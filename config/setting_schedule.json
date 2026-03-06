@@ -1,0 +1,15 @@
+{
+    "schedule_time": "09:00",
+    "schedule_daily": true,
+    "schedule_weekly": false,
+    "schedule_repeat_hours": 0,
+    "schedule_days": {
+        "Monday": false,
+        "Tuesday": false,
+        "Wednesday": false,
+        "Thursday": false,
+        "Friday": false,
+        "Saturday": false,
+        "Sunday": false
+    }
+}
