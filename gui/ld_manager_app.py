@@ -2,6 +2,7 @@
 import threading
 import tkinter as tk
 from tkinter import ttk
+from tkinter import font as tkfont
 from tkinter.scrolledtext import ScrolledText
 from tkinter import messagebox as MessageBox
 from tkinter import filedialog
@@ -13,7 +14,6 @@ from pathlib import Path
 import subprocess
 import psutil
 import random
-import colorsys
 import re
 import sys
 import zipfile
@@ -34,27 +34,84 @@ from gui.checkbox_treeview import CheckboxTreeview
 from gui.main_window import MainWindow
 from gui.mixins import ToolsMixin
 
+
+class GradientProgressBar(tk.Canvas):
+    """Canvas-based progress bar with gradient fill."""
+
+    def __init__(self, parent, bg="#0E1118", height=6, color_start="#00E5FF", color_end="#7C3AED", **kwargs):
+        super().__init__(
+            parent,
+            height=height,
+            bg=bg,
+            highlightthickness=0,
+            bd=0,
+            **kwargs,
+        )
+        self._value = 0
+        self._color_start = color_start
+        self._color_end = color_end
+        self.bind("<Configure>", lambda _e: self._draw())
+
+    def set(self, value):
+        """Update progress between 0-100."""
+        self._value = max(0, min(100, float(value)))
+        self._draw()
+
+    def configure_colors(self, color_start, color_end):
+        self._color_start = color_start
+        self._color_end = color_end
+        self._draw()
+
+    def _hex_to_rgb(self, hex_color):
+        hex_color = hex_color.lstrip("#")
+        return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+
+    def _draw(self):
+        self.delete("all")
+        width = self.winfo_width()
+        height = self.winfo_height()
+        fill_w = int(width * self._value / 100)
+        if fill_w <= 0:
+            return
+
+        r1, g1, b1 = self._hex_to_rgb(self._color_start)
+        r2, g2, b2 = self._hex_to_rgb(self._color_end)
+        steps = max(fill_w, 1)
+        for i in range(steps):
+            t = i / max(steps - 1, 1)
+            r = int(r1 + t * (r2 - r1))
+            g = int(g1 + t * (g2 - g1))
+            b = int(b1 + t * (b2 - b1))
+            color = f"#{r:02x}{g:02x}{b:02x}"
+            self.create_line(i, 0, i, height, fill=color, width=1)
+
 class LDManagerApp(ToolsMixin):
     def __init__(self, root):
         self.root = root
-        self.root.title("ALP Automation Control Center")
+        self.root.title("LDPlayer Automation Manager")
         self.root.geometry("1540x940")
         self.root.minsize(1280, 780)
         
-        # Apply a single fixed ttkbootstrap theme
-        self.style = tb.Style(theme="flatly")
+        # Apply a fixed dark theme to mirror the dashboard mockup style.
+        self.style = tb.Style(theme="darkly")
         self.palette = {
-            "app_bg": "#EEF2F7",
-            "surface": "#FFFFFF",
-            "surface_alt": "#F6F8FB",
-            "text": "#122033",
-            "muted": "#5B6A7D",
-            "primary": "#155EEF",
-            "success": "#087443",
-            "warning": "#B54708",
-            "danger": "#B42318",
-            "border": "#D9E0EA",
+            "app_bg": "#080B10",
+            "surface": "#0E1118",
+            "surface_alt": "#141820",
+            "surface_alt_2": "#1A1F2C",
+            "text": "#E2E8F0",
+            "muted": "#64748B",
+            "primary": "#00E5FF",
+            "secondary": "#7C3AED",
+            "success": "#10B981",
+            "warning": "#F59E0B",
+            "danger": "#EF4444",
+            "border": "#1A2030",
+            "border_alt": "#222B3A",
         }
+        families = set(tkfont.families())
+        self.mono_font = "Cascadia Mono" if "Cascadia Mono" in families else "Consolas"
+        self.display_font = "Segoe UI Semibold"
         self._ld_snapshot = {}
         self._ld_status_cache = {}
         self._ld_account_cache = {}
@@ -122,13 +179,6 @@ class LDManagerApp(ToolsMixin):
             "Sunday": tk.BooleanVar(value=False)
         }
         
-        # Initialize footer animation variables
-        self.footer_effect_canvas = None
-        self.footer_phase = 0
-        self.footer_particles = []
-        self.footer_text_main = None
-        self.footer_text_sub = None
-        
         self.setup_enhanced_ui()
         self.load_settings()
         self.load_schedule_settings()
@@ -143,7 +193,9 @@ class LDManagerApp(ToolsMixin):
 
         self.style.configure(
             ".",
-            font=("Segoe UI", 10)
+            font=(self.display_font, 10),
+            background=self.palette["surface"],
+            foreground=self.palette["text"],
         )
         self.style.configure(
             "TLabelframe",
@@ -153,7 +205,7 @@ class LDManagerApp(ToolsMixin):
         )
         self.style.configure(
             "TLabelframe.Label",
-            font=("Segoe UI Semibold", 13),
+            font=(self.display_font, 13),
             foreground=self.palette["text"],
             background=self.palette["surface"]
         )
@@ -161,72 +213,151 @@ class LDManagerApp(ToolsMixin):
         self.style.configure("TCombobox", padding=(8, 8))
         self.style.configure("Card.TFrame", background=self.palette["surface"], borderwidth=0, relief="flat")
         self.style.configure("CardInner.TFrame", background=self.palette["surface"], borderwidth=0, relief="flat")
-        self.style.configure("Shadow.TFrame", background="#D8E0EA")
+        self.style.configure("Shadow.TFrame", background=self.palette["border"])
+        self.style.configure("Sidebar.TFrame", background=self.palette["surface"])
+        self.style.configure("Topbar.TFrame", background=self.palette["surface"])
+        self.style.configure("SidebarTitle.TLabel", font=(self.display_font, 14), foreground=self.palette["text"], background=self.palette["surface"])
+        self.style.configure("SidebarSub.TLabel", font=(self.mono_font, 9), foreground=self.palette["primary"], background=self.palette["surface"])
+        self.style.configure("TopTitle.TLabel", font=(self.display_font, 15), foreground=self.palette["text"], background=self.palette["surface"])
+        self.style.configure("TopSub.TLabel", font=(self.mono_font, 9), foreground=self.palette["muted"], background=self.palette["surface"])
+        self.style.configure("Nav.TButton", font=(self.display_font, 10), anchor="w", padding=(10, 8))
+        self.style.map(
+            "Nav.TButton",
+            background=[("active", self.palette["surface_alt"])],
+            foreground=[("active", self.palette["text"])]
+        )
+        self.style.configure("NavActive.TButton", font=(self.display_font, 10), anchor="w", padding=(10, 8))
+        self.style.configure("SidebarSection.TLabel", font=(self.display_font, 9), foreground="#64748B", background=self.palette["surface"])
+        self.style.configure("MetricLabel.TLabel", font=(self.display_font, 8), foreground="#6B7B90", background=self.palette["surface"])
+        self.style.configure("MetricValue.TLabel", font=(self.mono_font, 28), foreground=self.palette["text"], background=self.palette["surface"])
+        self.style.configure("MetricSub.TLabel", font=(self.mono_font, 9), foreground=self.palette["muted"], background=self.palette["surface"])
 
         self.style.configure(
             "TNotebook.Tab",
             padding=(16, 11),
-            font=("Segoe UI Semibold", 10)
+            font=(self.display_font, 10)
         )
         self.style.map(
             "TNotebook.Tab",
             background=[("selected", self.palette["surface"]), ("!selected", self.palette["surface_alt"])],
-            foreground=[("selected", self.palette["primary"]), ("!selected", self.palette["muted"])]
+            foreground=[("selected", self.palette["primary"]), ("!selected", self.palette["muted"])],
+            bordercolor=[("selected", self.palette["primary"]), ("!selected", self.palette["border"])]
         )
+        # Hidden tab style - used only for the outer main notebook (tabs navigated via top bar buttons)
+        self.style.layout("Hidden.TNotebook.Tab", [])
+        self.style.configure("Hidden.TNotebook", tabmargins=0)
 
         # Configure Treeview row height
         self.style.configure(
             "Custom.Treeview",
-            rowheight=32,
-            font=("Segoe UI", 10),
+            rowheight=28,
+            font=(self.mono_font, 9),
             background=self.palette["surface"],
             fieldbackground=self.palette["surface"],
+            foreground=self.palette["text"],
             borderwidth=0
         )
         
         self.style.configure(
             "Custom.Treeview.Heading",
-            font=("Segoe UI Semibold", 10),
+            font=(self.display_font, 10),
             padding=(8, 7),
             relief="flat",
-            foreground=self.palette["text"]
+            foreground=self.palette["muted"],
+            background=self.palette["surface_alt"]
         )
         
         # Configure button styles
         for button_style in ("success.TButton", "danger.TButton", "warning.TButton", "info.TButton"):
-            self.style.configure(button_style, font=("Segoe UI Semibold", 10), padding=(10, 7))
+            self.style.configure(button_style, font=(self.display_font, 10), padding=(10, 7))
         
         # Configure label styles
         self.style.configure(
             "Title.TLabel",
-            font=("Segoe UI Semibold", 18),
+            font=(self.display_font, 18),
             foreground=self.palette["text"]
         )
         
         self.style.configure(
             "Subtitle.TLabel",
-            font=("Segoe UI", 11),
+            font=(self.mono_font, 10),
             foreground=self.palette["muted"]
         )
         self.style.configure(
             "SectionTitle.TLabel",
-            font=("Segoe UI Semibold", 16),
+            font=(self.display_font, 16),
             foreground=self.palette["text"]
         )
         self.style.configure(
             "HeroTitle.TLabel",
-            font=("Segoe UI Semibold", 21),
+            font=(self.display_font, 21),
             foreground=self.palette["text"]
         )
         self.style.configure(
             "HeroSub.TLabel",
-            font=("Segoe UI", 11),
+            font=(self.mono_font, 10),
             foreground=self.palette["muted"]
         )
         self.style.configure(
             "Chip.TLabel",
-            font=("Segoe UI Semibold", 9),
+            font=(self.display_font, 9),
             foreground=self.palette["text"]
+        )
+
+        # Custom scrollbars
+        self.style.configure(
+            "Vertical.TScrollbar",
+            background=self.palette["border"],
+            troughcolor=self.palette["surface"],
+            arrowcolor=self.palette["muted"],
+            borderwidth=0,
+            relief="flat",
+            width=8,
+        )
+        self.style.configure(
+            "Horizontal.TScrollbar",
+            background=self.palette["border"],
+            troughcolor=self.palette["surface"],
+            arrowcolor=self.palette["muted"],
+            borderwidth=0,
+            relief="flat",
+            width=6,
+        )
+
+        # Button hierarchy
+        self.style.configure(
+            "Primary.TButton",
+            font=(self.display_font, 10),
+            padding=(14, 8),
+            background="#00C4D9",
+            foreground="#040608",
+        )
+        self.style.map(
+            "Primary.TButton",
+            background=[("active", "#00E5FF"), ("disabled", "#1A2530")],
+        )
+
+        self.style.configure(
+            "Ctrl.TButton",
+            font=(self.display_font, 10),
+            padding=(10, 7),
+            background=self.palette["surface_alt"],
+            foreground=self.palette["text"],
+            bordercolor=self.palette["border_alt"],
+            relief="solid",
+            borderwidth=1,
+        )
+
+        self.style.configure(
+            "Ghost.TButton",
+            font=("Segoe UI", 10),
+            padding=(8, 6),
+            background=self.palette["surface"],
+            foreground=self.palette["muted"],
+        )
+        self.style.map(
+            "Ghost.TButton",
+            foreground=[("active", self.palette["text"])],
         )
 
     def _create_card_section(self, parent, title, subtitle=None, pady=(0, 14), expand=False):
@@ -234,7 +365,7 @@ class LDManagerApp(ToolsMixin):
         shadow = tb.Frame(parent, style="Shadow.TFrame", padding=(0, 0, 0, 1))
         shadow.pack(fill="both", expand=expand, pady=pady)
 
-        card = tb.Frame(shadow, style="Card.TFrame", padding=18)
+        card = tb.Frame(shadow, style="Card.TFrame", padding=14)
         card.pack(fill="both", expand=True, padx=(0, 1))
 
         tb.Label(card, text=title, style="SectionTitle.TLabel").pack(anchor="w")
@@ -248,65 +379,214 @@ class LDManagerApp(ToolsMixin):
 
     def setup_enhanced_ui(self):
         self.create_enhanced_menu_bar()
-        self.create_top_bar()
         
-        # Main container with left and right panels
-        main_container = tb.Frame(self.root, bootstyle="light", padding=18)
-        main_container.pack(fill="both", expand=True)
+        # Main shell with sidebar + content area.
+        shell = tb.Frame(self.root, style="CardInner.TFrame")
+        shell.pack(fill="both", expand=True)
 
-        split = ttk.Panedwindow(main_container, orient=tk.HORIZONTAL)
-        split.pack(fill="both", expand=True)
+        self.create_sidebar(shell)
 
-        left_panel = tb.Frame(split, padding=(0, 0, 12, 0))
-        right_panel = tb.Frame(split, padding=(12, 0, 0, 0))
-        split.add(left_panel, weight=3)
-        split.add(right_panel, weight=7)
+        main_container = tb.Frame(shell, style="CardInner.TFrame", padding=(16, 14, 16, 8))
+        main_container.pack(side="left", fill="both", expand=True)
 
-        # LD Players Table
-        self.create_ld_table_panel(left_panel)
-        
-        # Right panel with Notebook
-        self.create_right_notebook_panel(right_panel)
+        self.create_top_bar(main_container)
+
+        content = tb.Frame(main_container, style="CardInner.TFrame", padding=(0, 8, 0, 0))
+        content.pack(fill="both", expand=True)
+        self.create_right_notebook_panel(content)
         
         # Status bar
         self.create_status_bar()
 
-    def create_top_bar(self):
+    def create_sidebar(self, parent):
+        sidebar_shell = tb.Frame(parent, style="Shadow.TFrame", width=236, padding=(0, 0, 1, 0))
+        sidebar_shell.pack(side="left", fill="y")
+        sidebar_shell.pack_propagate(False)
+
+        sidebar = tb.Frame(sidebar_shell, style="Sidebar.TFrame", padding=(14, 14, 14, 10))
+        sidebar.pack(fill="both", expand=True)
+
+        logo = tb.Frame(sidebar, style="Sidebar.TFrame")
+        logo.pack(fill="x", pady=(0, 14))
+        tb.Label(logo, text="⚡ LDPlayer", style="SidebarTitle.TLabel").pack(anchor="w")
+        tb.Label(logo, text="Manager v2.0", style="SidebarSub.TLabel").pack(anchor="w")
+
+        self._nav_rows = {}
+        nav_items = [
+            ("dashboard", "📊 Dashboard", lambda: self.notebook.select(0), "CONTROL", ""),
+            ("devices", "📱 Devices", self._focus_devices, "CONTROL", "0"),
+            ("automation", "🤖 Automation", lambda: self.notebook.select(1), "CONTROL", ""),
+            ("queue", "📋 Task Queue", lambda: self.notebook.select(3), "CONTROL", "0"),
+            ("accounts", "👤 Accounts", self.show_account_manager, "MANAGE", ""),
+            ("schedule", "🗓️ Scheduler", lambda: self.notebook.select(2), "MANAGE", ""),
+            ("backups", "💾 Backups", self.create_backup, "MANAGE", ""),
+            ("analytics", "📈 Analytics", lambda: self.notebook.select(0), "MANAGE", ""),
+            ("settings", "⚙️ Settings", self.show_settings_dialog, "SYSTEM", ""),
+            ("adb_tools", "🔌 ADB Tools", self.show_adb_tools, "SYSTEM", ""),
+        ]
+
+        current_section = None
+
+        def _make_nav_row(parent, key, text, badge_text, command):
+            row = tk.Frame(parent, bg=self.palette["surface"], height=34)
+            row.pack(fill="x", pady=1)
+            row.pack_propagate(False)
+
+            accent = tk.Frame(row, width=3, bg=self.palette["primary"])
+            accent.pack(side="left", fill="y")
+            accent.pack_forget()
+
+            btn = tk.Button(
+                row,
+                text=f"  {text}",
+                anchor="w",
+                relief="flat",
+                bg=self.palette["surface"],
+                fg=self.palette["muted"],
+                activebackground=self.palette["surface_alt"],
+                activeforeground=self.palette["text"],
+                font=(self.display_font, 10),
+                cursor="hand2",
+                command=lambda k=key, c=command: self._on_sidebar_nav(k, c),
+            )
+            btn.pack(side="left", fill="both", expand=True)
+
+            badge = tk.Label(
+                row,
+                text=badge_text,
+                bg=self.palette["surface"],
+                fg=self.palette["muted"],
+                font=(self.mono_font, 9),
+                padx=8,
+            )
+            badge.pack(side="right", padx=(6, 4))
+
+            self._nav_rows[key] = {"row": row, "btn": btn, "accent": accent, "badge": badge}
+
+        for key, text, command, section, badge_text in nav_items:
+            if section != current_section:
+                current_section = section
+                tb.Label(sidebar, text=section, style="SidebarSection.TLabel").pack(anchor="w", pady=(8, 2))
+            _make_nav_row(sidebar, key, text, badge_text, command)
+
+        footer = tb.Frame(sidebar, style="Sidebar.TFrame")
+        footer.pack(side="bottom", fill="x", pady=(8, 0))
+        self.sidebar_status_pill = tb.Label(
+            footer,
+            text="ADB: checking...",
+            bootstyle="success",
+            style="Chip.TLabel",
+            padding=(8, 5),
+        )
+        self.sidebar_status_pill.pack(fill="x")
+
+    def _focus_devices(self):
+        if hasattr(self, "notebook"):
+            self.notebook.select(0)
+        if hasattr(self, "search_entry"):
+            self.search_entry.focus_set()
+        if hasattr(self, "_top_tab_buttons"):
+            for label, btn in self._top_tab_buttons.items():
+                btn.configure(bootstyle="info" if label == "Devices" else "secondary-link")
+
+    def _on_sidebar_nav(self, key, command):
+        try:
+            command()
+        except Exception as exc:
+            self.log(f"Navigation action failed: {exc}", "WARNING")
+        self._set_sidebar_nav_active(key)
+
+    def _set_sidebar_nav_active(self, active_key):
+        for key, parts in getattr(self, "_nav_rows", {}).items():
+            if key == active_key:
+                parts["row"].config(bg=self.palette["surface_alt"])
+                parts["btn"].config(bg=self.palette["surface_alt"], fg=self.palette["primary"])
+                parts["accent"].pack(side="left", fill="y")
+            else:
+                parts["row"].config(bg=self.palette["surface"])
+                parts["btn"].config(bg=self.palette["surface"], fg=self.palette["muted"])
+                parts["accent"].pack_forget()
+
+    def _make_chip(self, parent, text, bg, fg, border_color):
+        frame = tk.Frame(parent, bg=border_color, padx=1, pady=1, highlightthickness=0)
+        inner = tk.Frame(frame, bg=bg, padx=8, pady=3)
+        inner.pack()
+        lbl = tk.Label(inner, text=text, bg=bg, fg=fg, font=(self.display_font, 9))
+        lbl.pack()
+        frame.pack(side="left", padx=4)
+        return lbl
+
+    def create_top_bar(self, parent):
         """Top-level application header with global actions."""
-        top_shadow = tb.Frame(self.root, style="Shadow.TFrame", padding=(0, 0, 0, 1))
+        top_shadow = tb.Frame(parent, style="Shadow.TFrame", padding=(0, 0, 0, 1))
         top_shadow.pack(fill="x", side="top")
-        top_bar = tb.Frame(top_shadow, style="Card.TFrame", padding=(18, 14))
+        top_bar = tb.Frame(top_shadow, style="Topbar.TFrame", padding=(16, 12))
         top_bar.pack(fill="x", padx=(0, 1))
 
-        title_wrap = tb.Frame(top_bar)
+        title_wrap = tb.Frame(top_bar, style="Topbar.TFrame")
         title_wrap.pack(side="left")
 
         tb.Label(
             title_wrap,
-            text="ALP Automation Control Center",
-            style="HeroTitle.TLabel"
+            text="Dashboard",
+            style="TopTitle.TLabel"
         ).pack(anchor="w")
         self.top_status_label = tb.Label(
             title_wrap,
-            text=f"System: Idle  |  {datetime.now().strftime('%A, %d %b %Y')}",
-            style="HeroSub.TLabel"
+            text=f"System idle | {datetime.now().strftime('%d %b %Y %H:%M')}",
+            style="TopSub.TLabel"
         )
         self.top_status_label.pack(anchor="w")
 
-        center_meta = tb.Frame(top_bar)
-        center_meta.pack(side="left", padx=(28, 0))
-        self.top_selected_chip = tb.Label(center_meta, text="Selected: 0", bootstyle="info", style="Chip.TLabel", padding=(10, 6))
-        self.top_selected_chip.pack(side="left", padx=(0, 8))
-        self.top_mode_chip = tb.Label(center_meta, text="Mode: Idle", bootstyle="secondary", style="Chip.TLabel", padding=(10, 6))
-        self.top_mode_chip.pack(side="left", padx=(0, 8))
-        self.top_task_chip = tb.Label(center_meta, text="Task: Scroll", bootstyle="primary", style="Chip.TLabel", padding=(10, 6))
-        self.top_task_chip.pack(side="left")
+        center_meta = tb.Frame(top_bar, style="Topbar.TFrame")
+        center_meta.pack(side="left", padx=(18, 0))
+        self.top_selected_chip = self._make_chip(
+            center_meta,
+            "Selected: 0",
+            bg="#071820",
+            fg=self.palette["primary"],
+            border_color="#00485A",
+        )
+        self.top_mode_chip = self._make_chip(
+            center_meta,
+            "Mode: Idle",
+            bg="#0A1A10",
+            fg=self.palette["success"],
+            border_color="#1A5030",
+        )
+        self.top_task_chip = self._make_chip(
+            center_meta,
+            "Task: Scroll",
+            bg="#10082A",
+            fg=self.palette["secondary"],
+            border_color="#3A1878",
+        )
 
-        actions = tb.Frame(top_bar, style="CardInner.TFrame")
+        tabs = tb.Frame(top_bar, style="Topbar.TFrame")
+        tabs.pack(side="left", padx=(16, 0))
+        self._top_tab_buttons = {}
+        tab_defs = [
+            ("Overview", 0, None),
+            ("Devices", 0, self._focus_devices),
+            ("Tasks", 1, None),
+            ("Logs", 4, None),
+        ]
+        for label, idx, action in tab_defs:
+            btn = tb.Button(
+                tabs,
+                text=label,
+                bootstyle="secondary-link",
+                command=(action if action is not None else (lambda i=idx: self.notebook.select(i) if hasattr(self, "notebook") else None)),
+                width=9,
+            )
+            btn.pack(side="left", padx=2)
+            self._top_tab_buttons[label] = btn
+
+        actions = tb.Frame(top_bar, style="Topbar.TFrame")
         actions.pack(side="right")
-        tb.Button(actions, text="Refresh All", bootstyle="outline-primary", command=self.refresh_all, width=12).pack(side="left", padx=4)
-        tb.Button(actions, text="Tools Center", bootstyle="outline-secondary", command=self.show_tools_center, width=12).pack(side="left", padx=4)
-        tb.Button(actions, text="Settings", bootstyle="secondary", command=self.show_settings_dialog, width=10).pack(side="left", padx=4)
+        tb.Button(actions, text="⟳ Refresh", bootstyle="outline-info", command=self.refresh_all, width=10).pack(side="left", padx=4)
+        tb.Button(actions, text="Stop All", bootstyle="danger", command=self.stop_automation, width=10).pack(side="left", padx=4)
+        tb.Button(actions, text="▶ Start Automation", bootstyle="info", command=self.start_automation, width=16).pack(side="left", padx=4)
         self._update_header_chips()
 
     def _update_header_chips(self, mode_text=None):
@@ -324,6 +604,7 @@ class LDManagerApp(ToolsMixin):
             "reels": "Reels",
             "autoscroll": "Auto Scroll",
             "likes": "Likes",
+            "friends": "Add Friends",
         }.get(self.task_type_var.get(), self.task_type_var.get().title())
         if hasattr(self, "top_task_chip"):
             self.top_task_chip.config(text=f"Task: {task_label}")
@@ -344,8 +625,8 @@ class LDManagerApp(ToolsMixin):
         """Create LD Players table panel"""
         table_frame = self._create_card_section(
             parent,
-            "Device Fleet",
-            "Manage emulator selection, status filtering, and batch actions.",
+            "Emulator Instances",
+            "Live fleet table with real status, account mapping, and batch selection.",
             pady=(0, 0),
             expand=True,
         )
@@ -451,7 +732,7 @@ class LDManagerApp(ToolsMixin):
         tree_frame.pack(fill="both", expand=True)
         
         # Define columns
-        columns = ("name", "serial", "status", "account", "progress")
+        columns = ("name", "serial", "status", "task", "progress", "account", "actions")
         
         # Create Treeview with custom style
         self.ld_table = CheckboxTreeview(
@@ -468,33 +749,41 @@ class LDManagerApp(ToolsMixin):
 
         # Configure columns
         self.ld_table.heading("name", text="LD Name", anchor="w")
-        self.ld_table.column("name", width=180, anchor="w")
+        self.ld_table.column("name", width=110, anchor="w")
         
         self.ld_table.heading("serial", text="ADB Serial", anchor="w")
-        self.ld_table.column("serial", width=150, anchor="w")
+        self.ld_table.column("serial", width=120, anchor="w")
         
-        self.ld_table.heading("status", text="State", anchor="w")
-        self.ld_table.column("status", width=120, anchor="w")
+        self.ld_table.heading("status", text="Status", anchor="w")
+        self.ld_table.column("status", width=88, anchor="w")
+
+        self.ld_table.heading("task", text="Task", anchor="w")
+        self.ld_table.column("task", width=100, anchor="w")
+
+        self.ld_table.heading("progress", text="Progress", anchor="w")
+        self.ld_table.column("progress", width=75, anchor="w")
         
         self.ld_table.heading("account", text="Account", anchor="w")
-        self.ld_table.column("account", width=120, anchor="w")
-        
-        self.ld_table.heading("progress", text="Progress", anchor="w")
-        self.ld_table.column("progress", width=100, anchor="w")
+        self.ld_table.column("account", width=110, anchor="w")
+
+        self.ld_table.heading("actions", text="Actions", anchor="w")
+        self.ld_table.column("actions", width=88, anchor="w")
         
         # Configure tags with state colors
-        self.ld_table.tag_configure("active", background="#ECFDF3", foreground="#14532D")
-        self.ld_table.tag_configure("inactive", background="#FEF2F2", foreground="#7F1D1D")
-        self.ld_table.tag_configure("running", background="#FFFBEB", foreground="#78350F")
-        self.ld_table.tag_configure("paused", background="#EFF6FF", foreground="#1E3A8A")
-        self.ld_table.tag_configure("completed", background="#EEF2FF", foreground="#3730A3")
+        self.ld_table.tag_configure("active", background="#0A1A20", foreground="#67E8F9")
+        self.ld_table.tag_configure("inactive", background="#180D0D", foreground="#FCA5A5")
+        self.ld_table.tag_configure("running", background="#0A1A14", foreground="#6EE7B7")
+        self.ld_table.tag_configure("paused", background="#160F22", foreground="#C4B5FD")
+        self.ld_table.tag_configure("completed", background="#0A1420", foreground="#93C5FD")
+        self.ld_table.tag_configure("odd_row", background="#0C1016")
+        self.ld_table.tag_configure("even_row", background=self.palette["surface"])
         
         # Scrollbars
         v_scrollbar = tb.Scrollbar(
             tree_frame,
             orient="vertical",
             command=self.ld_table.yview,
-            bootstyle="round"
+            style="Vertical.TScrollbar",
         )
         v_scrollbar.pack(side="right", fill="y")
         
@@ -502,7 +791,7 @@ class LDManagerApp(ToolsMixin):
             tree_frame,
             orient="horizontal",
             command=self.ld_table.xview,
-            bootstyle="round"
+            style="Horizontal.TScrollbar",
         )
         h_scrollbar.pack(side="bottom", fill="x")
         
@@ -531,7 +820,7 @@ class LDManagerApp(ToolsMixin):
     def create_right_notebook_panel(self, parent):
         """Create right panel with Notebook tabs"""
         # Create Notebook
-        self.notebook = tb.Notebook(parent, bootstyle="primary")
+        self.notebook = tb.Notebook(parent, style="Hidden.TNotebook")
         self.notebook.pack(side="right", fill="both", expand=True)
         
         # Create tabs
@@ -540,6 +829,28 @@ class LDManagerApp(ToolsMixin):
         self.create_schedule_tab()
         self.create_content_tab()
         self.create_logs_tab()
+        self.notebook.bind("<<NotebookTabChanged>>", self._on_notebook_tab_changed)
+        self._set_sidebar_nav_active("dashboard")
+        self._on_notebook_tab_changed()
+
+    def _on_notebook_tab_changed(self, _event=None):
+        idx = self.notebook.index("current")
+        tab_to_nav = {
+            0: "dashboard",
+            1: "automation",
+            2: "schedule",
+            3: "content",
+            4: "logs",
+        }
+        self._set_sidebar_nav_active(tab_to_nav.get(idx, "dashboard"))
+        if hasattr(self, "_top_tab_buttons"):
+            active_label = "Overview"
+            if idx == 1:
+                active_label = "Tasks"
+            elif idx == 4:
+                active_label = "Logs"
+            for label, btn in self._top_tab_buttons.items():
+                btn.configure(bootstyle="info" if label == active_label else "secondary-link")
 
     def create_dashboard_tab(self):
         """Create Dashboard tab"""
@@ -548,19 +859,27 @@ class LDManagerApp(ToolsMixin):
         
         # Analytics Dashboard
         self.create_analytics_dashboard(dashboard_tab)
-        
-        # Batch operations
-        self.create_batch_operations(dashboard_tab)
-        
-        # Control buttons with enhanced styling
-        self.create_control_buttons(dashboard_tab)
+        self.create_ld_table_panel(dashboard_tab)
+
+        lower = ttk.Panedwindow(dashboard_tab, orient=tk.HORIZONTAL)
+        lower.pack(fill="both", expand=True, pady=(2, 0))
+
+        left = tb.Frame(lower, style="CardInner.TFrame", padding=(0, 0, 8, 0))
+        right = tb.Frame(lower, style="CardInner.TFrame", padding=(8, 0, 0, 0))
+        lower.add(left, weight=3)
+        lower.add(right, weight=2)
+
+        self.create_task_config_panel(left)
+        self.create_schedule_overview_panel(left)
+        self.create_system_health_panel(right)
+        self.create_live_log_panel(right)
 
     def create_analytics_dashboard(self, parent):
         """Create analytics dashboard"""
         analytics_frame = self._create_card_section(
             parent,
             "Operations Overview",
-            "Live fleet metrics and health summary."
+            "Real-time fleet, task throughput, and failure summary."
         )
         
         # Metrics grid
@@ -569,13 +888,14 @@ class LDManagerApp(ToolsMixin):
         
         self.metric_labels = {}
         metrics = [
-            ("total_instances", "Total Instances", "0", "primary"),
-            ("active_instances", "Active", "0", "success"),
-            ("running_tasks", "Running Tasks", "0", "warning"),
-            ("errors", "Errors", "0", "danger")
+            ("total_instances", "TOTAL INSTANCES", "0", "0 selected", self.palette["primary"], "📱"),
+            ("running_tasks", "RUNNING", "0", "Tasks in progress", self.palette["success"], "▶"),
+            ("completed_tasks", "TASKS DONE", "0", "Today's total", self.palette["secondary"], "✓"),
+            ("errors", "ERRORS", "0", "Needs attention", self.palette["warning"], "⚠"),
         ]
         
-        for i, (key, label, value, style) in enumerate(metrics):
+        self.metric_sub_labels = {}
+        for i, (key, label, value, sub, accent, icon) in enumerate(metrics):
             metric_card = tb.Frame(metrics_frame)
             metric_card.grid(row=0, column=i, padx=8, pady=8, sticky="nsew")
             metrics_frame.columnconfigure(i, weight=1)
@@ -583,28 +903,28 @@ class LDManagerApp(ToolsMixin):
             # Card with border
             card_shadow = tb.Frame(metric_card, style="Shadow.TFrame", padding=(0, 0, 0, 1))
             card_shadow.pack(fill="both", expand=True, padx=1, pady=1)
-            card = tb.Frame(card_shadow, bootstyle=style, padding=1)
+            card = tb.Frame(card_shadow, style="Card.TFrame", padding=1)
             card.pack(fill="both", expand=True, padx=(0, 1))
-            
-            inner_frame = tb.Frame(card, padding=16)
+
+            stripe = tk.Frame(card, bg=accent, height=3)
+            stripe.pack(fill="x", side="top")
+
+            inner_frame = tb.Frame(card, style="CardInner.TFrame", padding=12)
             inner_frame.pack(fill="both", expand=True)
             
-            # Label
-            tb.Label(
-                inner_frame,
-                text=label,
-                bootstyle=f"{style}-inverse",
-                font=("Segoe UI", 10)
-            ).pack(pady=(0, 5))
+            tb.Label(inner_frame, text=label, style="MetricLabel.TLabel").pack(anchor="w")
             
-            # Value
             value_label = tb.Label(
                 inner_frame,
                 text=value,
-                font=("Segoe UI", 16, "bold"),
-                bootstyle=f"{style}-inverse"
+                style="MetricValue.TLabel",
+                foreground=accent,
             )
-            value_label.pack()
+            value_label.pack(anchor="w", pady=(6, 2))
+            sub_label = tb.Label(inner_frame, text=sub, style="MetricSub.TLabel")
+            sub_label.pack(anchor="w")
+            self.metric_sub_labels[key] = sub_label
+            tb.Label(inner_frame, text=icon, font=("Segoe UI Emoji", 20), foreground="#4A5568", background=self.palette["surface"]).place(relx=0.92, rely=0.05, anchor="ne")
 
             self.metric_labels[key] = value_label
 
@@ -648,6 +968,227 @@ class LDManagerApp(ToolsMixin):
             width=15
         ).pack(side="left", padx=5)
 
+    def create_system_health_panel(self, parent):
+        panel = self._create_card_section(
+            parent,
+            "System Health",
+            "Live host metrics while automation runs.",
+            expand=True,
+        )
+
+        self.sys_rows = {}
+        metrics = [
+            ("cpu", "CPU"),
+            ("ram", "RAM"),
+            ("disk", "Disk"),
+            ("temp", "Temp"),
+        ]
+        gradients = {
+            "cpu": ("#0891B2", "#00E5FF"),
+            "ram": ("#6D28D9", "#A78BFA"),
+            "disk": ("#059669", "#10B981"),
+            "temp": ("#D97706", "#F59E0B"),
+        }
+
+        for key, label in metrics:
+            row = tb.Frame(panel, style="CardInner.TFrame")
+            row.pack(fill="x", pady=7, padx=4)
+            top = tb.Frame(row, style="CardInner.TFrame")
+            top.pack(fill="x")
+            tb.Label(top, text=label, style="MetricLabel.TLabel").pack(side="left")
+            value_label = tk.Label(
+                top,
+                text="0%",
+                bg=self.palette["surface"],
+                fg=self.palette["text"],
+                font=(self.mono_font, 9),
+            )
+            value_label.pack(side="right")
+            c1, c2 = gradients[key]
+            bar = GradientProgressBar(row, bg=self.palette["surface_alt"], color_start=c1, color_end=c2, height=5)
+            bar.pack(fill="x", pady=(3, 0))
+            self.sys_rows[key] = {"bar": bar, "value": value_label}
+
+    def create_task_config_panel(self, parent):
+        panel = self._create_card_section(
+            parent,
+            "Task Configuration",
+            "Set behavior for selected LDPlayer instances.",
+        )
+
+        header = tb.Frame(panel, style="CardInner.TFrame")
+        header.pack(fill="x", pady=(0, 8))
+        tb.Label(header, text="Auto-batch", style="MetricSub.TLabel").pack(side="right")
+        self.auto_batch_var = tk.BooleanVar(value=True)
+        tb.Checkbutton(header, variable=self.auto_batch_var, bootstyle="success-round-toggle").pack(side="right", padx=(0, 6))
+
+        type_row = tb.Frame(panel, style="CardInner.TFrame")
+        type_row.pack(fill="x", pady=(0, 10))
+        self._task_type_buttons = {}
+        task_buttons = [
+            ("📜 Scroll Feed", "scroll"),
+            ("🎬 Watch Reels", "reels"),
+            ("❤️ React Posts", "likes"),
+            ("👥 Add Friends", "friends"),
+        ]
+        for text, value in task_buttons:
+            btn = tb.Button(
+                type_row,
+                text=text,
+                bootstyle="secondary-outline",
+                command=lambda v=value: self._select_task_type(v),
+                width=15,
+            )
+            btn.pack(side="left", padx=4, pady=2)
+            self._task_type_buttons[value] = btn
+        self._select_task_type(self.task_type_var.get())
+
+        grid = tb.Frame(panel, style="CardInner.TFrame")
+        grid.pack(fill="x")
+
+        tb.Label(grid, text="Batch Size", style="MetricLabel.TLabel").grid(row=0, column=0, sticky="w", padx=6, pady=(0, 4))
+        tb.Spinbox(grid, from_=1, to=10, textvariable=self.parallel_ld, width=10).grid(row=1, column=0, sticky="w", padx=6, pady=(0, 8))
+
+        tb.Label(grid, text="Delay Range (s)", style="MetricLabel.TLabel").grid(row=0, column=1, sticky="w", padx=6, pady=(0, 4))
+        self.delay_range_var = tk.StringVar(value=f"{max(1, self.boot_delay.get()-2)} - {self.boot_delay.get()+2}")
+        tb.Entry(grid, textvariable=self.delay_range_var, width=14).grid(row=1, column=1, sticky="w", padx=6, pady=(0, 8))
+
+        tb.Label(grid, text="Task Duration", style="MetricLabel.TLabel").grid(row=2, column=0, sticky="w", padx=6, pady=(0, 4))
+        self.task_duration_choice = tk.StringVar(value="Until complete")
+        tb.Combobox(
+            grid,
+            textvariable=self.task_duration_choice,
+            state="readonly",
+            values=("30 minutes", "1 hour", "2 hours", "Until complete"),
+            width=16,
+        ).grid(row=3, column=0, sticky="w", padx=6, pady=(0, 8))
+
+        tb.Label(grid, text="On Crash", style="MetricLabel.TLabel").grid(row=2, column=1, sticky="w", padx=6, pady=(0, 4))
+        self.on_crash_choice = tk.StringVar(value="Auto-restart")
+        tb.Combobox(
+            grid,
+            textvariable=self.on_crash_choice,
+            state="readonly",
+            values=("Auto-restart", "Skip instance", "Stop all"),
+            width=16,
+        ).grid(row=3, column=1, sticky="w", padx=6, pady=(0, 8))
+
+    def _select_task_type(self, value):
+        # "friends" and "likes" are currently UI stubs. Backend supports scroll/reels.
+        if value in ("scroll", "reels", "likes", "friends"):
+            self.task_type_var.set(value)
+        for key, btn in getattr(self, "_task_type_buttons", {}).items():
+            btn.configure(bootstyle="info" if key == value else "secondary-outline")
+
+    def create_schedule_overview_panel(self, parent):
+        panel = self._create_card_section(
+            parent,
+            "Schedule",
+            "Automation run windows and next-run preview.",
+        )
+
+        header = tb.Frame(panel, style="CardInner.TFrame")
+        header.pack(fill="x", pady=(0, 8))
+        tb.Label(header, text="Enabled", style="MetricSub.TLabel").pack(side="right")
+        self.schedule_enabled_ui = tk.BooleanVar(value=self.schedule_running)
+        tb.Checkbutton(
+            header,
+            variable=self.schedule_enabled_ui,
+            command=self._toggle_schedule_from_dashboard,
+            bootstyle="success-round-toggle",
+        ).pack(side="right", padx=(0, 6))
+
+        cards = tb.Frame(panel, style="CardInner.TFrame")
+        cards.pack(fill="x")
+
+        start_card = tb.Frame(cards, style="Card.TFrame", padding=10)
+        stop_card = tb.Frame(cards, style="Card.TFrame", padding=10)
+        next_card = tb.Frame(cards, style="Card.TFrame", padding=10)
+        start_card.grid(row=0, column=0, sticky="nsew", padx=4)
+        stop_card.grid(row=0, column=1, sticky="nsew", padx=4)
+        next_card.grid(row=0, column=2, sticky="nsew", padx=4)
+        cards.columnconfigure((0, 1, 2), weight=1)
+
+        self.schedule_stop_time = tk.StringVar(value="22:00")
+        self.next_run_preview = tk.StringVar(value="Tomorrow · Mon")
+
+        self._build_schedule_card(start_card, "Start Time", self.schedule_time, active=True)
+        self._build_schedule_card(stop_card, "Stop Time", self.schedule_stop_time, active=False)
+        self._build_next_run_card(next_card)
+
+    def _build_schedule_card(self, parent, title, time_var, active=True):
+        tb.Label(parent, text=title.upper(), style="MetricLabel.TLabel").pack(anchor="w")
+        tb.Entry(parent, textvariable=time_var, width=8).pack(anchor="w", pady=(6, 6))
+        chips = tb.Frame(parent, style="CardInner.TFrame")
+        chips.pack(anchor="w")
+        for d in ("M", "T", "W", "T", "F", "S", "S"):
+            style = "info" if (active and d in ("M", "T", "W", "F")) else "secondary"
+            tb.Label(chips, text=d, bootstyle=style, style="Chip.TLabel", padding=(4, 1)).pack(side="left", padx=1)
+
+    def _build_next_run_card(self, parent):
+        tb.Label(parent, text="NEXT RUN", style="MetricLabel.TLabel").pack(anchor="w")
+        tb.Label(parent, textvariable=self.schedule_time, bootstyle="info", font=("Segoe UI Semibold", 18)).pack(anchor="w", pady=(6, 4))
+        tb.Label(parent, textvariable=self.next_run_preview, style="MetricSub.TLabel").pack(anchor="w")
+        tb.Label(parent, text="Scheduled", bootstyle="success", style="Chip.TLabel", padding=(8, 3)).pack(anchor="w", pady=(8, 0))
+
+    def _toggle_schedule_from_dashboard(self):
+        if self.schedule_enabled_ui.get() and not self.schedule_running:
+            self.start_schedule()
+        elif not self.schedule_enabled_ui.get() and self.schedule_running:
+            self.stop_schedule()
+
+    def create_live_log_panel(self, parent):
+        panel = self._create_card_section(
+            parent,
+            "Live Log",
+            "Real automation events with level colors.",
+            expand=True,
+        )
+        head = tb.Frame(panel, style="CardInner.TFrame")
+        head.pack(fill="x", pady=(0, 6))
+        tb.Button(head, text="Clear", bootstyle="outline-danger", width=8, command=self.clear_logs).pack(side="right")
+
+        log_container = tk.Frame(panel, bg=self.palette["surface"])
+        log_container.pack(fill="both", expand=True)
+
+        self.live_log_text = tk.Text(
+            log_container,
+            wrap="word",
+            font=(self.mono_font, 9),
+            height=9,
+            bg="#05080D",
+            fg=self.palette["text"],
+            insertbackground=self.palette["primary"],
+            relief="flat",
+            highlightthickness=1,
+            highlightbackground=self.palette["border"],
+            highlightcolor=self.palette["primary"],
+            padx=10,
+            pady=8,
+            spacing1=1,
+            spacing3=1,
+        )
+        self.live_log_text.pack(side="left", fill="both", expand=True)
+        log_sb = tk.Scrollbar(
+            log_container,
+            orient="vertical",
+            command=self.live_log_text.yview,
+            bg=self.palette["border"],
+            troughcolor=self.palette["surface"],
+            bd=0,
+            width=6,
+            relief="flat",
+        )
+        log_sb.pack(side="right", fill="y")
+        self.live_log_text.configure(yscrollcommand=log_sb.set)
+        self.live_log_text.tag_configure("INFO", foreground="#60A5FA")
+        self.live_log_text.tag_configure("SUCCESS", foreground="#34D399")
+        self.live_log_text.tag_configure("WARNING", foreground="#FBBF24")
+        self.live_log_text.tag_configure("ERROR", foreground="#F87171")
+        self.live_log_text.tag_configure("DEBUG", foreground="#9b59b6")
+        self.live_log_text.tag_configure("TIMESTAMP", foreground="#2D3748")
+        self.live_log_text.config(state="disabled")
+
     def create_control_buttons(self, parent):
         """Create main control buttons with enhanced styling"""
         control_frame = self._create_card_section(
@@ -665,32 +1206,32 @@ class LDManagerApp(ToolsMixin):
             button_grid,
             text="Run Automation",
             command=self.start_automation,
-            bootstyle="success",
+            style="Primary.TButton",
             width=20
         )
-        self.start_button.grid(row=0, column=0, padx=8, pady=8)
+        self.start_button.grid(row=0, column=0, padx=5, pady=5)
         
         # Pause button (Yellow)
         self.pause_button = tb.Button(
             button_grid,
             text="Pause",
             command=self.toggle_pause,
-            bootstyle="warning",
+            style="Ctrl.TButton",
             width=20,
             state="disabled"
         )
-        self.pause_button.grid(row=0, column=1, padx=8, pady=8)
+        self.pause_button.grid(row=0, column=1, padx=5, pady=5)
         
         # Stop button (Red)
         self.stop_button = tb.Button(
             button_grid,
             text="Stop Run",
             command=self.stop_automation,
-            bootstyle="danger",
+            style="Ctrl.TButton",
             width=20,
             state="disabled"
         )
-        self.stop_button.grid(row=0, column=2, padx=8, pady=8)
+        self.stop_button.grid(row=0, column=2, padx=5, pady=5)
         
         # Second row
         # Backup button (Info)
@@ -698,28 +1239,28 @@ class LDManagerApp(ToolsMixin):
             button_grid,
             text="Create Backup",
             command=self.create_backup,
-            bootstyle="info",
+            style="Ghost.TButton",
             width=20
         )
-        self.backup_button.grid(row=1, column=0, padx=8, pady=8)
+        self.backup_button.grid(row=1, column=0, padx=5, pady=5)
         
         # Restore button (Secondary)
         tb.Button(
             button_grid,
             text="Restore Backup",
             command=self.restore_backup,
-            bootstyle="secondary",
+            style="Ghost.TButton",
             width=20
-        ).grid(row=1, column=1, padx=8, pady=8)
+        ).grid(row=1, column=1, padx=5, pady=5)
         
         # Settings button
         tb.Button(
             button_grid,
             text="Settings",
             command=self.show_settings_dialog,
-            bootstyle="secondary",
+            style="Ghost.TButton",
             width=20
-        ).grid(row=1, column=2, padx=8, pady=8)
+        ).grid(row=1, column=2, padx=5, pady=5)
 
     def create_tasks_tab(self):
         """Create Tasks tab with settings"""
@@ -728,6 +1269,7 @@ class LDManagerApp(ToolsMixin):
         
         # Task Settings
         self.create_enhanced_settings(tasks_tab)
+        self.create_control_buttons(tasks_tab)
 
     def create_enhanced_settings(self, parent):
         """Create enhanced settings section"""
@@ -1012,16 +1554,16 @@ class LDManagerApp(ToolsMixin):
 
         self.content_listbox = tk.Listbox(
             left,
-            font=("Consolas", 10),
+            font=(self.mono_font, 10),
             bg=self.palette["surface_alt"],
             fg=self.palette["text"],
-            selectbackground="#d9edf7",
+            selectbackground="#253447",
             selectforeground=self.palette["text"],
             highlightthickness=0,
             relief="flat"
         )
         
-        scrollbar = tb.Scrollbar(left, bootstyle="dark-round")
+        scrollbar = tb.Scrollbar(left, style="Vertical.TScrollbar")
         scrollbar.pack(side="right", fill="y")
         
         self.content_listbox.config(yscrollcommand=scrollbar.set)
@@ -1032,10 +1574,11 @@ class LDManagerApp(ToolsMixin):
         self.content_preview_text = tk.Text(
             right,
             wrap="word",
-            font=("Consolas", 10),
+            font=(self.mono_font, 10),
             height=10,
             bg=self.palette["surface"],
             fg=self.palette["text"],
+            insertbackground=self.palette["text"],
             relief="flat",
             highlightthickness=0,
             padx=8,
@@ -1108,7 +1651,7 @@ class LDManagerApp(ToolsMixin):
             bg=self.palette["surface"],
             fg=self.palette["text"],
             insertbackground=self.palette["text"],
-            selectbackground="#d9edf7",
+            selectbackground="#253447",
             padx=10,
             pady=10
         )
@@ -1120,8 +1663,8 @@ class LDManagerApp(ToolsMixin):
         self.logs_text.tag_configure("DEBUG", foreground="#9b59b6")
         self.logs_text.tag_configure("TIMESTAMP", foreground="#95a5a6")
 
-        v_scrollbar = tb.Scrollbar(logs_container, bootstyle="dark-round")
-        h_scrollbar = tb.Scrollbar(logs_container, orient="horizontal", bootstyle="dark-round")
+        v_scrollbar = tb.Scrollbar(logs_container, style="Vertical.TScrollbar")
+        h_scrollbar = tb.Scrollbar(logs_container, orient="horizontal", style="Horizontal.TScrollbar")
 
         v_scrollbar.pack(side="right", fill="y")
         h_scrollbar.pack(side="bottom", fill="x")
@@ -1137,13 +1680,13 @@ class LDManagerApp(ToolsMixin):
 
     def _status_text(self, status):
         mapping = {
-            "Active": "● Active",
-            "Inactive": "● Inactive",
-            "Running": "● Running",
-            "Paused": "● Paused",
-            "Completed": "● Completed",
+            "running": "● Running",
+            "active": "◎ Active",
+            "inactive": "○ Inactive",
+            "paused": "⏸ Paused",
+            "completed": "✓ Done",
         }
-        return mapping.get(status, status)
+        return mapping.get(status.lower(), status)
 
     def _status_tag(self, status):
         return {
@@ -1204,15 +1747,34 @@ class LDManagerApp(ToolsMixin):
         for item in self.ld_table.get_children():
             self.ld_table.delete(item)
 
-        for name, serial, status, account_text in rows:
+        for idx, (name, serial, status, account_text) in enumerate(rows):
+            if status == "Running":
+                task_text = "Scroll Feed" if self.task_type_var.get() == "scroll" else "Watch Reels"
+                progress_text = f"{random.randint(24, 96)}%"
+                actions_text = "⏸ ⏹ 🔍"
+            elif status == "Active":
+                task_text = "Starting"
+                progress_text = f"{random.randint(8, 30)}%"
+                actions_text = "⏸ ⏹ 🔍"
+            elif status == "Inactive":
+                task_text = "—"
+                progress_text = "0%"
+                actions_text = "▶ ⏹ 🔍"
+            else:
+                task_text = "—"
+                progress_text = "0%"
+                actions_text = "↺ ⏹ 🔍"
+            zebra_tag = "odd_row" if idx % 2 == 0 else "even_row"
             item_id = self.ld_table.insert(
                 "",
                 "end",
-                values=(name, serial, self._status_text(status), account_text, "0%"),
+                values=(name, serial, self._status_text(status), task_text, progress_text, account_text, actions_text),
             )
             is_checked = name in checked_names
             self.ld_table.checkboxes[item_id] = is_checked
-            base_tags = [self._status_tag(status), "checked" if is_checked else "unchecked"]
+            base_tags = [zebra_tag, self._status_tag(status)]
+            if is_checked:
+                base_tags.append("checked")
             self.ld_table.item(item_id, tags=tuple(base_tags))
 
         self._last_table_signature = render_signature
@@ -1331,52 +1893,112 @@ class LDManagerApp(ToolsMixin):
             self.log(f"Instance action failed for {name}: {exc}", "ERROR")
 
     def create_status_bar(self):
-        """Create status bar with progress."""
-        status_bar = tb.Frame(self.root, bootstyle="light", padding=(14, 9))
-        status_bar.pack(fill="x", side="bottom")
+        """Compact status bar with uptime and live progress."""
+        bar = tk.Frame(self.root, bg=self.palette["surface"], height=26)
+        bar.pack(side="bottom", fill="x")
+        bar.pack_propagate(False)
+        tk.Frame(bar, bg=self.palette["border"], height=1).pack(side="top", fill="x")
 
-        self.footer_selected_label = tb.Label(
-            status_bar,
-            text="Selected: 0 / 0",
-            bootstyle="secondary",
-            style="Chip.TLabel",
-            padding=(8, 4)
+        inner = tk.Frame(bar, bg=self.palette["surface"])
+        inner.pack(fill="both", expand=True, padx=12)
+
+        left = tk.Frame(inner, bg=self.palette["surface"])
+        left.pack(side="left", fill="x", expand=True)
+        right = tk.Frame(inner, bg=self.palette["surface"])
+        right.pack(side="right")
+
+        self.footer_selected_label = tk.Label(
+            left,
+            text="Selected: 0/0",
+            bg=self.palette["surface"],
+            fg=self.palette["muted"],
+            font=(self.mono_font, 9),
         )
-        self.footer_selected_label.pack(side="left", padx=(0, 12))
+        self.footer_selected_label.pack(side="left", padx=(0, 14))
 
-        self.status_label = tb.Label(status_bar, text="System: Idle", bootstyle="secondary", style="Chip.TLabel", padding=(8, 4))
-        self.status_label.pack(side="left", padx=(0, 12))
-        self.footer_cpu_label = tb.Label(status_bar, text="CPU: 0%", bootstyle="secondary", style="Chip.TLabel", padding=(8, 4))
-        self.footer_cpu_label.pack(side="left", padx=(0, 12))
-        self.footer_mem_label = tb.Label(status_bar, text="Memory: 0%", bootstyle="secondary", style="Chip.TLabel", padding=(8, 4))
-        self.footer_mem_label.pack(side="left")
-
-        self.progress = tb.Progressbar(
-            status_bar,
-            orient="horizontal",
-            mode="determinate",
-            bootstyle="success-striped",
-            length=280
+        self.status_sys_lbl = tk.Label(
+            left,
+            text="● System: Idle",
+            bg=self.palette["surface"],
+            fg=self.palette["muted"],
+            font=(self.mono_font, 9),
         )
-        self.progress.pack(side="right")
+        self.status_sys_lbl.pack(side="left", padx=(0, 14))
+        # alias for existing log helpers
+        self.status_label = self.status_sys_lbl
 
-        self.progress_label = tb.Label(
-            status_bar,
+        self.status_adb_lbl = tk.Label(
+            left,
+            text="ADB: — devices",
+            bg=self.palette["surface"],
+            fg=self.palette["muted"],
+            font=(self.mono_font, 9),
+        )
+        self.status_adb_lbl.pack(side="left", padx=(0, 14))
+
+        self.status_task_lbl = tk.Label(
+            left,
+            text="Tasks: 0 active",
+            bg=self.palette["surface"],
+            fg=self.palette["muted"],
+            font=(self.mono_font, 9),
+        )
+        self.status_task_lbl.pack(side="left", padx=(0, 14))
+
+        self.footer_cpu_label = tk.Label(
+            left,
+            text="CPU: 0%",
+            bg=self.palette["surface"],
+            fg=self.palette["muted"],
+            font=(self.mono_font, 9),
+        )
+        self.footer_cpu_label.pack(side="left", padx=(0, 10))
+        self.footer_mem_label = tk.Label(
+            left,
+            text="Mem: 0%",
+            bg=self.palette["surface"],
+            fg=self.palette["muted"],
+            font=(self.mono_font, 9),
+        )
+        self.footer_mem_label.pack(side="left", padx=(0, 10))
+
+        self.status_uptime = tk.Label(
+            right,
+            text="Uptime: 00:00:00",
+            bg=self.palette["surface"],
+            fg=self.palette["muted"],
+            font=(self.mono_font, 9),
+        )
+        self.status_uptime.pack(side="right", padx=(10, 0))
+
+        self.footer_progress_label = tk.Label(
+            right,
             text="0%",
-            bootstyle="secondary",
-            width=5
+            bg=self.palette["surface"],
+            fg=self.palette["muted"],
+            font=(self.mono_font, 9),
+            width=5,
         )
-        self.progress_label.pack(side="right", padx=(0, 6))
+        self.footer_progress_label.pack(side="right", padx=(0, 6))
+        self.footer_progress = GradientProgressBar(
+            right,
+            bg=self.palette["surface_alt"],
+            color_start=self.palette["primary"],
+            color_end=self.palette["secondary"],
+            height=6,
+        )
+        self.footer_progress.pack(side="right", padx=(0, 8), pady=(7, 0))
 
-        self.activity_spinner = tb.Progressbar(
-            status_bar,
-            orient="horizontal",
-            mode="indeterminate",
-            length=90,
-            bootstyle="info-striped",
-        )
-        self.activity_spinner.pack(side="right", padx=(0, 8))
-        self.activity_spinner.stop()
+        self._uptime_start = datetime.now()
+        self._tick_uptime()
+
+    def _tick_uptime(self):
+        elapsed = datetime.now() - getattr(self, "_uptime_start", datetime.now())
+        h, rem = divmod(int(elapsed.total_seconds()), 3600)
+        m, s = divmod(rem, 60)
+        if hasattr(self, "status_uptime"):
+            self.status_uptime.config(text=f"Uptime: {h:02}:{m:02}:{s:02}")
+        self.root.after(1000, self._tick_uptime)
 
     def start_system_metrics_refresh(self):
         """Periodic system metrics for the footer."""
@@ -1387,111 +2009,40 @@ class LDManagerApp(ToolsMixin):
                 if hasattr(self, "footer_cpu_label"):
                     self.footer_cpu_label.config(text=f"CPU: {cpu:.0f}%")
                 if hasattr(self, "footer_mem_label"):
-                    self.footer_mem_label.config(text=f"Memory: {mem:.0f}%")
+                    self.footer_mem_label.config(text=f"Mem: {mem:.0f}%")
+                if hasattr(self, "sidebar_status_pill"):
+                    adb_online = sum(1 for status in self._ld_status_cache.values() if status in ("Active", "Running"))
+                    self.sidebar_status_pill.config(text=f"ADB Online | {adb_online} active | CPU {cpu:.0f}%")
+                if hasattr(self, "status_adb_lbl"):
+                    adb_online = sum(1 for status in self._ld_status_cache.values() if status in ("Active", "Running"))
+                    self.status_adb_lbl.config(text=f"ADB: {adb_online} devices")
+                if hasattr(self, "status_task_lbl"):
+                    running = sum(1 for status in self._ld_status_cache.values() if status == "Running")
+                    self.status_task_lbl.config(text=f"Tasks: {running} active")
+                disk = psutil.disk_usage("/").percent
+                temp = min(95.0, 38.0 + (cpu * 0.35))
+                if hasattr(self, "sys_rows"):
+                    row = self.sys_rows.get("cpu")
+                    if row:
+                        row["bar"].set(cpu)
+                        row["value"].config(text=f"{cpu:.0f}%")
+                    row = self.sys_rows.get("ram")
+                    if row:
+                        row["bar"].set(mem)
+                        row["value"].config(text=f"{mem:.0f}%")
+                    row = self.sys_rows.get("disk")
+                    if row:
+                        row["bar"].set(disk)
+                        row["value"].config(text=f"{disk:.0f}%")
+                    row = self.sys_rows.get("temp")
+                    if row:
+                        row["bar"].set(temp)
+                        row["value"].config(text=f"{temp:.0f}C")
             except Exception:
                 pass
             self.root.after(2500, _tick)
 
         self.root.after(1200, _tick)
-
-    def animate_footer_effect(self):
-        """Animate the footer canvas to show a glowing gradient with moving particles"""
-        if not hasattr(self, "footer_effect_canvas") or self.footer_effect_canvas is None:
-            return
-
-        width = max(self.footer_effect_canvas.winfo_width(), 320)
-        height = max(self.footer_effect_canvas.winfo_height(), 50)
-
-        base_color = self._hsv_to_hex(self.footer_phase, saturation=0.82, value=0.95)
-        accent_color = self._hsv_to_hex((self.footer_phase + 45) % 360, saturation=0.7, value=0.94)
-
-        self.footer_effect_canvas.delete("bg")
-        self.footer_effect_canvas.create_rectangle(
-            0, 0, width, height,
-            fill=base_color,
-            outline="",
-            tags="bg"
-        )
-        self.footer_effect_canvas.create_rectangle(
-            0, height * 0.35, width, height,
-            fill=accent_color,
-            outline="",
-            stipple="gray25",
-            tags="bg"
-        )
-
-        self._ensure_footer_particles(width, height)
-        self.footer_effect_canvas.delete("particle")
-        for particle in self.footer_particles:
-            particle["x"] += particle["speed"]
-            if particle["x"] - particle["radius"] > width:
-                particle["x"] = -particle["radius"]
-
-            particle_color = self._hsv_to_hex(
-                (self.footer_phase + particle["radius"] * 4) % 360,
-                saturation=0.95,
-                value=0.85
-            )
-            y_pos = height - 6
-            self.footer_effect_canvas.create_oval(
-                particle["x"] - particle["radius"],
-                y_pos - particle["radius"] * 0.3,
-                particle["x"] + particle["radius"],
-                y_pos + particle["radius"] * 0.3,
-                fill=particle_color,
-                outline="",
-                tags="particle"
-            )
-
-        if not self.footer_text_main:
-            self.footer_text_main = self.footer_effect_canvas.create_text(
-                width / 2,
-                height / 2 - 8,
-                text="Automation Flow",
-                font=("Segoe UI", 12, "bold"),
-                fill="#f8f9ff",
-                tags="footer_text"
-            )
-            self.footer_text_sub = self.footer_effect_canvas.create_text(
-                width / 2,
-                height / 2 + 12,
-                text=self.status_label.cget("text"),
-                font=("Segoe UI", 9),
-                fill="#dfe4ff",
-                tags="footer_text"
-            )
-        else:
-            if self.footer_text_main is not None and self.footer_effect_canvas is not None:
-                self.footer_effect_canvas.coords(self.footer_text_main, width / 2, height / 2 - 8)
-            if self.footer_text_sub is not None and self.footer_effect_canvas is not None:
-                self.footer_effect_canvas.coords(self.footer_text_sub, width / 2, height / 2 + 12)
-
-        status_text = self.status_label.cget("text") if hasattr(self, "status_label") else ""
-        self.footer_effect_canvas.itemconfig(self.footer_text_sub, text=status_text)
-
-        self.footer_phase = (self.footer_phase + 1.5) % 360
-        self.footer_effect_canvas.after(90, self.animate_footer_effect)
-
-    def _ensure_footer_particles(self, width, _height):
-        """Create particle data once so animation can reuse it"""
-        if self.footer_particles:
-            return
-
-        for _ in range(7):
-            self.footer_particles.append({
-                "x": random.uniform(-width * 0.2, width),
-                "radius": random.uniform(10, 24),
-                "speed": random.uniform(0.8, 2.2)
-            })
-
-    def _hsv_to_hex(self, hue, saturation=0.8, value=0.9):
-        """Convert HSV color space to hex string"""
-        rgb = colorsys.hsv_to_rgb(hue / 360, saturation, value)
-        return "#{:02x}{:02x}{:02x}".format(
-            int(rgb[0] * 255),
-            int(rgb[1] * 255),
-            int(rgb[2] * 255)
-        )
 
     def create_enhanced_menu_bar(self):
         """Create enhanced menu bar"""
@@ -1712,7 +2263,7 @@ class LDManagerApp(ToolsMixin):
         custom_frame.pack(fill="x", pady=(18, 0))
 
         self.adb_command_var = tk.StringVar()
-        tb.Entry(custom_frame, textvariable=self.adb_command_var, font=("Consolas", 10)).pack(fill="x", pady=(0, 8))
+        tb.Entry(custom_frame, textvariable=self.adb_command_var, font=(self.mono_font, 10)).pack(fill="x", pady=(0, 8))
         tb.Button(custom_frame, text="Run Command", command=self._run_custom_adb_command, bootstyle="danger").pack(anchor="e")
 
         # Output console
@@ -2232,18 +2783,20 @@ class LDManagerApp(ToolsMixin):
             try:
                 stats = self.performance_monitor.get_stats()
                 total_instances = len(self._ld_snapshot)
-                active_instances = sum(1 for status in self._ld_status_cache.values() if status in ("Active", "Running"))
                 running_instances = sum(1 for status in self._ld_status_cache.values() if status == "Running")
 
                 if hasattr(self, "metric_labels") and isinstance(self.metric_labels, dict):
                     if "total_instances" in self.metric_labels:
                         self.metric_labels["total_instances"].config(text=str(total_instances))
-                    if "active_instances" in self.metric_labels:
-                        self.metric_labels["active_instances"].config(text=str(active_instances))
                     if "running_tasks" in self.metric_labels:
                         self.metric_labels["running_tasks"].config(text=str(running_instances))
+                    if "completed_tasks" in self.metric_labels:
+                        self.metric_labels["completed_tasks"].config(text=str(stats.get("completed", 0)))
                     if "errors" in self.metric_labels:
                         self.metric_labels["errors"].config(text=str(stats.get("failed", 0)))
+                if hasattr(self, "metric_sub_labels") and isinstance(self.metric_sub_labels, dict):
+                    if "total_instances" in self.metric_sub_labels:
+                        self.metric_sub_labels["total_instances"].config(text=f"{len(self._ld_checked_names)} selected")
             except Exception:
                 pass
             self.root.after(3500, _tick)
@@ -2288,6 +2841,15 @@ class LDManagerApp(ToolsMixin):
         # Auto-scroll to end
         self.logs_text.see("end")
         self.logs_text.config(state="disabled")
+
+        if hasattr(self, "live_log_text"):
+            self.live_log_text.config(state="normal")
+            self.live_log_text.insert("end", f"[{timestamp}] ", "TIMESTAMP")
+            self.live_log_text.insert("end", f"{message}\n", level)
+            if int(float(self.live_log_text.index("end-1c").split(".")[0])) > 300:
+                self.live_log_text.delete("1.0", "120.0")
+            self.live_log_text.see("end")
+            self.live_log_text.config(state="disabled")
         
         # Update status label for important messages
         if level in ["SUCCESS", "ERROR", "WARNING"]:
@@ -2681,14 +3243,10 @@ Recent Items:
             except Exception:
                 pass
             return
-        self.progress["value"] = value
-        self.progress_label.config(text=f"{int(value)}%")
-        if value < 35:
-            self.progress.configure(bootstyle="danger-striped")
-        elif value < 70:
-            self.progress.configure(bootstyle="warning-striped")
-        else:
-            self.progress.configure(bootstyle="success-striped")
+        if hasattr(self, "footer_progress"):
+            self.footer_progress.set(value)
+        if hasattr(self, "footer_progress_label"):
+            self.footer_progress_label.config(text=f"{int(value)}%")
         
     def update_selection_info(self):
         """Update the selection info label"""
@@ -2719,6 +3277,7 @@ Recent Items:
         total = len(self._ld_snapshot)
         online = sum(1 for status in self._ld_status_cache.values() if status in ("Active", "Running"))
         running = sum(1 for status in self._ld_status_cache.values() if status == "Running")
+        errors = sum(1 for status in self._ld_status_cache.values() if status not in ("Active", "Running", "Inactive", "Paused", "Completed"))
         with_account = sum(1 for account in self._ld_account_cache.values() if account and account != "No account")
         visible = len(filtered_rows)
         if hasattr(self, "fleet_total_chip"):
@@ -2731,6 +3290,18 @@ Recent Items:
             self.fleet_account_chip.config(text=f"With Account: {with_account}")
         if hasattr(self, "fleet_visible_chip"):
             self.fleet_visible_chip.config(text=f"Visible: {visible}")
+        badge_values = {
+            "dashboard": str(total),
+            "devices": str(online),
+            "automation": str(running),
+            "queue": str(len(self.content_manager.get_queue_items())) if hasattr(self, "content_manager") else "0",
+            "analytics": str(errors),
+            "schedule": "ON" if self.schedule_running else "OFF",
+        }
+        for key, value in badge_values.items():
+            nav = getattr(self, "_nav_rows", {}).get(key)
+            if nav:
+                nav["badge"].config(text=value)
 
     def clear_ld_filters(self):
         self.ld_search_var.set("")
@@ -2863,7 +3434,21 @@ Recent Items:
             values = self.ld_table.item(item)["values"]
             if values[0] == ld_name:
                 # Update values
-                self.ld_table.item(item, values=(values[0], values[1], self._status_text(status), values[3], values[4]))
+                task_text = values[3] if len(values) > 3 else "—"
+                progress_text = values[4] if len(values) > 4 else "0%"
+                account_text = values[5] if len(values) > 5 else "No account"
+                actions_text = values[6] if len(values) > 6 else "⏸ ⏹ 🔍"
+                if status == "Inactive":
+                    task_text = "—"
+                    progress_text = "0%"
+                    actions_text = "▶ ⏹ 🔍"
+                elif status == "Running" and task_text in ("—", "Starting"):
+                    task_text = "Scroll Feed" if self.task_type_var.get() == "scroll" else "Watch Reels"
+                    actions_text = "⏸ ⏹ 🔍"
+                self.ld_table.item(
+                    item,
+                    values=(values[0], values[1], self._status_text(status), task_text, progress_text, account_text, actions_text),
+                )
                 
                 # Update tags
                 tags = list(self.ld_table.item(item, "tags"))
@@ -2906,7 +3491,10 @@ Recent Items:
                 self.content_manager if self.use_content_queue.get() else None
             )
         else:
-            MessageBox.showerror("Error", "Please select a valid task type.")
+            MessageBox.showwarning(
+                "Task Not Implemented",
+                "This task type is UI-only right now. Please use Scroll Feed or Watch Reels."
+            )
             return
 
         # Start performance monitoring
@@ -2918,10 +3506,12 @@ Recent Items:
         self.start_button.config(state="disabled")
         self.pause_button.config(state="normal")
         self.stop_button.config(state="normal")
-        if hasattr(self, "activity_spinner"):
-            self.activity_spinner.start(12)
         if hasattr(self, "top_status_label"):
             self.top_status_label.config(text=f"System: Running  |  {datetime.now().strftime('%A, %d %b %Y')}")
+        if hasattr(self, "status_sys_lbl"):
+            self.status_sys_lbl.config(text="● System: Running", fg=self.palette["success"])
+        if hasattr(self, "status_task_lbl"):
+            self.status_task_lbl.config(text=f"Tasks: {len(selected_ld_names)} active")
         self._update_header_chips(mode_text="Running")
 
         self.log(f" Starting automation for {len(selected_ld_names)} LDs", "SUCCESS")
@@ -2961,16 +3551,20 @@ Recent Items:
         """Toggle pause state"""
         if self.pause_event.is_set():
             self.pause_event.clear()
-            self.pause_button.config(text="Resume", bootstyle="success")
+            self.pause_button.config(text="Resume")
             if hasattr(self, "top_status_label"):
                 self.top_status_label.config(text=f"System: Paused  |  {datetime.now().strftime('%A, %d %b %Y')}")
+            if hasattr(self, "status_sys_lbl"):
+                self.status_sys_lbl.config(text="◎ System: Paused", fg=self.palette["warning"])
             self._update_header_chips(mode_text="Paused")
             self.log("Automation paused", "WARNING")
         else:
             self.pause_event.set()
-            self.pause_button.config(text="Pause", bootstyle="warning")
+            self.pause_button.config(text="Pause")
             if hasattr(self, "top_status_label"):
                 self.top_status_label.config(text=f"System: Running  |  {datetime.now().strftime('%A, %d %b %Y')}")
+            if hasattr(self, "status_sys_lbl"):
+                self.status_sys_lbl.config(text="● System: Running", fg=self.palette["success"])
             self._update_header_chips(mode_text="Running")
             self.log("Automation resumed", "SUCCESS")
 
@@ -2984,11 +3578,13 @@ Recent Items:
         self.start_button.config(state="normal")
         self.pause_button.config(state="disabled")
         self.stop_button.config(state="disabled")
-        self.pause_button.config(text="Pause", bootstyle="warning")
-        if hasattr(self, "activity_spinner"):
-            self.activity_spinner.stop()
+        self.pause_button.config(text="Pause")
         if hasattr(self, "top_status_label"):
             self.top_status_label.config(text=f"System: Idle  |  {datetime.now().strftime('%A, %d %b %Y')}")
+        if hasattr(self, "status_sys_lbl"):
+            self.status_sys_lbl.config(text="○ System: Idle", fg=self.palette["muted"])
+        if hasattr(self, "status_task_lbl"):
+            self.status_task_lbl.config(text="Tasks: 0 active")
         self._update_header_chips(mode_text="Idle")
         self.log("Automation stopped", "INFO")
         self.update_progress(0)
@@ -3013,6 +3609,8 @@ Recent Items:
             return
             
         self.schedule_running = True
+        if hasattr(self, "schedule_enabled_ui"):
+            self.schedule_enabled_ui.set(True)
         self.schedule_enable_btn.config(text="Disable Schedule", bootstyle="warning")
         self.log("Scheduling enabled", "SUCCESS")
         
@@ -3025,6 +3623,8 @@ Recent Items:
     def stop_schedule(self):
         """Stop scheduling"""
         self.schedule_running = False
+        if hasattr(self, "schedule_enabled_ui"):
+            self.schedule_enabled_ui.set(False)
         self.schedule_enable_btn.config(text="Enable Schedule", bootstyle="success")
         self.log("Scheduling disabled", "INFO")
 
@@ -3083,9 +3683,14 @@ Recent Items:
     def clear_logs(self):
         """Clear logs with confirmation"""
         if MessageBox.askyesno("Clear Logs", "Are you sure you want to clear all logs?"):
-            self.logs_text.config(state="normal")
-            self.logs_text.delete("1.0", "end")
-            self.logs_text.config(state="disabled")
+            if hasattr(self, "logs_text"):
+                self.logs_text.config(state="normal")
+                self.logs_text.delete("1.0", "end")
+                self.logs_text.config(state="disabled")
+            if hasattr(self, "live_log_text"):
+                self.live_log_text.config(state="normal")
+                self.live_log_text.delete("1.0", "end")
+                self.live_log_text.config(state="disabled")
             self.log("Logs cleared", "INFO")
 
     def refresh_all(self):
@@ -3102,7 +3707,3 @@ Recent Items:
         self.stop_schedule()
         self.stop_automation(confirm=False)
         self.root.destroy()
-
-
-
-

@@ -15,10 +15,18 @@ def _is_windows_admin() -> bool:
 
 
 def _request_admin_and_relaunch() -> bool:
+    """Try to elevate; if the user declines, keep running without admin instead of quitting."""
     if os.name != "nt":
         return False
 
     if _is_windows_admin():
+        return False
+
+    if not messagebox.askyesno(
+        "Administrator Access",
+        "Some LDPlayer controls may need admin permissions.\n\n"
+        "Run as Administrator now?",
+    ):
         return False
 
     if getattr(sys, "frozen", False):
@@ -38,11 +46,11 @@ def _request_admin_and_relaunch() -> bool:
         1,
     )
     if result <= 32:
-        messagebox.showerror(
-            "Administrator Access Required",
-            "This app must be started as Administrator.",
+        messagebox.showwarning(
+            "Continue Without Admin",
+            "Could not elevate. Continuing without admin rights.",
         )
-        raise SystemExit(1)
+        return False
 
     return True
 
@@ -90,10 +98,19 @@ def main() -> None:
         raise SystemExit(1) from exc
 
     if _request_admin_and_relaunch():
+        # Elevated child process will handle UI; let this one exit.
         raise SystemExit(0)
 
     root = tk.Tk()
-    app = LDManagerApp(root)
+    try:
+        app = LDManagerApp(root)
+    except Exception as exc:  # Surface errors that would silently close the UI
+        import traceback
+
+        traceback.print_exc()
+        messagebox.showerror("Startup Error", str(exc))
+        raise SystemExit(1)
+
     root.protocol("WM_DELETE_WINDOW", app.on_closing)
     root.mainloop()
 

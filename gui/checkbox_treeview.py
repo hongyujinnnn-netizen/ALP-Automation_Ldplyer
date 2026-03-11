@@ -1,10 +1,8 @@
 ﻿import tkinter as tk
 from tkinter import ttk
 import time
-import ttkbootstrap as tb
-from ttkbootstrap.constants import *
 
-class CheckboxTreeview(tb.Treeview):
+class CheckboxTreeview(ttk.Treeview):
     def __init__(self, master=None, **kwargs):
         # Use ttkbootstrap Treeview
         super().__init__(master, **kwargs)
@@ -13,20 +11,20 @@ class CheckboxTreeview(tb.Treeview):
         self._clicked_item = None
         self._click_time = 0
 
-        # Configure tags with softer colors for a cleaner table look
-        self.tag_configure("checked", background="#E8F0FE", foreground="#0F172A")
-        self.tag_configure("unchecked", background="#FFFFFF", foreground="#0F172A")
-        self.tag_configure("active", background="#ECFDF3", foreground="#14532D")
-        self.tag_configure("inactive", background="#FEF2F2", foreground="#7F1D1D")
-        self.tag_configure("running", background="#FFFBEB", foreground="#78350F")
-        self.tag_configure("paused", background="#EFF6FF", foreground="#1E3A8A")
-        self.tag_configure("completed", background="#EEF2FF", foreground="#3730A3")
-        self.tag_configure("selected", background="#DBEAFE", foreground="#1E3A8A")
-        self.tag_configure("hover", background="#F3F4F6")
+        # Configure tags with dark theme colors
+        self.tag_configure("checked", background="#1E2840", foreground="#E2E8F0")
+        self.tag_configure("unchecked", background="#111318", foreground="#E2E8F0")
+        self.tag_configure("active", background="#10B981", foreground="#E2E8F0")
+        self.tag_configure("inactive", background="#EF4444", foreground="#E2E8F0")
+        self.tag_configure("running", background="#F59E0B", foreground="#E2E8F0")
+        self.tag_configure("paused", background="#7C3AED", foreground="#E2E8F0")
+        self.tag_configure("completed", background="#10B981", foreground="#E2E8F0")
+        self.tag_configure("selected", background="#00E5FF", foreground="#0A0C10")
+        self.tag_configure("hover", background="#1E2330")
         
         # Custom checkbox tags
-        self.tag_configure("checkbox_checked", background="#16a34a", foreground="white")
-        self.tag_configure("checkbox_unchecked", background="#64748b", foreground="white")
+        self.tag_configure("checkbox_checked", background="#10B981", foreground="white")
+        self.tag_configure("checkbox_unchecked", background="#64748B", foreground="white")
         
         # Bind events
         self.bind("<Button-1>", self._on_click)
