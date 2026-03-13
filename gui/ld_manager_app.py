@@ -1839,23 +1839,20 @@ class LDManagerApp(ToolsMixin):
             MessageBox.showwarning("Automation Running", "Automation is already running.")
             return
 
-        found = False
+        # Keep existing multi-select checks; only ensure the clicked row is included.
+        target_item = None
         for item in self.ld_table.get_children():
             values = self.ld_table.item(item, "values")
-            if not values:
-                continue
-            is_target = values[0] == name
-            checked = self.ld_table.checkboxes.get(item, False)
-            if is_target:
-                found = True
-                if not checked:
-                    self.ld_table.toggle_checkbox(item)
-            elif checked:
-                self.ld_table.toggle_checkbox(item)
+            if values and values[0] == name:
+                target_item = item
+                break
 
-        if not found:
+        if not target_item:
             MessageBox.showerror("Run Automation", f"Could not find emulator row: {name}")
             return
+
+        if not self.ld_table.checkboxes.get(target_item, False):
+            self.ld_table.toggle_checkbox(target_item)
 
         self.update_selection_info()
         self.log(f"Starting automation for {name}", "INFO")
