@@ -121,6 +121,11 @@ class ScrollTaskHandler(BaseTaskHandler):
         
         params = intensity_params.get(intensity, intensity_params["medium"])
         
+        # Let Facebook/feed settle before issuing swipe commands
+        settle_delay = random.uniform(5, 10)
+        self.log(f"Waiting {settle_delay:.1f}s before starting scrolls")
+        time.sleep(settle_delay)
+
         start_time = time.time()
         successful_swipes = 0
         failed_swipes = 0
