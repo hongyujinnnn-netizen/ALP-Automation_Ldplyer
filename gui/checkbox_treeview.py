@@ -11,11 +11,11 @@ class CheckboxTreeview(ttk.Treeview):
         self._clicked_item = None
         self._click_time = 0
 
-        # Configure tags with dark theme colors
-        self.tag_configure("checked", background="#1E2840", foreground="#E2E8F0")
-        self.tag_configure("unchecked", background="#111318", foreground="#E2E8F0")
+        # Configure tags; keep checked rows uncolored so only the checkmark indicates selection.
+        self.tag_configure("checked", background="", foreground="")
+        self.tag_configure("unchecked", background="", foreground="")
         self.tag_configure("active", background="#10B981", foreground="#E2E8F0")
-        self.tag_configure("inactive", background="#EF4444", foreground="#E2E8F0")
+        self.tag_configure("inactive", background="", foreground="")
         self.tag_configure("running", background="#F59E0B", foreground="#E2E8F0")
         self.tag_configure("paused", background="#7C3AED", foreground="#E2E8F0")
         self.tag_configure("completed", background="#10B981", foreground="#E2E8F0")

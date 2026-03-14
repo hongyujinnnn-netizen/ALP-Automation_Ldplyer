@@ -367,7 +367,8 @@ class LDManagerApp(
         
         # Configure tags with state colors
         self.ld_table.tag_configure("active", background="#0A1A20", foreground="#67E8F9")
-        self.ld_table.tag_configure("inactive", background="#180D0D", foreground="#FCA5A5")
+        # Keep inactive rows uncolored; zebra striping will handle contrast.
+        self.ld_table.tag_configure("inactive", background="", foreground="")
         self.ld_table.tag_configure("running", background="#0A1A14", foreground="#6EE7B7")
         self.ld_table.tag_configure("paused", background="#160F22", foreground="#C4B5FD")
         self.ld_table.tag_configure("completed", background="#0A1420", foreground="#93C5FD")
@@ -535,12 +536,13 @@ class LDManagerApp(
                 progress_text = "0%"
                 actions_text = "↺ ⏹ 🔍"
             zebra_tag = "odd_row" if idx % 2 == 0 else "even_row"
+            is_checked = name in checked_names
             item_id = self.ld_table.insert(
                 "",
                 "end",
+                text="☑" if is_checked else "☐",
                 values=(name, serial, self._status_text(status), task_text, progress_text, account_text, actions_text),
             )
-            is_checked = name in checked_names
             self.ld_table.checkboxes[item_id] = is_checked
             base_tags = [zebra_tag, self._status_tag(status)]
             if is_checked:
