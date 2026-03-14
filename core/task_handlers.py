@@ -238,25 +238,30 @@ class ScrollTaskHandler(BaseTaskHandler):
                 
         return False
 
-    def open_facebook(self, d):
+    def open_facebook(self, d, ready_delay_range=(5, 10)):
         try:
             package = "com.facebook.katana"  # Main Facebook package name
             activity = "com.facebook.katana.LoginActivity"
 
             # Try launching Facebook
             d.app_start(package)
-            self.log("ðŸ“±Facebook app opened")
+            self.log("Facebook app opened")
+
+            # Give the app time to finish initial loading so UI is stable
+            wait_secs = random.uniform(*ready_delay_range)
+            self.log(f"Waiting {wait_secs:.1f}s for Facebook to be ready")
+            time.sleep(wait_secs)
 
             # Wait until main UI appears (logo or feed)
             if d(packageName=package).wait(timeout=10):
-                self.log("âœ”ï¸Facebook is running")
+                self.log("Facebook is running")
                 return True
             else:
-                self.log("âš ï¸Facebook app did not load in time")
+                self.log("Facebook app did not load in time")
                 return False
 
         except Exception as e:
-            self.log(f"âŒFailed to open Facebook: {e}")
+            self.log(f"Failed to open Facebook: {e}")
             return False
 
     def _in_top_right(self, d, node, top_ratio=0.25, right_ratio=0.28):
@@ -691,8 +696,8 @@ class ReelsTaskHandler(BaseTaskHandler):
                 video_posted += 1
                 continue
 
-        d.app_start("com.facebook.katana")
-        time.sleep(5)
+        # Re-open Facebook and allow it to settle before any follow-up actions
+        self.open_facebook(d)
             
         if scroll_after_post:
             self.log("ðŸŽ¬ Starting Reels scrolling after post...")
@@ -1089,25 +1094,30 @@ class ReelsTaskHandler(BaseTaskHandler):
             self.log(f"[switch_to_page] Error: {e}")
             return False
 
-    def open_facebook(self, d):
+    def open_facebook(self, d, ready_delay_range=(5, 10)):
         try:
             package = "com.facebook.katana"  # Main Facebook package name
             activity = "com.facebook.katana.LoginActivity"
 
             # Try launching Facebook
             d.app_start(package)
-            self.log("ðŸ“±Facebook app opened")
+            self.log("Facebook app opened")
+
+            # Give the app a short window to finish booting so UI elements exist
+            wait_secs = random.uniform(*ready_delay_range)
+            self.log(f"Waiting {wait_secs:.1f}s for Facebook to be ready")
+            time.sleep(wait_secs)
 
             # Wait until main UI appears (logo or feed)
             if d(packageName=package).wait(timeout=10):
-                self.log("âœ”ï¸ Facebook is running")
+                self.log("Facebook is running")
                 return True
             else:
-                self.log("âš ï¸ Facebook app did not load in time")
+                self.log("Facebook app did not load in time")
                 return False
 
         except Exception as e:
-            self.log(f"âŒFailed to open Facebook: {e}")
+            self.log(f"Failed to open Facebook: {e}")
             return False
 
     #function clear app    
