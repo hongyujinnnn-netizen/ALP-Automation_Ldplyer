@@ -5,6 +5,7 @@ from pathlib import Path
 import zipfile
 import os
 from core.paths import get_app_paths, AppPaths
+from core.settings import _atomic_write_json
 
 # ==================== ACCOUNT MANAGER ====================
 class AccountManager:
@@ -13,13 +14,13 @@ class AccountManager:
         self.accounts_file = self.paths.accounts_file
         self.accounts = self.load_accounts()
     
-    def load_accounts(self):
+    def load_accounts(self) -> dict:
         if self.accounts_file.exists():
             with open(self.accounts_file, 'r') as f:
                 return json.load(f)
         return {}
     
-    def assign_account_to_device(self, device_name, account_data):
+    def assign_account_to_device(self, device_name: str, account_data: dict) -> None:
         self.accounts[device_name] = {
             **account_data,
             'assigned_date': datetime.now().isoformat(),
@@ -27,25 +28,45 @@ class AccountManager:
         }
         self.save_accounts()
     
-    def get_device_account(self, device_name):
+    def get_device_account(self, device_name: str) -> dict:
         account = self.accounts.get(device_name, {})
         if account:
             account['last_used'] = datetime.now().isoformat()
             self.save_accounts()
         return account
     
-    def remove_account(self, device_name):
+    def remove_account(self, device_name: str) -> None:
         if device_name in self.accounts:
             del self.accounts[device_name]
             self.save_accounts()
     
-    def save_accounts(self):
-        self.accounts_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.accounts_file, 'w') as f:
-            json.dump(self.accounts, f, indent=4, ensure_ascii=False)
+    def save_accounts(self) -> None:
+        _atomic_write_json(self.accounts_file, self.accounts)
     
-    def get_all_accounts(self):
+    def get_all_accounts(self) -> dict:
         return self.accounts
+
+    # Small adapter used by the Account Manager dialog.
+    def list_accounts(self) -> list[dict]:
+        """
+        Return a flat list of accounts suitable for table display.
+
+        Each entry contains at least: name, instance and status.
+        """
+        rows: list[dict] = []
+        for instance, data in self.accounts.items():
+            # Existing data may come from older versions; be defensive.
+            username = data.get("username") or data.get("name") or instance
+            status = data.get("status") or "active"
+            rows.append(
+                {
+                    "name": str(username),
+                    "instance": str(instance),
+                    "status": str(status),
+                    **data,
+                }
+            )
+        return rows
 
 # ==================== CONTENT MANAGER ====================
 class ContentManager:
@@ -129,9 +150,7 @@ class ContentManager:
             self.video_queue = []
     
     def save_content_queue(self):
-        self.content_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.content_file, 'w') as f:
-            json.dump(self.video_queue, f, indent=4, ensure_ascii=False)
+        _atomic_write_json(self.content_file, self.video_queue)
 
 # ==================== SMART SCHEDULER ====================
 class SmartScheduler:
@@ -226,16 +245,28 @@ class SmartScheduler:
         self.save_scheduled_tasks()
     
     def load_scheduled_tasks(self):
-        if self.schedule_file.exists():
-            with open(self.schedule_file, 'r') as f:
-                self.task_queue = json.load(f)
-        else:
+        if not self.schedule_file.exists():
             self.task_queue = []
+            return
+
+        try:
+            with open(self.schedule_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError) as exc:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            corrupt_copy = self.schedule_file.with_suffix(f"{self.schedule_file.suffix}.corrupt_{timestamp}")
+            try:
+                self.schedule_file.rename(corrupt_copy)
+            except OSError:
+                pass
+            print(f"Invalid schedule JSON. Resetting tasks. Details: {exc}")
+            self.task_queue = []
+            return
+
+        self.task_queue = data if isinstance(data, list) else []
     
     def save_scheduled_tasks(self):
-        self.schedule_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.schedule_file, 'w') as f:
-            json.dump(self.task_queue, f, indent=4)
+        _atomic_write_json(self.schedule_file, self.task_queue)
 
 # ==================== BACKUP MANAGER ====================
 class BackupManager:

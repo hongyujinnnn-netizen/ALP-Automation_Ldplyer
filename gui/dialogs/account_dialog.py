@@ -11,8 +11,9 @@ import ttkbootstrap as tb
 class AccountDialogMixin:
 
     def show_account_manager(self):
-        if hasattr(self, "_account_dialog") and self._account_dialog.winfo_exists():
-            self._account_dialog.focus()
+        win = getattr(self, "_account_dialog", None)
+        if win is not None and win.winfo_exists():
+            win.focus()
             return
 
         P = self.palette
@@ -105,9 +106,36 @@ class AccountDialogMixin:
         fp.pack(fill="x")
 
         self._acct_btn(fp, "Close",       P["muted"],   P["border"],               win.destroy,          "left")
-        self._acct_btn(fp, "Remove",      "#F87171",    "rgba(239,68,68,0.4)",     self._remove_account, "right")
-        self._acct_btn(fp, "+ Add Account", "#A78BFA",  "rgba(124,58,237,0.4)",   self._add_account,    "right")
-        self._acct_btn(fp, "↺ Refresh",   P["primary"], P["primary"],             self._refresh_account_tree, "right")
+        # Keep a reference so we can enable/disable based on selection.
+        self._acct_remove_btn = self._acct_btn(
+            fp,
+            "Remove",
+            "#F87171",
+            "rgba(239,68,68,0.4)",
+            self._remove_account,
+            "right",
+        )
+        self._acct_add_btn = self._acct_btn(
+            fp,
+            "+ Add Account",
+            "#A78BFA",
+            "rgba(124,58,237,0.4)",
+            self._add_account,
+            "right",
+        )
+        self._acct_refresh_btn = self._acct_btn(
+            fp,
+            "↺ Refresh",
+            P["primary"],
+            P["primary"],
+            self._refresh_account_tree,
+            "right",
+        )
+
+        # Initialise remove button state and react to selection changes.
+        if hasattr(self, "_acct_remove_btn"):
+            self._acct_remove_btn.configure(state="disabled")
+        tree.bind("<<TreeviewSelect>>", self._on_account_selection_changed)
 
     # ── helpers ───────────────────────────────────────────────────────── #
 
@@ -133,11 +161,31 @@ class AccountDialogMixin:
             border_hex = self.palette["border"]
         f = tk.Frame(parent, bg=self.palette["border_alt"], padx=1, pady=1)
         f.pack(side=side, padx=4)
-        tk.Button(f, text=text, bg=self.palette["surface_alt"], fg=fg,
-                  activebackground=self.palette["surface"],
-                  activeforeground=fg, relief="flat",
-                  font=(self.mono_font, 10), padx=12, pady=5,
-                  cursor="hand2", command=command).pack()
+        btn = tk.Button(
+            f,
+            text=text,
+            bg=self.palette["surface_alt"],
+            fg=fg,
+            activebackground=self.palette["surface"],
+            activeforeground=fg,
+            relief="flat",
+            font=(self.mono_font, 10),
+            padx=12,
+            pady=5,
+            cursor="hand2",
+            command=command,
+        )
+        btn.pack()
+        return btn
+
+    def _on_account_selection_changed(self, _event=None):
+        """Enable/disable destructive actions based on selection."""
+        tree = getattr(self, "_account_tree", None)
+        btn = getattr(self, "_acct_remove_btn", None)
+        if not tree or not btn:
+            return
+        has_sel = bool(tree.selection())
+        btn.configure(state="normal" if has_sel else "disabled")
 
     def _remove_account(self):
         tree = getattr(self, "_account_tree", None)
@@ -145,16 +193,25 @@ class AccountDialogMixin:
             return
         sel = tree.selection()
         if not sel:
-            self.log("No account selected", "WARNING")
+            self.log("Select an account to remove first.", "WARNING")
             return
         item = sel[0]
         name = tree.item(item, "values")[1]
-        if tb.Messagebox.yesno(f"Remove account '{name}'?", "Confirm"):
+        if tb.Messagebox.yesno(
+            f"Remove account '{name}' from this workspace?",
+            "Confirm Removal",
+        ):
             tree.delete(item)
             self.log(f"Account removed: {name}", "INFO")
+            # Re-evaluate selection state after deletion.
+            self._on_account_selection_changed()
 
     def _add_account(self):
-        self.log("Add account — not yet implemented", "INFO")
+        self.log(
+            "Add account is not available yet in this version. "
+            "You can still manage mappings from the emulator side.",
+            "INFO",
+        )
 
     def _refresh_account_tree(self):
         tree = getattr(self, "_account_tree", None)

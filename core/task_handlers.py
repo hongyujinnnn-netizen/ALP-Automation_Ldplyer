@@ -1,4 +1,4 @@
-﻿import os
+import os
 import subprocess
 import time
 import random
@@ -156,6 +156,16 @@ class ScrollTaskHandler(BaseTaskHandler):
                 # Add slight horizontal variation for more natural movement
                 x_pos = random.randint(280, 320)
                 
+                # Respect optional rate limiter if present (EnhancedScrollTaskHandler and similar).
+                limiter = getattr(self, "rate_limiter", None)
+                if limiter is not None:
+                    if not limiter.can_perform_action("scroll_swipe"):
+                        wait_for = max(0.0, limiter.get_wait_time())
+                        if wait_for > 0:
+                            self.log(f"Rate limit reached for {name}; backing off for {wait_for:.1f}s")
+                            # Sleep in the worker thread, does not block Tkinter UI.
+                            time.sleep(min(wait_for, 60.0))
+
                 # Execute the swipe command
                 try:
                     result = subprocess.run([
@@ -195,7 +205,13 @@ class ScrollTaskHandler(BaseTaskHandler):
                         consecutive_failures = 0
                 
                 # Vary the delay between swipes for more human-like behavior
-                delay = random.uniform(*params["delay_range"])
+                base_delay = random.uniform(*params["delay_range"])
+                # If an ActivityRandomizer is attached (EnhancedScrollTaskHandler), use it for jitter.
+                randomizer = getattr(self, "randomizer", None)
+                if randomizer is not None:
+                    delay = max(0.1, randomizer.random_delay(base_delay, variation=0.35))
+                else:
+                    delay = base_delay
                 
                 # Add occasional longer pauses to mimic reading behavior
                 if successful_swipes % 5 == 0:
@@ -607,6 +623,14 @@ class ReelsTaskHandler(BaseTaskHandler):
         success_pots = 0
         while video_posted < max_videos:
             try:
+                # Respect optional rate limiter if present to avoid hammering Facebook/device.
+                limiter = getattr(self, "rate_limiter", None)
+                if limiter is not None and not limiter.can_perform_action("reels_post"):
+                    wait_for = max(0.0, limiter.get_wait_time())
+                    if wait_for > 0:
+                        self.log(f"Reels rate limit reached on {name}; pausing for {wait_for:.1f}s")
+                        time.sleep(min(wait_for, 90.0))
+
                 if not self.hold_on_video(d, hold_time=2):
                     self.log(f"âŒ Failed to hold on video on {name}")
                     video_posted += 1
@@ -872,7 +896,13 @@ class ReelsTaskHandler(BaseTaskHandler):
             serial = d.serial  # required for adb
 
             while time.time() - start_time < duration:
-                swipe_time = random.uniform(*params["swipe_time"])
+                base_swipe = random.uniform(*params["swipe_time"])
+                randomizer = getattr(self, "randomizer", None)
+                swipe_time = (
+                    max(150, int(randomizer.random_swipe_duration(base_swipe, variation=0.25)))
+                    if randomizer is not None
+                    else base_swipe
+                )
                 
                 start_x = w // 2
                 start_y = int(h * 0.8)
@@ -889,7 +919,12 @@ class ReelsTaskHandler(BaseTaskHandler):
                 successful_swipes += 1
                 
                 # Delay between swipes
-                delay = random.uniform(*params["delay"])
+                base_delay = random.uniform(*params["delay"])
+                delay = (
+                    max(0.2, randomizer.random_delay(base_delay, variation=0.35))
+                    if randomizer is not None
+                    else base_delay
+                )
                 if successful_swipes % 3 == 0:
                     delay += random.uniform(1.0, 3.0)
                 time.sleep(delay)

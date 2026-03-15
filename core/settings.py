@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Any
 
 
 class SettingsError(RuntimeError):
@@ -100,12 +101,7 @@ def load_app_settings(path: Path) -> AppSettings:
 
 
 def save_app_settings(path: Path, settings: AppSettings) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        with path.open("w", encoding="utf-8") as handle:
-            json.dump(settings.to_dict(), handle, indent=4, ensure_ascii=False)
-    except OSError as exc:
-        raise SettingsError(f"Could not write application settings: {exc}") from exc
+    _atomic_write_json(path, settings.to_dict())
 
 
 def load_schedule_settings(path: Path) -> ScheduleSettings:
@@ -122,9 +118,27 @@ def load_schedule_settings(path: Path) -> ScheduleSettings:
 
 
 def save_schedule_settings(path: Path, settings: ScheduleSettings) -> None:
+    _atomic_write_json(path, settings.to_dict())
+
+
+def _atomic_write_json(path: Path, data: Any) -> None:
+    """
+    Safely write JSON to disk using a temp file + atomic replace.
+
+    This greatly reduces the chance of corrupting JSON files if the
+    process is interrupted during a write.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
     try:
-        with path.open("w", encoding="utf-8") as handle:
-            json.dump(settings.to_dict(), handle, indent=4, ensure_ascii=False)
+        with tmp_path.open("w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=4, ensure_ascii=False)
+        os.replace(tmp_path, path)
     except OSError as exc:
-        raise SettingsError(f"Could not write schedule settings: {exc}") from exc
+        # Best-effort cleanup of partial temp file
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except OSError:
+            pass
+        raise SettingsError(f"Could not write JSON settings: {exc}") from exc

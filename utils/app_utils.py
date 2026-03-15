@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import os
 import sys
 import re
 from pathlib import Path
+from typing import Dict, Any
 import psutil
 import platform
 
@@ -10,13 +13,13 @@ class AppUtils:
     """Utility functions for the application"""
     
     @staticmethod
-    def resource_path(relative_path):
+    def resource_path(relative_path: str) -> str:
         """Get absolute path to resource, works for dev and for PyInstaller"""
         base_path = getattr(sys, "_MEIPASS", os.path.abspath("."))
         return os.path.join(base_path, relative_path)
     
     @staticmethod
-    def format_duration(seconds):
+    def format_duration(seconds: int) -> str:
         """Format seconds into human readable duration"""
         hours = seconds // 3600
         minutes = (seconds % 3600) // 60
@@ -30,7 +33,7 @@ class AppUtils:
             return f"{seconds}s"
     
     @staticmethod
-    def format_file_size(size_bytes):
+    def format_file_size(size_bytes: int) -> str:
         """Format file size in human readable format"""
         if size_bytes == 0:
             return "0 B"
@@ -44,13 +47,13 @@ class AppUtils:
         return f"{size_bytes:.2f} {size_names[i]}"
     
     @staticmethod
-    def validate_email(email):
+    def validate_email(email: str) -> bool:
         """Validate email format"""
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return re.match(pattern, email) is not None
     
     @staticmethod
-    def get_system_info():
+    def get_system_info() -> Dict[str, Any]:
         """Get comprehensive system information"""
         try:
             system_info = {

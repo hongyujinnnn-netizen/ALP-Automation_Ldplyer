@@ -1,0 +1,8 @@
+{
+    "parallel_ld": 3,
+    "boot_delay": 7,
+    "task_duration": 11,
+    "max_videos": 4,
+    "start_same_time": false,
+    "use_content_queue": true
+}

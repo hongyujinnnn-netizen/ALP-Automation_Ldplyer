@@ -1,4 +1,5 @@
 import os
+import shlex
 import subprocess
 import threading
 import time
@@ -417,6 +418,41 @@ class ControlEmulator:
             print("ADB server killed")
         except Exception as e:
             print(f"Error killing ADB server: {e}")
+
+    def run_adb_command(self, command, timeout=15):
+        """Run an adb command for the tools console and return combined output."""
+        if not isinstance(command, str) or not command.strip():
+            raise ValueError("ADB command cannot be empty")
+
+        cmd = shlex.split(command.strip(), posix=False)
+        if not cmd:
+            raise ValueError("ADB command cannot be empty")
+
+        if cmd[0].lower() != "adb":
+            cmd.insert(0, "adb")
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+
+        stdout = (result.stdout or "").strip()
+        stderr = (result.stderr or "").strip()
+
+        parts = []
+        if stdout:
+            parts.append(stdout)
+        if stderr:
+            parts.append(stderr)
+        if not parts:
+            if result.returncode == 0:
+                parts.append("(no output)")
+            else:
+                parts.append(f"Command failed with exit code {result.returncode}")
+
+        return "\n".join(parts)
 
     def set_boot_delay(self, delay):
         """Set boot delay for emulator startup"""

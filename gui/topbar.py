@@ -64,9 +64,9 @@ class TopBarMixin:
         self._top_tab_buttons = {}
         tab_defs = [
             ("Overview", 0, None),
-            ("Devices", 0, self._focus_devices),
-            ("Tasks", 1, None),
-            ("Logs", 4, None),
+            ("Devices", 1, self._focus_devices),
+            ("Tasks", 2, None),
+            ("Logs", 5, None),
         ]
         for label, idx, action in tab_defs:
             btn = tb.Button(

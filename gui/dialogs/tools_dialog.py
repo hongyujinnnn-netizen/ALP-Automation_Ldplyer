@@ -11,9 +11,11 @@ import ttkbootstrap as tb
 class ToolsDialogMixin:
 
     def show_tools_center(self, section="quick"):
-        if hasattr(self, "_tools_center_window") and \
-                self._tools_center_window.winfo_exists():
-            self._tools_center_window.focus()
+        win = getattr(self, "_tools_center_window", None)
+        if win is not None and win.winfo_exists():
+            win.focus()
+            if section in getattr(self, "_tools_panels", {}):
+                self._open_tools_tab(section)
             return
 
         P = self.palette
@@ -25,6 +27,7 @@ class ToolsDialogMixin:
         win.grab_set()
         win.configure(bg=P["surface"])
         self._tools_center_window = win
+        win.protocol("WM_DELETE_WINDOW", self._close_tools_center)
 
         # ── header ────────────────────────────────────────────────────── #
         hdr = tk.Frame(win, bg=P["surface_alt"],
@@ -78,13 +81,18 @@ class ToolsDialogMixin:
              P["primary"], self.create_backup),
             ("🔄", "Restore Backup",     "Load a previous configuration snapshot",
              "#A78BFA",   self.restore_backup),
+            ("🧹", "Clean Old Backups",  "Delete older backup ZIPs, keep latest 10",
+             P["danger"], self.cleanup_old_backups),
             ("📊", "Performance Report", "Open live metrics & session statistics",
              P["success"], self.show_performance_report),
             ("👤", "Account Manager",   "View and manage linked Facebook accounts",
              P["warning"], self.show_account_manager),
         ]
         for icon, name, desc, color, cmd in quick_tools:
-            self._tool_card(q, icon, name, desc, color, cmd)
+            self._tool_card(
+                q, icon, name, desc, color,
+                lambda action=cmd: self._invoke_tools_action(action),
+            )
 
         # Diagnostics tab
         d = tk.Frame(content, bg=P["surface"], padx=18, pady=16)
@@ -105,6 +113,8 @@ class ToolsDialogMixin:
             padx=12, pady=10,
         )
         self.system_info_text.pack(fill="both", expand=True)
+        # Treat diagnostics as read-only viewer.
+        self.system_info_text.config(state="disabled")
 
         self._tool_row_btn(d, "↺ Refresh System Info", P["primary"],
                            self._refresh_system_info_tree)
@@ -127,7 +137,7 @@ class ToolsDialogMixin:
                  bg=P["surface_alt"], fg=P["text"],
                  insertbackground=P["primary"], relief="flat",
                  font=(self.mono_font, 11), highlightthickness=0,
-                 pady=7, padx=10).pack(fill="x")
+                 borderwidth=0).pack(fill="x", padx=10, pady=7, ipady=6)
 
         run_f = tk.Frame(cmd_row, bg=P["primary"], padx=1, pady=1)
         run_f.pack(side="right")
@@ -164,6 +174,8 @@ class ToolsDialogMixin:
         )
         self.adb_output.insert("end", "// output will appear here\n")
         self.adb_output.pack(fill="both", expand=True)
+        # Start in read-only mode; helper toggles state when appending.
+        self.adb_output.config(state="disabled")
 
         # ── footer ────────────────────────────────────────────────────── #
         foot = tk.Frame(win, bg=P["surface_alt"],
@@ -178,7 +190,7 @@ class ToolsDialogMixin:
                   activebackground=P["surface"], activeforeground=P["text"],
                   relief="flat", font=(self.mono_font, 10),
                   padx=14, pady=5, cursor="hand2",
-                  command=win.destroy).pack()
+                  command=self._close_tools_center).pack()
 
         self._open_tools_tab(section)
 
@@ -193,13 +205,11 @@ class ToolsDialogMixin:
 
         def on_enter(e):  card.config(highlightbackground=P["border_alt"])
         def on_leave(e):  card.config(highlightbackground=P["border"])
-        card.bind("<Enter>", on_enter)
-        card.bind("<Leave>", on_leave)
-        card.bind("<Button-1>", lambda e: command())
+        def on_click(_event=None):
+            command()
 
         inner = tk.Frame(card, bg=P["surface_alt"], padx=14, pady=12)
         inner.pack(fill="x")
-        inner.bind("<Button-1>", lambda e: command())
 
         # icon pill
         ico_bg = tk.Frame(inner, bg=P["surface3"] if hasattr(P, "surface3")
@@ -211,7 +221,6 @@ class ToolsDialogMixin:
 
         info = tk.Frame(inner, bg=P["surface_alt"])
         info.pack(side="left", fill="x", expand=True)
-        info.bind("<Button-1>", lambda e: command())
 
         tk.Label(info, text=name, bg=P["surface_alt"],
                  fg=P["text"], font=(self.display_font, 11),
@@ -222,6 +231,16 @@ class ToolsDialogMixin:
 
         tk.Label(inner, text="›", bg=P["surface_alt"],
                  fg=P["border_alt"], font=(self.display_font, 16)).pack(side="right")
+
+        for widget in (card, inner, ico_bg, info):
+            widget.bind("<Enter>", on_enter)
+            widget.bind("<Leave>", on_leave)
+            widget.bind("<Button-1>", on_click)
+
+        for widget in card.winfo_children():
+            widget.bind("<Button-1>", on_click)
+            for child in widget.winfo_children():
+                child.bind("<Button-1>", on_click)
 
     def _tool_row_btn(self, parent, text, color, command):
         P = self.palette
@@ -244,6 +263,32 @@ class ToolsDialogMixin:
                            highlightcolor=P["primary"])
             else:
                 btn.config(fg=P["muted"], highlightthickness=0)
+
+    def _invoke_tools_action(self, action):
+        win = getattr(self, "_tools_center_window", None)
+        if win and win.winfo_exists():
+            try:
+                win.grab_release()
+            except Exception:
+                pass
+            self._close_tools_center()
+
+        self.root.after(0, action)
+
+    def _close_tools_center(self):
+        win = getattr(self, "_tools_center_window", None)
+        self._tools_center_window = None
+        if win is None:
+            return
+        try:
+            if win.winfo_exists():
+                try:
+                    win.grab_release()
+                except Exception:
+                    pass
+                win.destroy()
+        except Exception:
+            pass
 
     def _refresh_system_info_tree(self):
         if not hasattr(self, "system_info_text"):

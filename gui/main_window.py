@@ -5,7 +5,7 @@ from datetime import datetime
 class MainWindow:
     def __init__(self, selected_ld_names, running_flag, ld_thread, log_func=print,
                  start_same_time=False, task_type="scroll", task_handler=None, progress_callback=None,
-                 boot_delay=20, task_duration=900, max_videos=2, emulator=None):
+                 boot_delay=20, task_duration=900, max_videos=2, emulator=None, state_callback=None):
 
         # Import here to avoid circular imports when we need a fresh controller
         if emulator is None:
@@ -48,6 +48,7 @@ class MainWindow:
         self.task_type = task_type
         self.task_handler = task_handler
         self.progress_callback = progress_callback
+        self.state_callback = state_callback
         self.completed_count = 0
         self.boot_delay = boot_delay
         self.max_videos = max_videos
@@ -58,6 +59,13 @@ class MainWindow:
             time.sleep(0.5)
         return not self.running_flag()
 
+    def _push_state(self, name, **payload):
+        if callable(self.state_callback):
+            try:
+                self.state_callback(name, payload)
+            except Exception:
+                pass
+
     def ld_task_stage(self, name, stage):
         if not self.running_flag():
             return
@@ -66,25 +74,48 @@ class MainWindow:
             return
         
         if stage == "start":
+            self._push_state(name, phase="start", state="Starting", task="Boot sequence", progress=10)
             self.log(f"Starting LD: {name}")
             self.em.start_ld(name, delay_between_starts=self.boot_delay)
             self.log(f"Waiting for LD ready: {name}")
+            self._push_state(name, phase="start", state="Waiting", task="Waiting for Android ready", progress=24)
             if not self.em.wait_for_ld_ready(name, timeout=max(90, self.boot_delay * 6), poll_interval=2):
                 self.log(f"LD not ready in time: {name}")
+                self._push_state(name, phase="start", state="Attention", task="Boot timeout", progress=0)
+            else:
+                self._push_state(name, phase="ready", state="Active", task="Device online", progress=36)
         elif stage == "facebook":
             if self.task_type == "scroll":
                 if not self.em.wait_for_ld_ready(name, timeout=60, poll_interval=2):
                     self.log(f"Skip Facebook; LD not ready: {name}")
+                    self._push_state(name, phase="facebook", state="Attention", task="Facebook skipped", progress=0)
                     return
                 self.log(f"Opening Facebook on LD: {name}")
+                self._push_state(name, phase="facebook", state="Preparing", task="Opening Facebook", progress=48)
                 self.em.open_facebook(name)
+                self._push_state(name, phase="facebook", state="Ready", task="Facebook opened", progress=60)
         elif stage == "task":
             self.log(f"Running {self.task_type} task on LD: {name}")
+            self._push_state(
+                name,
+                phase="task",
+                state="Running",
+                task=f"{self.task_type.title()} task",
+                progress=78 if self.task_type == "reels" else 72,
+                started_task_at=datetime.now().isoformat(),
+            )
             if self.task_handler is not None:
                 if self.task_type == "reels":
                     success = self.task_handler.execute(name, self.task_duration, max_videos=self.max_videos)
                 else:
                     success = self.task_handler.execute(name, self.task_duration)
+                self._push_state(
+                    name,
+                    phase="task",
+                    state="Completed" if success else "Attention",
+                    task=f"{self.task_type.title()} task",
+                    progress=100 if success else 0,
+                )
             
             # Update progress if callback provided
             if self.progress_callback:
@@ -97,8 +128,10 @@ class MainWindow:
                 # Wait a bit longer to ensure all cleanup is done
                 time.sleep(5)
             self.log(f"Closing LD: {name}")
+            self._push_state(name, phase="close", state="Closing", task="Shutdown sequence", progress=100)
             time.sleep(15)  # Fixed close delay
             self.em.quit_ld(name)
+            self._push_state(name, phase="close", state="Idle", task="Waiting for next run", progress=0, finished_at=datetime.now().isoformat())
 
     def main(self):
         total = len(self.thread_ld)

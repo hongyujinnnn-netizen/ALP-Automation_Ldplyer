@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import messagebox as MessageBox
+from tkinter import messagebox as MessageBox, filedialog
 import ttkbootstrap as tb
 from gui.gradient_progress import GradientProgressBar
 
@@ -70,6 +70,8 @@ class LogsPageMixin:
         h_scrollbar.config(command=self.logs_text.xview)
 
         self.logs_text.pack(fill="both", expand=True)
+        # Logs are a viewer; writing is done through the central logger.
+        self.logs_text.config(state="disabled")
 
 
     def export_logs(self):

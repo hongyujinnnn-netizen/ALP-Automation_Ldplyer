@@ -12,8 +12,9 @@ from gui.gradient_progress import GradientProgressBar
 class PerformanceDialogMixin:
 
     def show_performance_report(self):
-        if hasattr(self, "_perf_dialog") and self._perf_dialog.winfo_exists():
-            self._perf_dialog.focus()
+        win = getattr(self, "_perf_dialog", None)
+        if win is not None and win.winfo_exists():
+            win.focus()
             return
 
         P = self.palette

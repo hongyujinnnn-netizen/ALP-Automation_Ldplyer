@@ -1,4 +1,4 @@
-﻿import os
+import os
 import threading
 import tkinter as tk
 from tkinter import ttk
@@ -39,6 +39,7 @@ from gui.topbar import TopBarMixin
 from gui.status_bar import StatusBarMixin
 from gui.menu_bar import MenuBarMixin
 from gui.pages.dashboard_page import DashboardPageMixin
+from gui.pages.devices_page import DevicesPageMixin
 from gui.pages.tasks_page import TasksPageMixin
 from gui.pages.schedule_page import SchedulePageMixin
 from gui.pages.content_page import ContentPageMixin
@@ -55,6 +56,7 @@ class LDManagerApp(
     StatusBarMixin,
     MenuBarMixin,
     DashboardPageMixin,
+    DevicesPageMixin,
     TasksPageMixin,
     SchedulePageMixin,
     ContentPageMixin,
@@ -94,6 +96,7 @@ class LDManagerApp(
         self._ld_snapshot = {}
         self._ld_status_cache = {}
         self._ld_account_cache = {}
+        self._device_runtime_state = {}
         self._last_table_signature = None
         self._ld_search_job = None
         self._main_thread_id = threading.get_ident()
@@ -422,6 +425,7 @@ class LDManagerApp(
         
         # Create tabs
         self.create_dashboard_tab()
+        self.create_devices_tab()
         self.create_tasks_tab()
         self.create_schedule_tab()
         self.create_content_tab()
@@ -434,17 +438,20 @@ class LDManagerApp(
         idx = self.notebook.index("current")
         tab_to_nav = {
             0: "dashboard",
-            1: "automation",
-            2: "schedule",
-            3: "content",
-            4: "logs",
+            1: "devices",
+            2: "automation",
+            3: "schedule",
+            4: "content",
+            5: "logs",
         }
         self._set_sidebar_nav_active(tab_to_nav.get(idx, "dashboard"))
         if hasattr(self, "_top_tab_buttons"):
             active_label = "Overview"
             if idx == 1:
+                active_label = "Devices"
+            elif idx == 2:
                 active_label = "Tasks"
-            elif idx == 4:
+            elif idx == 5:
                 active_label = "Logs"
             for label, btn in self._top_tab_buttons.items():
                 btn.configure(bootstyle="info" if label == active_label else "secondary-link")
@@ -467,6 +474,57 @@ class LDManagerApp(
             "Paused": "paused",
             "Completed": "completed",
         }.get(status, "inactive")
+
+    def _ensure_device_runtime_entry(self, ld_name):
+        entry = self._device_runtime_state.setdefault(
+            ld_name,
+            {
+                "state": "Idle",
+                "task": "Waiting for selection",
+                "progress": 0,
+                "queue_label": "-",
+            },
+        )
+        serial = self._ld_snapshot.get(ld_name) or self.emulator.name_to_serial.get(ld_name)
+        if serial:
+            entry["serial"] = serial
+        return entry
+
+    def update_device_runtime_state(self, ld_name, payload=None, **kwargs):
+        if not self._is_main_thread():
+            merged = {}
+            if payload:
+                merged.update(payload)
+            merged.update(kwargs)
+            try:
+                self.root.after(0, lambda name=ld_name, data=merged: self.update_device_runtime_state(name, data))
+            except Exception:
+                pass
+            return
+
+        entry = self._ensure_device_runtime_entry(ld_name)
+        if payload:
+            entry.update(payload)
+        if kwargs:
+            entry.update(kwargs)
+        entry.setdefault("started_at", datetime.now().isoformat())
+        self._render_devices_page()
+
+    def _mark_selected_devices_as_queued(self, selected_ld_names):
+        timestamp = datetime.now().isoformat()
+        selected_set = set(selected_ld_names)
+        for order, name in enumerate(selected_ld_names, start=1):
+            self.update_device_runtime_state(
+                name,
+                state="Queued",
+                task="Waiting to start task",
+                progress=0,
+                queue_label=f"#{order}",
+                started_at=timestamp,
+            )
+        for name in list(self._device_runtime_state.keys()):
+            if name not in selected_set and self._device_runtime_state[name].get("state") == "Queued":
+                self.update_device_runtime_state(name, state="Idle", task="Waiting for selection", progress=0, queue_label="-")
 
     def _get_checked_names(self):
         return set(self._ld_checked_names)
@@ -571,6 +629,8 @@ class LDManagerApp(
             return
         self._last_table_signature = None
         self._render_ld_table()
+        if hasattr(self, "_render_devices_page"):
+            self._render_devices_page()
 
     def _show_instance_context_menu(self, event):
         item = self.ld_table.identify_row(event.y)
@@ -674,6 +734,25 @@ class LDManagerApp(
             MessageBox.showinfo("Backup", "Backup created successfully.")
         else:
             MessageBox.showerror("Backup", "Backup failed. Check logs for details.")
+
+    def cleanup_old_backups(self):
+        """Delete older backup ZIPs while keeping the most recent set."""
+        if not MessageBox.askyesno(
+            "Clean Old Backups",
+            "Delete older backup archives and keep only the most recent 10?",
+        ):
+            return
+
+        try:
+            self.backup_manager.cleanup_old_backups(keep_count=10)
+        except Exception as exc:
+            MessageBox.showerror("Backup Cleanup", f"Cleanup failed: {exc}")
+            return
+
+        MessageBox.showinfo(
+            "Backup Cleanup",
+            "Old backups cleaned up. The most recent 10 archives were kept.",
+        )
 
     def restore_backup(self):
         """Restore app data from a backup ZIP."""
@@ -956,6 +1035,7 @@ Recent Items:
             return
             
         selected_ld_names = [self.ld_table.item(item)["values"][0] for item in selected_items]
+        self._mark_selected_devices_as_queued(selected_ld_names)
         
         def restart_thread():
             for name in selected_ld_names:
@@ -1006,6 +1086,8 @@ Recent Items:
         if hasattr(self, "footer_selected_label"):
             self.footer_selected_label.config(text=f"Selected: {selected_all} / {len(self._ld_snapshot)}")
         self._update_header_chips()
+        if hasattr(self, "_render_devices_page"):
+            self._render_devices_page()
 
     def _update_fleet_summary(self, filtered_rows):
         total = len(self._ld_snapshot)
@@ -1163,6 +1245,16 @@ Recent Items:
             return
 
         self._ld_status_cache[ld_name] = status
+        runtime_defaults = {"state": status}
+        if status == "Inactive":
+            runtime_defaults.update({"task": "Waiting for selection", "progress": 0, "queue_label": "-"})
+        elif status == "Active":
+            runtime_defaults.update({"task": "Device active", "progress": 30})
+        elif status == "Running":
+            runtime_defaults.update({"task": "Scroll Feed" if self.task_type_var.get() == "scroll" else "Watch Reels", "progress": 72})
+        elif status == "Completed":
+            runtime_defaults.update({"task": "Task completed", "progress": 100})
+        self.update_device_runtime_state(ld_name, runtime_defaults)
         self._last_table_signature = None
         for item in self.ld_table.get_children():
             values = self.ld_table.item(item)["values"]
@@ -1266,7 +1358,8 @@ Recent Items:
                     self.boot_delay.get(),
                     self.task_duration.get() * 60,
                     self.max_videos.get(),
-                    emulator=self.emulator
+                    emulator=self.emulator,
+                    state_callback=self.update_device_runtime_state,
                 )
 
                 main_window.main()
@@ -1322,6 +1415,10 @@ Recent Items:
         self._update_header_chips(mode_text="Idle")
         self.log("Automation stopped", "INFO")
         self.update_progress(0)
+        for name in list(self._device_runtime_state.keys()):
+            current_state = self._device_runtime_state[name].get("state", "")
+            if current_state not in ("Completed", "Idle"):
+                self.update_device_runtime_state(name, state="Idle", task="Waiting for next run", progress=0, queue_label="-")
 
     def on_schedule_type_change(self):
         """Show/hide days of week based on schedule type"""

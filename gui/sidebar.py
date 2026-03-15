@@ -13,27 +13,27 @@ class SidebarMixin:
 
         logo = tb.Frame(sidebar, style="Sidebar.TFrame")
         logo.pack(fill="x", pady=(0, 14))
-        tb.Label(logo, text="⚡ LDPlayer", style="SidebarTitle.TLabel").pack(anchor="w")
+        tb.Label(logo, text="LDPlayer", style="SidebarTitle.TLabel").pack(anchor="w")
         tb.Label(logo, text="Manager v2.0", style="SidebarSub.TLabel").pack(anchor="w")
 
         self._nav_rows = {}
         nav_items = [
-            ("dashboard", "📊 Dashboard", lambda: self.notebook.select(0), "CONTROL", ""),
-            ("devices", "📱 Devices", self._focus_devices, "CONTROL", "0"),
-            ("automation", "🤖 Automation", lambda: self.notebook.select(1), "CONTROL", ""),
-            ("queue", "📋 Task Queue", lambda: self.notebook.select(3), "CONTROL", "0"),
-            ("accounts", "👤 Accounts", self.show_account_manager, "MANAGE", ""),
-            ("schedule", "🗓️ Scheduler", lambda: self.notebook.select(2), "MANAGE", ""),
-            ("backups", "💾 Backups", self.create_backup, "MANAGE", ""),
-            ("analytics", "📈 Analytics", lambda: self.notebook.select(0), "MANAGE", ""),
-            ("settings", "⚙️ Settings", self.show_settings_dialog, "SYSTEM", ""),
-            ("adb_tools", "🔌 ADB Tools", self.show_adb_tools, "SYSTEM", ""),
+            ("dashboard", "Dashboard", lambda: self.notebook.select(0), "CONTROL", ""),
+            ("devices", "Devices", self._focus_devices, "CONTROL", "0"),
+            ("automation", "Automation", lambda: self.notebook.select(2), "CONTROL", ""),
+            ("queue", "Task Queue", lambda: self.notebook.select(4), "CONTROL", "0"),
+            ("accounts", "Accounts", self.show_account_manager, "MANAGE", ""),
+            ("schedule", "Scheduler", lambda: self.notebook.select(3), "MANAGE", ""),
+            ("backups", "Backups", self.create_backup, "MANAGE", ""),
+            ("analytics", "Analytics", lambda: self.notebook.select(0), "MANAGE", ""),
+            ("settings", "Settings", self.show_settings_dialog, "SYSTEM", ""),
+            ("adb_tools", "ADB Tools", self.show_adb_tools, "SYSTEM", ""),
         ]
 
         current_section = None
 
-        def _make_nav_row(parent, key, text, badge_text, command):
-            row = tk.Frame(parent, bg=self.palette["surface"], height=34)
+        def _make_nav_row(parent_widget, key, text, badge_text, command):
+            row = tk.Frame(parent_widget, bg=self.palette["surface"], height=34)
             row.pack(fill="x", pady=1)
             row.pack_propagate(False)
 
@@ -87,9 +87,15 @@ class SidebarMixin:
 
     def _focus_devices(self):
         if hasattr(self, "notebook"):
-            self.notebook.select(0)
-        if hasattr(self, "search_entry"):
-            self.search_entry.focus_set()
+            self.notebook.select(1)
+        if hasattr(self, "_render_devices_page"):
+            self._render_devices_page()
+        if hasattr(self, "devices_tree"):
+            children = self.devices_tree.get_children()
+            if children:
+                self.devices_tree.selection_set(children[0])
+                self.devices_tree.focus(children[0])
+                self._update_device_focus_card()
         if hasattr(self, "_top_tab_buttons"):
             for label, btn in self._top_tab_buttons.items():
                 btn.configure(bootstyle="info" if label == "Devices" else "secondary-link")
