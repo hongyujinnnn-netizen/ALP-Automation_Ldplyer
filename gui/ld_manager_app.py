@@ -29,6 +29,7 @@ from core.emulator import ControlEmulator
 from core.managers import AccountManager, ContentManager, BackupManager, SmartScheduler, TaskTemplates
 from utils.performance_monitor import PerformanceMonitor
 from utils.app_utils import AppUtils
+from utils.ip_guard import check_ip_allowed
 from gui.checkbox_treeview import CheckboxTreeview
 from gui.main_window import MainWindow
 from gui.mixins import ToolsMixin
@@ -144,6 +145,10 @@ class LDManagerApp(
         self.schedule_repeat_hours = tk.IntVar(value=0)  # 0 means no repeat
         self.start_same_time = tk.BooleanVar(value=False)
         self.use_content_queue = tk.BooleanVar(value=True)
+        # Comma-separated list of blocked ISO country codes for IP guard.
+        self.blocked_countries = tk.StringVar(
+            value="US,KH,CN,TH,VN,PH,ID,MY,LA,MM"
+        )
         
         # Task type variables
         self.task_type_var = tk.StringVar(value="scroll")
@@ -836,6 +841,13 @@ class LDManagerApp(
         self.max_videos.set(settings.max_videos)
         self.start_same_time.set(settings.start_same_time)
         self.use_content_queue.set(settings.use_content_queue)
+        try:
+            # Store as comma-separated, upper-case country codes.
+            blocked = ",".join(settings.blocked_countries)
+            self.blocked_countries.set(blocked)
+        except Exception:
+            # Fallback to default if anything goes wrong.
+            self.blocked_countries.set("US,KH,CN,TH,VN,PH,ID,MY,LA,MM")
 
     def save_settings(self):
         """Persist general settings to disk."""
@@ -846,6 +858,11 @@ class LDManagerApp(
             max_videos=int(self.max_videos.get()),
             start_same_time=bool(self.start_same_time.get()),
             use_content_queue=bool(self.use_content_queue.get()),
+            blocked_countries=[
+                code.strip().upper()
+                for code in self.blocked_countries.get().split(",")
+                if code.strip()
+            ],
         )
 
         try:
@@ -1307,6 +1324,12 @@ Recent Items:
                 self.pause_event,
                 lambda: self.running_event.is_set()
             )
+            # Pass blocked countries for per-LD IP guard inside the handler.
+            task_handler.blocked_countries = [
+                code.strip().upper()
+                for code in self.blocked_countries.get().split(",")
+                if code.strip()
+            ]
         elif task_type == "reels":
             from core.task_handlers import ReelsTaskHandler
             task_handler = ReelsTaskHandler(

@@ -5,6 +5,8 @@ import random
 import re
 from abc import ABC, abstractmethod
 
+from utils.ip_guard import check_ld_ip_allowed
+
 # Import uiautomator2
 try:
     import uiautomator2 as u2
@@ -101,6 +103,20 @@ class ScrollTaskHandler(BaseTaskHandler):
         if not self.ensure_device_ready(name, timeout=60):
             self.log(f"Device is not ready for automation: {name}")
             return False
+
+        # Per-LD IP / country guard: query public IP from inside the emulator
+        # so that per-instance VPN / proxy settings are respected.
+        blocked_countries = getattr(self, "blocked_countries", None)
+        if blocked_countries:
+            if not check_ld_ip_allowed(serial, blocked_countries, self.log, ld_name=name):
+                # Optionally close the LD instance when blocked, to avoid
+                # leaving a leaking session running.
+                try:
+                    if hasattr(self.emulator, "quit_ld"):
+                        self.emulator.quit_ld(name)
+                except Exception:
+                    pass
+                return False
 
         # Connect with uiautomator2 for profile switching
         try:

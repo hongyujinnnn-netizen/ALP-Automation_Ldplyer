@@ -4,7 +4,7 @@ import json
 import os
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 
 class SettingsError(RuntimeError):
@@ -21,10 +21,34 @@ class AppSettings:
     max_videos: int = 2
     start_same_time: bool = False
     use_content_queue: bool = True
+    # Two-letter ISO country codes to block when detected as the host's
+    # public IP country. If the country is blocked, automation will not start.
+    blocked_countries: List[str] = field(
+        default_factory=lambda: [
+            "US",  # United States
+            "KH",  # Cambodia / Khmer
+            "CN",  # China
+            "TH",  # Thailand
+            "VN",  # Vietnam
+            "PH",  # Philippines
+            "ID",  # Indonesia
+            "MY",  # Malaysia
+            "LA",  # Laos
+            "MM",  # Myanmar
+        ]
+    )
 
     @classmethod
     def from_dict(cls, raw: Dict) -> "AppSettings":
         try:
+            raw_blocked = raw.get("blocked_countries")
+            if isinstance(raw_blocked, list):
+                blocked_countries = [str(code).upper() for code in raw_blocked if code]
+            elif isinstance(raw_blocked, str):
+                blocked_countries = [part.strip().upper() for part in raw_blocked.split(",") if part.strip()]
+            else:
+                blocked_countries = cls.blocked_countries  # type: ignore[attr-defined]
+
             return cls(
                 parallel_ld=int(raw.get("parallel_ld", cls.parallel_ld)),
                 boot_delay=int(raw.get("boot_delay", cls.boot_delay)),
@@ -32,6 +56,7 @@ class AppSettings:
                 max_videos=int(raw.get("max_videos", cls.max_videos)),
                 start_same_time=bool(raw.get("start_same_time", cls.start_same_time)),
                 use_content_queue=bool(raw.get("use_content_queue", cls.use_content_queue)),
+                blocked_countries=blocked_countries,
             )
         except (TypeError, ValueError) as exc:
             raise SettingsError(f"Invalid value in application settings: {exc}") from exc

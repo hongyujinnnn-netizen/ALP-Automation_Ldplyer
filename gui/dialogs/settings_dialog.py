@@ -26,6 +26,8 @@ class SettingsDialogMixin:
         max_videos_var = tk.IntVar(value=self.max_videos.get())
         start_same_var = tk.BooleanVar(value=self.start_same_time.get())
         use_queue_var = tk.BooleanVar(value=self.use_content_queue.get())
+        # Reuse the main app variable for blocked countries so changes are live.
+        blocked_countries_var = getattr(self, "blocked_countries", tk.StringVar(value=""))
 
         shell = tk.Frame(dialog, bg=P["surface"], padx=18, pady=18)
         shell.pack(fill="both", expand=True)
@@ -324,6 +326,50 @@ class SettingsDialogMixin:
 
         self._toggle_feature_card(parent, palette, "Start at Same Time", "Launch all selected instances together for faster startup on stronger machines.", start_same_var)
         self._toggle_feature_card(parent, palette, "Use Content Queue", "Enable a safer and more organized content delivery flow during the session.", use_queue_var)
+
+        # Country / IP guard configuration
+        outer, card = self._premium_card(
+            parent,
+            palette,
+            "IP / Country Guard",
+            "Block automation when your public IP is detected in selected countries.",
+        )
+        outer.pack(fill="x", pady=(12, 0))
+
+        row = tk.Frame(card, bg=palette["surface_alt"])
+        row.pack(fill="x", pady=(8, 0))
+
+        tk.Label(
+            row,
+            text="Blocked Countries (ISO codes)",
+            bg=palette["surface_alt"],
+            fg=palette["text"],
+            font=(self.mono_font, 8),
+        ).pack(anchor="w")
+
+        hint = (
+            "Examples: US, KH, CN, TH, VN, PH, ID, MY, LA, MM\n"
+            "Automation will not start if your public IP is in any blocked country."
+        )
+        tk.Label(
+            card,
+            text=hint,
+            bg=palette["surface_alt"],
+            fg=palette["muted"],
+            justify="left",
+            wraplength=520,
+            font=(self.mono_font, 8),
+        ).pack(anchor="w", pady=(2, 8))
+
+        # Use the main app's StringVar so changes are saved directly.
+        entry = tk.Entry(
+            card,
+            textvariable=getattr(self, "blocked_countries", None),
+            bg=palette["surface"],
+            fg=palette["text"],
+            insertbackground=palette["text"],
+        )
+        entry.pack(fill="x")
 
         outer, notes = self._premium_card(parent, palette, "Operational Notes", "Behavior settings should match your hardware and launch pacing.")
         outer.pack(fill="x", pady=(12, 0))

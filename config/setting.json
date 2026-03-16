@@ -4,5 +4,8 @@
     "task_duration": 2,
     "max_videos": 2,
     "start_same_time": true,
-    "use_content_queue": false
+    "use_content_queue": false,
+    "blocked_countries": [
+        "KH"
+    ]
 }
