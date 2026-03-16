@@ -1,5 +1,5 @@
 {
-    "parallel_ld": 2,
+    "parallel_ld": 1,
     "boot_delay": 10,
     "task_duration": 2,
     "max_videos": 2,

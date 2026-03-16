@@ -112,13 +112,23 @@ class ScrollTaskHandler(BaseTaskHandler):
             self.log(f"âŒ Failed to connect {serial}: {e}")
             return False
 
-        # Configure scroll parameters based on intensity
+        # Configure scroll parameters based on intensity.
+        # Durations are in milliseconds for the ADB swipe command.
         intensity_params = {
-            "light": {"duration_range": (500, 700), "delay_range": (2.0, 3.0)},
-            "medium": {"duration_range": (400, 600), "delay_range": (1.5, 2.5)},
-            "heavy": {"duration_range": (300, 500), "delay_range": (1.0, 2.0)}
+            "light": {
+                "duration_range": (550, 800),   # slightly slower, longer swipes
+                "delay_range": (1.8, 3.0),
+            },
+            "medium": {
+                "duration_range": (450, 700),
+                "delay_range": (1.4, 2.4),
+            },
+            "heavy": {
+                "duration_range": (380, 600),   # faster but still non-robotic
+                "delay_range": (1.0, 2.0),
+            },
         }
-        
+
         params = intensity_params.get(intensity, intensity_params["medium"])
         
         # Let Facebook/feed settle before issuing swipe commands
@@ -137,24 +147,41 @@ class ScrollTaskHandler(BaseTaskHandler):
                     self.log(f"Scrolling paused on {name} after {successful_swipes} successful swipes")
                     return False
                 
-                # Determine scroll direction
+                # Determine scroll direction.
+                # Even when direction is "down", add a small probability of brief
+                # reverse scrolls to mimic human corrections.
                 if direction == "random":
                     current_direction = "down" if random.random() > 0.5 else "up"
                 else:
                     current_direction = direction
+                    if current_direction == "down" and random.random() < 0.12:
+                        current_direction = "up"
+                    elif current_direction == "up" and random.random() < 0.12:
+                        current_direction = "down"
                 
-                # Generate swipe parameters based on direction and intensity
+                # Generate swipe parameters based on direction and intensity.
                 scroll_duration = random.uniform(*params["duration_range"])
-                
+
+                # Vary the scroll "distance" so some swipes are short nudges and
+                # others are longer feed jumps.
+                long_scroll_chance = 0.25
+                if random.random() < long_scroll_chance:
+                    vertical_span = (260, 720)
+                else:
+                    vertical_span = (320, 560)
+
                 if current_direction == "down":
-                    start_y = random.randint(800, 900)
-                    end_y = random.randint(300, 400)
+                    start_y = random.randint(760, 920)
+                    end_y = start_y - random.randint(*vertical_span)
                 else:  # up direction
-                    start_y = random.randint(300, 400)
-                    end_y = random.randint(800, 900)
-                
-                # Add slight horizontal variation for more natural movement
-                x_pos = random.randint(280, 320)
+                    start_y = random.randint(320, 520)
+                    end_y = start_y + random.randint(*vertical_span)
+
+                # Add slight horizontal variation and occasional micro-jitter for
+                # more natural movement instead of a perfectly straight line.
+                base_x = random.randint(270, 330)
+                jitter = random.randint(-8, 8)
+                x_pos = base_x + jitter
                 
                 # Respect optional rate limiter if present (EnhancedScrollTaskHandler and similar).
                 limiter = getattr(self, "rate_limiter", None)
@@ -204,23 +231,24 @@ class ScrollTaskHandler(BaseTaskHandler):
                             return False
                         consecutive_failures = 0
                 
-                # Vary the delay between swipes for more human-like behavior
+                # Vary the delay between swipes for more human-like behavior.
                 base_delay = random.uniform(*params["delay_range"])
+
                 # If an ActivityRandomizer is attached (EnhancedScrollTaskHandler), use it for jitter.
                 randomizer = getattr(self, "randomizer", None)
                 if randomizer is not None:
                     delay = max(0.1, randomizer.random_delay(base_delay, variation=0.35))
                 else:
                     delay = base_delay
-                
-                # Add occasional longer pauses to mimic reading behavior
-                if successful_swipes % 5 == 0:
-                    delay += random.uniform(0.5, 1.5)
-                    
-                # Occasionally vary swipe length (20% of the time)
-                if random.random() < 0.2:
-                    delay += random.uniform(0.3, 0.8)
-                    
+
+                # Add occasional longer pauses to mimic "reading" or watching a reel.
+                if successful_swipes > 0 and successful_swipes % 4 == 0 and random.random() < 0.7:
+                    delay += random.uniform(1.2, 3.0)
+
+                # Occasionally introduce a micro-pause as if hesitating.
+                if random.random() < 0.15:
+                    delay += random.uniform(0.15, 0.45)
+
                 time.sleep(delay)
                 
             self.log(f"Completed scrolling on {name}: {successful_swipes} successful, {failed_swipes} failed swipes")
