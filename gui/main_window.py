@@ -2,6 +2,9 @@ import threading
 import time
 from datetime import datetime
 
+from services.emulator_service import EmulatorService
+
+
 class MainWindow:
     def __init__(self, selected_ld_names, running_flag, ld_thread, log_func=print,
                  start_same_time=False, task_type="scroll", task_handler=None, progress_callback=None,
@@ -9,8 +12,7 @@ class MainWindow:
 
         # Import here to avoid circular imports when we need a fresh controller
         if emulator is None:
-            from core.emulator import ControlEmulator
-            self.em = ControlEmulator()
+            self.em = EmulatorService()
             self._owns_emulator = True
         else:
             self.em = emulator

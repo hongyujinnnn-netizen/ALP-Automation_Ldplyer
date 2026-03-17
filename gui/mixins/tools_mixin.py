@@ -1,4 +1,3 @@
-import subprocess
 from tkinter import filedialog
 from tkinter import messagebox as MessageBox
 from tkinter import simpledialog
@@ -26,8 +25,7 @@ class ToolsMixin:
     def adb_list_devices(self):
         """List ADB devices."""
         try:
-            result = subprocess.run(["adb", "devices"], capture_output=True, text=True)
-            output = result.stdout.strip() or "(no devices detected)"
+            output = self.emulator.run_adb_command("adb devices")
             self._append_adb_output(output)
             MessageBox.showinfo("ADB Devices", output)
         except Exception as exc:
@@ -38,8 +36,7 @@ class ToolsMixin:
         command = simpledialog.askstring("ADB Shell", "Enter ADB shell command:")
         if command:
             try:
-                result = subprocess.run(["adb", "shell", command], capture_output=True, text=True)
-                output = result.stdout.strip() or result.stderr.strip() or "(no output)"
+                output = self.emulator.run_adb_command(f"adb shell {command}")
                 self._append_adb_output(f"adb shell {command}\n{output}")
                 MessageBox.showinfo("ADB Shell Output", output)
             except Exception as exc:
@@ -56,8 +53,7 @@ class ToolsMixin:
             return
 
         try:
-            result = subprocess.run(["adb", "pull", remote_path, local_dir], capture_output=True, text=True)
-            output = result.stdout.strip() or result.stderr.strip() or "Pull completed."
+            output = self.emulator.run_adb_command(["adb", "pull", remote_path, local_dir], timeout=30)
             self._append_adb_output(f"adb pull {remote_path} {local_dir}\n{output}")
             MessageBox.showinfo("ADB Pull", output)
         except Exception as exc:
@@ -74,8 +70,7 @@ class ToolsMixin:
             return
 
         try:
-            result = subprocess.run(["adb", "push", local_file, remote_dir], capture_output=True, text=True)
-            output = result.stdout.strip() or result.stderr.strip() or "Push completed."
+            output = self.emulator.run_adb_command(["adb", "push", local_file, remote_dir], timeout=30)
             self._append_adb_output(f"adb push {local_file} {remote_dir}\n{output}")
             MessageBox.showinfo("ADB Push", output)
         except Exception as exc:

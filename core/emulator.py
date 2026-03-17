@@ -47,16 +47,16 @@ class SimpleLDPlayer:
 
 # ==================== EMULATOR CONTROL ====================
 class ControlEmulator:
-    def __init__(self):
+    def __init__(self, ld_dir=r"C:\LDPlayer\LDPlayer9", fb_package="com.facebook.katana"):
         # Use raw string for Windows paths
-        self.ld_dir = r"C:\LDPlayer\LDPlayer9"
+        self.ld_dir = ld_dir
         
         # Create proper emulator mapping without external module
         self.em = {}
         self.name_to_serial = {}
         self.boot_delay = 20
         self.task_duration = 900
-        self.fb = "com.facebook.katana"  # Facebook package
+        self.fb = fb_package
         
         # Try to detect actual LDPlayer emulators
         self._detect_emulators()

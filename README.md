@@ -1,52 +1,144 @@
 # ALP Automation LDPlayer
 
-Windows desktop control center for managing multiple LDPlayer instances, running automation batches, scheduling tasks, handling content queues, and monitoring live device activity from a single Tkinter UI.
+Windows desktop control center for managing LDPlayer instances, running automation batches, scheduling work, and monitoring live device activity from a Tkinter UI.
 
-## Overview
+## Status
 
-This project is a local GUI application for LDPlayer-based Android automation. It focuses on:
+This project currently works as a Windows-first desktop app and is being refactored incrementally toward a layered architecture:
 
-- discovering and controlling LDPlayer emulators through `dnconsole.exe` and `adb`
-- launching batch automation for `scroll` and `reels` workflows
-- tracking selected devices, queued devices, and live device task state
-- managing accounts, content queue items, scheduled tasks, and backups
-- giving operators a modern dashboard with diagnostics, settings, and tools dialogs
+`GUI -> Controller -> Service -> Core/Utils`
 
-The app is designed for Windows and assumes LDPlayer is installed locally.
+The codebase is not a full clean-slate rewrite. Some new layers are already in place, and some legacy flow still exists behind compatibility wrappers. The goal is to improve maintainability without breaking working behavior.
 
-## Current UI Areas
+## What The App Does
 
-- `Dashboard`
-  Fleet overview, emulator table, task configuration, system health, live logs.
-- `Devices`
-  Live operations page showing each LD's current task, runtime, queue position, and selected waiting devices.
-- `Tasks`
-  Task settings and automation controls.
-- `Scheduler`
-  Scheduled automation configuration.
-- `Content`
-  Content queue and related content management.
-- `Logs`
-  Runtime log viewer.
-- `Tools Center`
-  Quick actions, diagnostics, and ADB console.
-- `Settings`
-  Menu-based configuration dialog for launch, behavior, profiles, and summary.
+- discovers LDPlayer instances
+- starts, stops, and restarts selected emulators
+- runs automation batches for `scroll` and `reels`
+- manages content queue, account assignments, backups, and schedule settings
+- exposes ADB tools inside the desktop UI
+- shows fleet state, live task status, system metrics, and logs
 
-## Features
+## Architecture
 
-- Multi-instance LDPlayer management
-- Batch start, stop, restart, and automation execution
-- ADB tools console inside the app
-- Reels and scroll task orchestration
-- Live device runtime tracking during automation
-- Schedule persistence with repeat support
-- Content queue persistence
-- Account mapping dialog
-- Backup, restore, and backup cleanup actions
-- Performance and system diagnostics panels
-- Automatic relaunch into local `.venv` when available
-- Optional Windows admin elevation prompt at startup
+### Current Layer Design
+
+```text
+app/
+  app.py                    # real application entrypoint
+
+gui/
+  ld_manager_app.py         # main Tk shell
+  pages/                    # dashboard/devices/tasks/schedule/content/logs
+  dialogs/                  # settings/tools/account/perf dialogs
+  mixins/                   # UI-only helpers
+
+controllers/
+  app_controller.py
+  emulator_controller.py
+  task_controller.py
+
+services/
+  adb_service.py
+  emulator_service.py
+  logging_service.py
+  scheduler_service.py
+  settings_service.py
+  task_service.py
+
+core/
+  emulator.py
+  managers.py
+  models.py
+  paths.py
+  settings.py
+  state_machine.py
+  task_handlers.py
+
+utils/
+  app_utils.py
+  helpers.py
+  logger.py
+  performance_monitor.py
+  rate_limiter.py
+  ...
+```
+
+### Layer Intent
+
+- `app/`
+  Startup, relaunch, and bootstrapping only.
+- `gui/`
+  Tkinter widgets, layouts, dialogs, visual state, and user interaction.
+- `controllers/`
+  Thin coordination layer between UI and services.
+- `services/`
+  Emulator, ADB, settings, scheduling, task-run orchestration, and logging boundaries.
+- `core/`
+  Shared models, paths, persistent settings, task handlers, and lower-level logic.
+- `utils/`
+  Reusable helpers and compatibility adapters.
+
+## Entry Points
+
+- `python app.py`
+  Safe root shim that forwards to `app/app.py`
+- `python -m app.app`
+  Direct package entrypoint
+
+Current startup behavior:
+
+- if a local `.venv` exists and the app is launched outside it, the app relaunches inside `.venv`
+- on Windows, the app can request administrator rights because some LDPlayer actions may require elevation
+
+## Main Runtime Flow
+
+1. `app/app.py` boots the application.
+2. `gui/ld_manager_app.py` builds the main shell.
+3. `controllers/*` translate UI actions into service calls.
+4. `services/*` coordinate emulator, ADB, task-run, scheduler, and settings behavior.
+5. `core/*` provides shared persistence and lower-level execution pieces.
+
+## Current Important Files
+
+- `app/app.py`
+  Real application startup path.
+- `app.py`
+  Compatibility launcher.
+- `gui/ld_manager_app.py`
+  Main UI shell. Still the largest class and the main ongoing refactor target.
+- `controllers/app_controller.py`
+  Settings-focused UI coordination.
+- `controllers/emulator_controller.py`
+  Emulator-related UI coordination.
+- `controllers/task_controller.py`
+  Task request creation and runner delegation.
+- `services/emulator_service.py`
+  Emulator facade used by the UI and orchestration layer.
+- `services/adb_service.py`
+  Centralized ADB command execution.
+- `services/task_service.py`
+  Task runner creation boundary.
+- `services/scheduler_service.py`
+  Scheduling decision logic.
+- `services/logging_service.py`
+  Structured JSON logging.
+- `core/emulator.py`
+  Legacy emulator control implementation still used underneath the service layer.
+- `core/task_handlers.py`
+  Scroll and reels automation handlers.
+
+## Project Layout Notes
+
+Not every new module is a final implementation yet.
+
+Examples:
+
+- `gui/pages/emulator_page.py`, `gui/pages/task_page.py`, and `gui/pages/settings_page.py` are compatibility page aliases added to match the new structure.
+- `services/task_service.py` still creates the current `MainWindow` runner rather than owning the full task engine yet.
+- `services/scheduler_service.py` currently owns schedule decision logic, not the entire scheduling thread lifecycle.
+
+This is intentional. The refactor is being done step by step to preserve behavior.
 
 ## Requirements
 
@@ -55,169 +147,121 @@ The app is designed for Windows and assumes LDPlayer is installed locally.
 - LDPlayer 9 installed locally
 - ADB available either from LDPlayer or system PATH
 
-Default LDPlayer path used by the app:
+Default LDPlayer install path currently assumed by the emulator layer:
 
 ```text
 C:\LDPlayer\LDPlayer9
 ```
 
-If your LDPlayer installation is somewhere else, update the path in [core/emulator.py](/d:/Application/Tools/ALP-Automation_Ldplyer/core/emulator.py).
-
-## Python Dependencies
-
-From [requirements.txt](/d:/Application/Tools/ALP-Automation_Ldplyer/requirements.txt):
-
-- `psutil`
-- `ttkbootstrap`
-- `uiautomator2`
-
 ## Installation
 
 ```powershell
-cd D:\Application\Tools\ALP-Automation_Ldplyer
+cd D:\Application\ALP-Automation_Ldplyer
 python -m venv .venv
 .\.venv\Scripts\activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-## Running the App
+## Run
 
 ```powershell
 python app.py
 ```
 
-Startup behavior:
-
-- if you are not already inside the project virtual environment, `app.py` relaunches itself with `.venv\Scripts\python.exe`
-- on Windows, the app can ask for administrator rights because some LDPlayer actions may need elevation
-
 ## First Run Checklist
 
-1. Install and open LDPlayer at least once.
+1. Install LDPlayer and open it once manually.
 2. Confirm `dnconsole.exe` exists under `C:\LDPlayer\LDPlayer9`.
-3. Run `adb devices` from a terminal and confirm ADB is available.
+3. Confirm `adb devices` works in a terminal.
 4. Launch the app with `python app.py`.
-5. Open `Tools Center > ADB Console` and test a simple command such as `adb devices`.
+5. Open `Tools Center > ADB Console` and test `adb devices`.
 
-## Typical Workflow
+## UI Areas
 
-1. Open the app and verify emulators appear in the fleet table.
-2. Select the LD instances you want to use.
-3. Choose a task type in the dashboard or tasks page.
-4. Adjust launch settings in the settings dialog if needed.
-5. Start automation.
-6. Watch the `Devices` page for:
-   - what task each LD is running
-   - how long the task has been running
-   - which selected LDs are still waiting for work
+- `Dashboard`
+  Fleet overview, emulator table, live logs, system health, and task configuration.
+- `Devices`
+  Live per-device runtime status and waiting queue.
+- `Tasks`
+  Task configuration and automation controls.
+- `Schedule`
+  Scheduled automation configuration.
+- `Content`
+  Content queue management.
+- `Logs`
+  Runtime log viewer.
+- `Tools Center`
+  Diagnostics, quick actions, and ADB console.
+- `Settings`
+  Configuration dialog and profile controls.
 
-## Project Structure
+## Configuration And Data
 
-```text
-ALP-Automation_Ldplyer/
-|-- app.py
-|-- requirements.txt
-|-- README.md
-|-- core/
-|   |-- emulator.py
-|   |-- managers.py
-|   |-- paths.py
-|   |-- settings.py
-|   `-- task_handlers.py
-|-- gui/
-|   |-- ld_manager_app.py
-|   |-- main_window.py
-|   |-- sidebar.py
-|   |-- topbar.py
-|   |-- status_bar.py
-|   |-- menu_bar.py
-|   |-- styles.py
-|   |-- gradient_progress.py
-|   |-- checkbox_treeview.py
-|   |-- dialogs/
-|   |   |-- account_dialog.py
-|   |   |-- perf_dialog.py
-|   |   |-- settings_dialog.py
-|   |   `-- tools_dialog.py
-|   `-- pages/
-|       |-- dashboard_page.py
-|       |-- devices_page.py
-|       |-- tasks_page.py
-|       |-- schedule_page.py
-|       |-- content_page.py
-|       `-- logs_page.py
-|-- utils/
-|   |-- activity_randomizer.py
-|   |-- app_utils.py
-|   |-- error_handler.py
-|   |-- performance_monitor.py
-|   |-- rate_limiter.py
-|   `-- toast.py
-|-- config/
-|-- content/
-|-- logs/
-`-- backups/
-```
+Runtime files are stored under:
 
-## Important Files
+- `config/`
+  persisted settings and queue/schedule/account JSON files
+- `content/`
+  content assets and queue-related files
+- `logs/`
+  runtime log output including structured logs
+- `backups/`
+  backup archives
 
-- [app.py](/d:/Application/Tools/ALP-Automation_Ldplyer/app.py)
-  Entry point, `.venv` relaunch logic, Windows admin elevation prompt.
-- [gui/ld_manager_app.py](/d:/Application/Tools/ALP-Automation_Ldplyer/gui/ld_manager_app.py)
-  Main application shell and UI orchestration.
-- [gui/main_window.py](/d:/Application/Tools/ALP-Automation_Ldplyer/gui/main_window.py)
-  Batch stage execution for selected LDs.
-- [gui/pages/devices_page.py](/d:/Application/Tools/ALP-Automation_Ldplyer/gui/pages/devices_page.py)
-  Live device operations view.
-- [core/emulator.py](/d:/Application/Tools/ALP-Automation_Ldplyer/core/emulator.py)
-  LDPlayer control, emulator discovery, ADB execution, readiness checks.
-- [core/task_handlers.py](/d:/Application/Tools/ALP-Automation_Ldplyer/core/task_handlers.py)
-  Scroll and reels automation handlers.
-- [core/managers.py](/d:/Application/Tools/ALP-Automation_Ldplyer/core/managers.py)
-  Accounts, content queue, scheduler, and backup managers.
+Path definitions are centralized in `core/paths.py`.
 
-## Configuration Files
+Important config files:
 
-Managed under [config/](/d:/Application/Tools/ALP-Automation_Ldplyer/config):
+- `config/setting.json`
+- `config/setting_schedule.json`
+- `config/accounts.json`
+- `config/content_queue.json`
+- `config/scheduled_tasks.json`
 
-- `setting.json`
-  Main app settings such as parallel LD count, boot delay, task duration, max reels, and behavior flags.
-- `setting_schedule.json`
-  Scheduler settings.
-- `accounts.json`
-  Account mapping data.
-- `content_queue.json`
-  Queue items for content-driven tasks.
-- `scheduled_tasks.json`
-  Saved scheduled tasks.
+## Logging
 
-Path definitions are centralized in [core/paths.py](/d:/Application/Tools/ALP-Automation_Ldplyer/core/paths.py).
+The project now uses structured Python logging through `services/logging_service.py`.
+
+Current log behavior:
+
+- UI log panels still show readable operator logs
+- structured JSON log records are written to `logs/app.jsonl`
 
 ## Testing
 
-The repository currently includes utility-level tests in [tests/test_core_utils.py](/d:/Application/Tools/ALP-Automation_Ldplyer/tests/test_core_utils.py).
+Current unit tests cover the extracted non-UI seams and selected core utilities.
 
-Run them with:
-
-```powershell
-python -m unittest tests\test_core_utils.py
-```
-
-## ADB and LDPlayer Notes
-
-- The app tries to detect emulators using `dnconsole.exe list2`.
-- If detection fails, it can fall back to test emulator entries.
-- ADB is checked during emulator controller startup.
-- The Tools Center ADB console now routes commands through the emulator backend.
-
-Useful manual commands:
+Run:
 
 ```powershell
-adb devices
-adb kill-server
-adb start-server
+python -m unittest tests.test_core_utils tests.test_controller_services
 ```
+
+Current test focus:
+
+- settings round-trip
+- structured logging
+- ADB service normalization
+- emulator service delegation
+- scheduler decision logic
+- new layer importability
+
+## Known Design Debt
+
+- `gui/ld_manager_app.py` is still too large
+- `gui/main_window.py` still owns part of task execution flow
+- `core/task_handlers.py` still contains direct execution-heavy behavior
+- `core/managers.py` still groups multiple unrelated responsibilities
+- some configuration is still partly hardcoded and needs further centralization
+
+## Recommended Next Refactor Steps
+
+1. Move `MainWindow` orchestration into `services/task_service.py`
+2. Split `core/managers.py` into separate service-focused modules
+3. Move remaining schedule thread ownership out of `LDManagerApp`
+4. Introduce richer models in `core/models.py` and reduce dict-heavy runtime state
+5. Add more unit tests around task requests, scheduler transitions, and emulator workflows
 
 ## Troubleshooting
 
@@ -225,13 +269,11 @@ adb start-server
 
 - confirm `C:\LDPlayer\LDPlayer9\dnconsole.exe` exists
 - run LDPlayer manually once
-- check whether Windows elevation is required
+- try launching the app with admin rights
 
-### ADB command errors
+### ADB errors
 
-- open `Tools Center > ADB Console`
-- try `adb devices`
-- restart the ADB server if needed
+Use the in-app ADB console or a terminal:
 
 ```powershell
 adb kill-server
@@ -239,36 +281,20 @@ adb start-server
 adb devices
 ```
 
-### Missing Python package at startup
-
-Install dependencies into the project virtual environment:
+### Missing Python package on startup
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-### Settings, queue, or schedule JSON corruption
+### Corrupt JSON settings or queue files
 
-The project uses atomic JSON writes where possible, but if a file becomes invalid:
+- inspect `config/`
+- restore a backup from `backups/`
+- or remove the broken file and let the app recreate defaults where supported
 
-- inspect the matching file in `config/`
-- restore from a backup in `backups/`
-- or delete the broken file and let the app recreate defaults where supported
+## Notes
 
-## Known Limitations
-
-- The project is Windows-first.
-- LDPlayer path is currently hardcoded in the emulator controller.
-- A number of automation outcomes depend on UI timing and device readiness.
-- Some UI areas are more mature than others; this is still an actively evolving desktop tool.
-
-## Development Notes
-
-- Prefer running with the local `.venv`.
-- The GUI is built with Tkinter plus `ttkbootstrap`.
-- Runtime data directories are created automatically through [core/paths.py](/d:/Application/Tools/ALP-Automation_Ldplyer/core/paths.py).
-
-## Author
-
-Bunhong
-
+- This is a local desktop automation tool intended for a Windows + LDPlayer environment.
+- The refactor is incremental by design.
+- The README reflects the current structure after the recent layer split.

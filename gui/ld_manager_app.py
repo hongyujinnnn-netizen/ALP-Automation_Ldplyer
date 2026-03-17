@@ -7,7 +7,7 @@ from tkinter.scrolledtext import ScrolledText
 from tkinter import messagebox as MessageBox
 from tkinter import filedialog
 from tkinter import simpledialog
-from datetime import datetime, timedelta
+from datetime import datetime
 import json
 import time
 from pathlib import Path
@@ -23,15 +23,21 @@ from ttkbootstrap.constants import *
 from ttkbootstrap.scrolled import ScrolledText as tbScrolledText
 
 # Import local modules
-from core import settings as settings_store
+from controllers.app_controller import AppController
+from controllers.emulator_controller import EmulatorController
+from controllers.task_controller import TaskController
 from core.paths import get_app_paths
-from core.emulator import ControlEmulator
 from core.managers import AccountManager, ContentManager, BackupManager, SmartScheduler, TaskTemplates
+from core.settings import AppSettings, ScheduleSettings
+from services.scheduler_service import SchedulerService
+from services.emulator_service import EmulatorService
+from services.task_service import TaskService
 from utils.performance_monitor import PerformanceMonitor
 from utils.app_utils import AppUtils
 from utils.ip_guard import check_ip_allowed
+from services.logging_service import AppLogger
+from services.settings_service import SettingsService
 from gui.checkbox_treeview import CheckboxTreeview
-from gui.main_window import MainWindow
 from gui.mixins import ToolsMixin
 from gui.gradient_progress import GradientProgressBar
 from gui.styles import configure_styles
@@ -111,13 +117,20 @@ class LDManagerApp(
         configure_styles(self.root, self.style, self.palette, self.display_font, self.mono_font)
         self.paths = get_app_paths()
         self.paths.ensure_runtime_dirs()
-        
+        self.app_logger = AppLogger(self.paths)
+        self.settings_service = SettingsService(self.paths)
+        self.controller = AppController(self.settings_service, log_func=self.log)
+        self.task_service = TaskService()
+        self.scheduler_service = SchedulerService()
+
         try:
-            self.emulator = ControlEmulator()
+            self.emulator = EmulatorService()
         except Exception as e:
             MessageBox.showerror("Initialization Error", f"Failed to initialize emulator control: {str(e)}")
             self.root.destroy()
             return
+        self.emulator_controller = EmulatorController(self.emulator)
+        self.task_controller = TaskController(self.task_service)
             
         # Initialize enhanced components
         self.performance_monitor = PerformanceMonitor()
@@ -829,11 +842,7 @@ class LDManagerApp(
 
     def load_settings(self):
         """Load general settings from disk."""
-        try:
-            settings = settings_store.load_app_settings(self.settings_file)
-        except settings_store.SettingsError as exc:
-            self.log(f" Failed to load settings: {exc}", level="WARNING")
-            settings = settings_store.AppSettings()
+        settings = self.controller.load_app_settings()
 
         self.parallel_ld.set(settings.parallel_ld)
         self.boot_delay.set(settings.boot_delay)
@@ -851,7 +860,7 @@ class LDManagerApp(
 
     def save_settings(self):
         """Persist general settings to disk."""
-        settings = settings_store.AppSettings(
+        settings = AppSettings(
             parallel_ld=int(self.parallel_ld.get()),
             boot_delay=int(self.boot_delay.get()),
             task_duration=int(self.task_duration.get()),
@@ -865,18 +874,11 @@ class LDManagerApp(
             ],
         )
 
-        try:
-            settings_store.save_app_settings(self.settings_file, settings)
-        except settings_store.SettingsError as exc:
-            self.log(f" Failed to save settings: {exc}", level="WARNING")
+        self.controller.save_app_settings(settings)
 
     def load_schedule_settings(self):
         """Load scheduling settings from the configured schedule settings file."""
-        try:
-            schedule = settings_store.load_schedule_settings(self.schedule_settings_file)
-        except settings_store.SettingsError as exc:
-            self.log(f" Failed to load schedule settings: {exc}", level="WARNING")
-            schedule = settings_store.ScheduleSettings()
+        schedule = self.controller.load_schedule_settings()
 
         self.schedule_time.set(schedule.schedule_time)
         self.schedule_daily.set(schedule.schedule_daily)
@@ -888,7 +890,7 @@ class LDManagerApp(
 
     def save_schedule_settings(self):
         """Save scheduling settings to the configured schedule settings file."""
-        schedule = settings_store.ScheduleSettings(
+        schedule = ScheduleSettings(
             schedule_time=self.schedule_time.get(),
             schedule_daily=bool(self.schedule_daily.get()),
             schedule_weekly=bool(self.schedule_weekly.get()),
@@ -896,10 +898,7 @@ class LDManagerApp(
             schedule_days={day: bool(var.get()) for day, var in self.schedule_days.items()},
         )
 
-        try:
-            settings_store.save_schedule_settings(self.schedule_settings_file, schedule)
-        except settings_store.SettingsError as exc:
-            self.log(f" Failed to save schedule settings: {exc}", level="WARNING")
+        self.controller.save_schedule_settings(schedule)
 
     def start_status_refresh(self):
         """Periodic refresh for device/status UI."""
@@ -1004,12 +1003,18 @@ class LDManagerApp(
             self.live_log_text.config(state="disabled")
         
         # Update status label for important messages
-        if level in ["SUCCESS", "ERROR", "WARNING"]:
+        if level in ["SUCCESS", "ERROR", "WARNING"] and hasattr(self, "status_label"):
             self.status_label.config(text=f"System: {message[:40]}")
-            self._update_header_chips(mode_text="Running" if self.running_event.is_set() else "Idle")
-        
-        # Also print to console
-        print(f"[{level}] {formatted_message.strip()}")
+            self._update_header_chips(
+                mode_text="Running" if getattr(self, "running_event", None) and self.running_event.is_set() else "Idle"
+            )
+
+        self.app_logger.log(
+            level,
+            message,
+            running=bool(getattr(self, "running_event", None) and self.running_event.is_set()),
+            schedule_running=bool(getattr(self, "schedule_running", False)),
+        )
 
     def show_time_picker(self):
         """Show time picker dialog"""
@@ -1177,7 +1182,7 @@ Recent Items:
     def refresh_emulator_list(self):
         """Refresh the emulator list from LDPlayer"""
         try:
-            self.emulator = ControlEmulator()
+            self.emulator = EmulatorService()
             self.populate_ld_table()
             self.log("Emulator list refreshed", "SUCCESS")
         except Exception as e:
@@ -1226,7 +1231,7 @@ Recent Items:
         def start_thread():
             for name in selected_ld_names:
                 if not self.running_event.is_set():
-                    self.emulator.start_ld(name, delay_between_starts=self.boot_delay.get())
+                    self.emulator_controller.start_emulator(name, delay_between_starts=self.boot_delay.get())
                     time.sleep(self.boot_delay.get())
                     self.update_status(name, "Active")
                     self.log(f" Started LD: {name}", "SUCCESS")
@@ -1246,7 +1251,7 @@ Recent Items:
         
         def stop_thread():
             for name in selected_ld_names:
-                self.emulator.quit_ld(name)
+                self.emulator_controller.stop_emulator(name)
                 self.update_status(name, "Inactive")
                 self.log(f" Stopped LD: {name}", "INFO")
             
@@ -1369,18 +1374,21 @@ Recent Items:
         # Create automation thread
         def automation_thread():
             try:
-                main_window = MainWindow(
-                    selected_ld_names,
-                    lambda: self.running_event.is_set(),
-                    self.parallel_ld.get(),
-                    self.log,
-                    self.start_same_time.get(),
-                    task_type,
-                    task_handler,
-                    self.update_progress,
-                    self.boot_delay.get(),
-                    self.task_duration.get() * 60,
-                    self.max_videos.get(),
+                request = self.task_controller.build_request(
+                    selected_ld_names=selected_ld_names,
+                    task_type=task_type,
+                    parallel_ld=self.parallel_ld.get(),
+                    start_same_time=self.start_same_time.get(),
+                    boot_delay=self.boot_delay.get(),
+                    task_duration_seconds=self.task_duration.get() * 60,
+                    max_videos=self.max_videos.get(),
+                )
+                main_window = self.task_controller.create_runner(
+                    request=request,
+                    running_flag=lambda: self.running_event.is_set(),
+                    log_func=self.log,
+                    task_handler=task_handler,
+                    progress_callback=self.update_progress,
                     emulator=self.emulator,
                     state_callback=self.update_device_runtime_state,
                 )
@@ -1506,26 +1514,25 @@ Recent Items:
         while self.schedule_running:
             try:
                 now = datetime.now()
-                current_time = now.strftime("%H:%M")
-                current_day = now.strftime("%A")
-                
-                if current_time == self.schedule_time.get():
-                    should_run = False
-                    
-                    if self.schedule_daily.get():
-                        should_run = True
-                    elif any(self.schedule_days[day].get() for day in self.schedule_days if day == current_day):
-                        should_run = True
-                        
-                    if should_run and not self.running_event.is_set():
-                        self.log(f" Scheduled task triggered at {current_time}", "INFO")
-                        self.root.after(0, self.start_automation)
-                        
-                        repeat_hours = self.schedule_repeat_hours.get()
-                        if repeat_hours > 0:
-                            next_time = (now + timedelta(hours=repeat_hours)).strftime("%H:%M")
-                            self.schedule_time.set(next_time)
-                            self.log(f"Next run scheduled for {next_time}", "INFO")
+                should_run = self.scheduler_service.should_run(
+                    now=now,
+                    schedule_time=self.schedule_time.get(),
+                    schedule_daily=self.schedule_daily.get(),
+                    schedule_days={day: var.get() for day, var in self.schedule_days.items()},
+                    is_running=self.running_event.is_set(),
+                )
+
+                if should_run:
+                    self.log(f" Scheduled task triggered at {now.strftime('%H:%M')}", "INFO")
+                    self.root.after(0, self.start_automation)
+
+                    decision = self.scheduler_service.apply_repeat_interval(
+                        now,
+                        self.schedule_repeat_hours.get(),
+                    )
+                    if decision.next_time:
+                        self.schedule_time.set(decision.next_time)
+                        self.log(f"Next run scheduled for {decision.next_time}", "INFO")
                 
                 time.sleep(30)
             except Exception as e:
@@ -1547,4 +1554,6 @@ Recent Items:
         self.save_settings()
         self.stop_schedule()
         self.stop_automation(confirm=False)
+        if hasattr(self, "app_logger"):
+            self.app_logger.close()
         self.root.destroy()

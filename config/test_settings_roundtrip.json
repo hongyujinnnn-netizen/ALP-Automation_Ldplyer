@@ -4,5 +4,17 @@
     "task_duration": 11,
     "max_videos": 4,
     "start_same_time": false,
-    "use_content_queue": true
+    "use_content_queue": true,
+    "blocked_countries": [
+        "US",
+        "KH",
+        "CN",
+        "TH",
+        "VN",
+        "PH",
+        "ID",
+        "MY",
+        "LA",
+        "MM"
+    ]
 }
