@@ -40,11 +40,13 @@ class TestControllerAndServices(unittest.TestCase):
             paths.ensure_runtime_dirs()
             service = SettingsService(paths)
 
-            service.save_app_settings(AppSettings(parallel_ld=5, boot_delay=12))
+            service.save_app_settings(AppSettings(parallel_ld=5, boot_delay=12, task_type="reels", task_template="content_day"))
             loaded = service.load_app_settings()
 
             self.assertEqual(loaded.parallel_ld, 5)
             self.assertEqual(loaded.boot_delay, 12)
+            self.assertEqual(loaded.task_type, "reels")
+            self.assertEqual(loaded.task_template, "content_day")
 
     def test_app_controller_returns_defaults_when_settings_load_fails(self) -> None:
         settings_service = Mock()
@@ -133,16 +135,20 @@ class TestControllerAndServices(unittest.TestCase):
         request = controller.build_request(
             selected_ld_names=["US - 01"],
             task_type="scroll",
+            task_template="custom",
             parallel_ld=2,
             start_same_time=False,
             boot_delay=8,
             task_duration_seconds=900,
             max_videos=2,
+            scroll_after_post=True,
         )
 
         self.assertIsInstance(request, TaskRunRequest)
         self.assertEqual(request.selected_ld_names, ["US - 01"])
         self.assertEqual(request.task_type, "scroll")
+        self.assertEqual(request.task_template, "custom")
+        self.assertTrue(request.scroll_after_post)
 
     def test_new_layer_modules_are_importable(self) -> None:
         from app.app import main

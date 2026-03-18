@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from core.emulator import ControlEmulator
+from core.task_handlers import ReelsTaskHandler
 from core.managers import AccountManager
 from core.paths import get_app_paths
 from core.settings import AppSettings, save_app_settings, load_app_settings
@@ -19,13 +20,24 @@ class TestCoreUtilities(unittest.TestCase):
         if tmp_path.exists():
             tmp_path.unlink()
 
-        original = AppSettings(parallel_ld=3, boot_delay=7, task_duration=11, max_videos=4)
+        original = AppSettings(
+            parallel_ld=3,
+            boot_delay=7,
+            task_duration=11,
+            max_videos=4,
+            task_type="reels",
+            task_template="content_day",
+            scroll_after_post=False,
+        )
         save_app_settings(tmp_path, original)
         loaded = load_app_settings(tmp_path)
         self.assertEqual(loaded.parallel_ld, 3)
         self.assertEqual(loaded.boot_delay, 7)
         self.assertEqual(loaded.task_duration, 11)
         self.assertEqual(loaded.max_videos, 4)
+        self.assertEqual(loaded.task_type, "reels")
+        self.assertEqual(loaded.task_template, "content_day")
+        self.assertFalse(loaded.scroll_after_post)
 
     def test_rate_limiter_budget_and_wait(self) -> None:
         limiter = RateLimiter(max_actions_per_hour=3)
@@ -70,6 +82,34 @@ class TestCoreUtilities(unittest.TestCase):
             text=True,
             timeout=15,
         )
+
+    @patch("core.task_handlers.check_ld_ip_allowed")
+    def test_reels_task_blocks_when_ld_ip_is_blocked(self, mock_check_ld_ip_allowed) -> None:
+        mock_check_ld_ip_allowed.return_value = False
+        emulator = unittest.mock.Mock()
+        emulator.is_ld_running.return_value = True
+        emulator.name_to_serial = {"US - 01": "127.0.0.1:5555"}
+
+        pause_event = unittest.mock.Mock()
+        pause_event.is_set.return_value = True
+        handler = ReelsTaskHandler(
+            emulator,
+            lambda message, level="INFO": None,
+            pause_event,
+            lambda: True,
+        )
+        handler.blocked_countries = ["US"]
+
+        result = handler.execute("US - 01", duration=60, max_videos=1)
+
+        self.assertFalse(result)
+        mock_check_ld_ip_allowed.assert_called_once_with(
+            "127.0.0.1:5555",
+            ["US"],
+            handler.log,
+            ld_name="US - 01",
+        )
+        emulator.quit_ld.assert_called_once_with("US - 01")
 
 
 if __name__ == "__main__":

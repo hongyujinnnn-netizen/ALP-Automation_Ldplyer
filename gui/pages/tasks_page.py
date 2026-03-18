@@ -132,9 +132,15 @@ class TasksPageMixin:
                                value=value, bootstyle="outline-toolbutton",
                                command=self.on_template_change)
             btn.pack(side="left", padx=5, pady=5)
+        tb.Checkbutton(
+            main_grid,
+            text="Scroll Reels After Post",
+            variable=self.scroll_after_post,
+            bootstyle="primary-round-toggle",
+        ).grid(row=2, column=0, columnspan=2, padx=10, pady=(10, 10), sticky="w")
         tb.Label(
             main_grid,
             text="Template applies validated defaults to reduce setup mistakes.",
             style="Subtitle.TLabel"
-        ).grid(row=2, column=0, columnspan=4, padx=10, pady=(2, 0), sticky="w")
+        ).grid(row=3, column=0, columnspan=4, padx=10, pady=(2, 0), sticky="w")
 

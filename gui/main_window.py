@@ -3,12 +3,13 @@ import time
 from datetime import datetime
 
 from services.emulator_service import EmulatorService
+from utils.ip_guard import get_ld_public_ip_info
 
 
 class MainWindow:
     def __init__(self, selected_ld_names, running_flag, ld_thread, log_func=print,
-                 start_same_time=False, task_type="scroll", task_handler=None, progress_callback=None,
-                 boot_delay=20, task_duration=900, max_videos=2, emulator=None, state_callback=None):
+                 start_same_time=False, task_type="scroll", task_template="custom", task_handler=None, progress_callback=None,
+                 boot_delay=20, task_duration=900, max_videos=2, scroll_after_post=True, emulator=None, state_callback=None):
 
         # Import here to avoid circular imports when we need a fresh controller
         if emulator is None:
@@ -48,12 +49,15 @@ class MainWindow:
         self.pause_event = threading.Event()
         self.pause_event.set()  # Start unpaused
         self.task_type = task_type
+        self.task_template = task_template
         self.task_handler = task_handler
         self.progress_callback = progress_callback
         self.state_callback = state_callback
         self.completed_count = 0
         self.boot_delay = boot_delay
         self.max_videos = max_videos
+        self.scroll_after_post = scroll_after_post
+        self._ip_lookup_inflight = set()
 
     def check_paused(self):
         """Check if operations should be paused - blocks if paused"""
@@ -67,6 +71,38 @@ class MainWindow:
                 self.state_callback(name, payload)
             except Exception:
                 pass
+
+    def _start_ip_lookup(self, name, force=False):
+        if name in self._ip_lookup_inflight:
+            return
+        serial = self.em.name_to_serial.get(name)
+        if not serial:
+            self._push_state(name, public_ip="Unavailable", public_ip_country="")
+            return
+
+        self._ip_lookup_inflight.add(name)
+        if force:
+            self._push_state(name, public_ip="Refreshing...", public_ip_country="")
+        else:
+            self._push_state(name, public_ip="Loading...", public_ip_country="")
+
+        def worker():
+            info = None
+            try:
+                info = get_ld_public_ip_info(serial, timeout=10.0)
+            except Exception:
+                info = None
+
+            if info:
+                ip = str(info.get("ip") or "Unknown")
+                country = str(info.get("country") or "")
+                self._push_state(name, public_ip=ip, public_ip_country=country)
+            else:
+                self._push_state(name, public_ip="Unavailable", public_ip_country="")
+            self._ip_lookup_inflight.discard(name)
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
 
     def ld_task_stage(self, name, stage):
         if not self.running_flag():
@@ -86,6 +122,7 @@ class MainWindow:
                 self._push_state(name, phase="start", state="Attention", task="Boot timeout", progress=0)
             else:
                 self._push_state(name, phase="ready", state="Active", task="Device online", progress=36)
+                self._start_ip_lookup(name)
         elif stage == "facebook":
             if self.task_type == "scroll":
                 if not self.em.wait_for_ld_ready(name, timeout=60, poll_interval=2):
@@ -98,6 +135,7 @@ class MainWindow:
                 self._push_state(name, phase="facebook", state="Ready", task="Facebook opened", progress=60)
         elif stage == "task":
             self.log(f"Running {self.task_type} task on LD: {name}")
+            self._start_ip_lookup(name, force=(self.task_type == "reels"))
             self._push_state(
                 name,
                 phase="task",
@@ -105,10 +143,17 @@ class MainWindow:
                 task=f"{self.task_type.title()} task",
                 progress=78 if self.task_type == "reels" else 72,
                 started_task_at=datetime.now().isoformat(),
+                task_template=self.task_template,
+                scroll_after_post=self.scroll_after_post,
             )
             if self.task_handler is not None:
                 if self.task_type == "reels":
-                    success = self.task_handler.execute(name, self.task_duration, max_videos=self.max_videos)
+                    success = self.task_handler.execute(
+                        name,
+                        self.task_duration,
+                        max_videos=self.max_videos,
+                        scroll_after_post=self.scroll_after_post,
+                    )
                 else:
                     success = self.task_handler.execute(name, self.task_duration)
                 self._push_state(

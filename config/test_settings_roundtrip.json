@@ -5,6 +5,9 @@
     "max_videos": 4,
     "start_same_time": false,
     "use_content_queue": true,
+    "task_type": "reels",
+    "task_template": "content_day",
+    "scroll_after_post": false,
     "blocked_countries": [
         "US",
         "KH",

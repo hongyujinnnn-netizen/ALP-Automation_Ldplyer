@@ -10,11 +10,13 @@ from gui.main_window import MainWindow
 class TaskRunRequest:
     selected_ld_names: list[str]
     task_type: str
+    task_template: str
     parallel_ld: int
     start_same_time: bool
     boot_delay: int
     task_duration_seconds: int
     max_videos: int
+    scroll_after_post: bool
 
 
 class TaskService:
@@ -37,11 +39,13 @@ class TaskService:
             log_func,
             request.start_same_time,
             request.task_type,
+            request.task_template,
             task_handler,
             progress_callback,
             request.boot_delay,
             request.task_duration_seconds,
             request.max_videos,
+            request.scroll_after_post,
             emulator=emulator,
             state_callback=state_callback,
         )

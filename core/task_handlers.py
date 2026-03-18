@@ -34,6 +34,14 @@ class BaseTaskHandler(ABC):
             time.sleep(0.5)
         return not self.running_flag()
 
+    def push_runtime_state(self, name, **payload):
+        callback = getattr(self, "state_callback", None)
+        if callable(callback):
+            try:
+                callback(name, payload)
+            except Exception:
+                pass
+
     def ensure_device_ready(self, name, timeout=120):
         """
         Wait for emulator/device readiness.
@@ -635,6 +643,16 @@ class ReelsTaskHandler(BaseTaskHandler):
             self.log(f"âŒ No serial for {name}")
             return False
 
+        blocked_countries = getattr(self, "blocked_countries", None)
+        if blocked_countries:
+            if not check_ld_ip_allowed(serial, blocked_countries, self.log, ld_name=name):
+                try:
+                    if hasattr(self.emulator, "quit_ld"):
+                        self.emulator.quit_ld(name)
+                except Exception:
+                    pass
+                return False
+
         # Connect with uiautomator2
         try:
             if not U2_AVAILABLE:
@@ -665,6 +683,12 @@ class ReelsTaskHandler(BaseTaskHandler):
 
         video_posted = 0
         success_pots = 0
+        self.push_runtime_state(
+            name,
+            state="Running",
+            task=f"Processed {success_pots}/{max_videos} video",
+            progress=78 if max_videos > 0 else 0,
+        )
         while video_posted < max_videos:
             try:
                 # Respect optional rate limiter if present to avoid hammering Facebook/device.
@@ -718,8 +742,15 @@ class ReelsTaskHandler(BaseTaskHandler):
                     video_data = self.content_manager.get_next_video()
                 
                 if self.handle_reels_description(d, video_data):
-                    self.log("â³ Waiting 20s to complete Facebook post...")
-                    time.sleep(20)
+                    self.log("â³ Waiting 5s to complete Facebook post...")
+                    time.sleep(5)
+                    
+                    if scroll_after_post:
+                        if self.emulator.is_ld_running(name):
+                            self.log("Starting Reels scrolling after post...")
+                            self.scroll_facebook_reels(d, duration=20, intensity="light")
+                        else:
+                            self.log("LD closed before post-scroll, skipping Reels scrolling")
 
                     # Check if the device is still connected before attempting cleanup
                     if not self.emulator.is_ld_running(name):
@@ -763,19 +794,26 @@ class ReelsTaskHandler(BaseTaskHandler):
 
                     video_posted += 1
                     success_pots += 1
+                    progress_value = min(100, 78 + int((success_pots / max_videos) * 22)) if max_videos > 0 else 100
+                    self.push_runtime_state(
+                        name,
+                        state="Running" if success_pots < max_videos else "Completed",
+                        task=f"Processed {success_pots}/{max_videos} video",
+                        progress=progress_value,
+                    )
                     continue
             except Exception as e:
                 self.log(f"âŒ Exception during task execution on {name}: {e}")
                 video_posted += 1
                 continue
 
-        # Re-open Facebook and allow it to settle before any follow-up actions
-        self.open_facebook(d)
-            
-        if scroll_after_post:
-            self.log("ðŸŽ¬ Starting Reels scrolling after post...")
-            self.scroll_facebook_reels(d, duration=20, intensity="light")
 
+        self.push_runtime_state(
+            name,
+            state="Completed" if success_pots > 0 else "Attention",
+            task=f"Processed {success_pots}/{max_videos} video",
+            progress=100 if success_pots > 0 else 0,
+        )
         self.log(f"ðŸ“Š Task completed: Processed {success_pots}/{max_videos} videos successfully")
         return success_pots > 0
     
@@ -786,7 +824,7 @@ class ReelsTaskHandler(BaseTaskHandler):
         """
         try:
             # Wait for the reels description screen to load
-            time.sleep(3)
+            time.sleep(5)
             
             # FIRST: Check for and click OK button if it exists
             ok_button_found = False
@@ -879,6 +917,8 @@ class ReelsTaskHandler(BaseTaskHandler):
                 self.log(f"Could not add description: {e}")
             
             # Look for the final share/post button with more flexible detection
+            self.log(" Looking for Share/Post button...")
+            time.sleep(3)
             share_button_found = False
             share_button_texts = [
                 "Share", "Post", "Share now", "Publish", "ÄÄƒng", "Publicar",

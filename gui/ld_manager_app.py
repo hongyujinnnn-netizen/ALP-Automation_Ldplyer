@@ -158,6 +158,7 @@ class LDManagerApp(
         self.schedule_repeat_hours = tk.IntVar(value=0)  # 0 means no repeat
         self.start_same_time = tk.BooleanVar(value=False)
         self.use_content_queue = tk.BooleanVar(value=True)
+        self.scroll_after_post = tk.BooleanVar(value=True)
         # Comma-separated list of blocked ISO country codes for IP guard.
         self.blocked_countries = tk.StringVar(
             value="US,KH,CN,TH,VN,PH,ID,MY,LA,MM"
@@ -835,6 +836,14 @@ class LDManagerApp(
                     pass
                 break
 
+        for task in tasks:
+            if task.get("type") == "reels" and "scroll_after_post" in task:
+                try:
+                    self.scroll_after_post.set(bool(task["scroll_after_post"]))
+                except Exception:
+                    pass
+                break
+
         self.log(
             f" Applied template: {template.get('name', template_key)} - {template.get('description', '')}",
             level="SUCCESS",
@@ -850,6 +859,9 @@ class LDManagerApp(
         self.max_videos.set(settings.max_videos)
         self.start_same_time.set(settings.start_same_time)
         self.use_content_queue.set(settings.use_content_queue)
+        self.task_type_var.set(settings.task_type)
+        self.task_template_var.set(settings.task_template)
+        self.scroll_after_post.set(settings.scroll_after_post)
         try:
             # Store as comma-separated, upper-case country codes.
             blocked = ",".join(settings.blocked_countries)
@@ -867,6 +879,9 @@ class LDManagerApp(
             max_videos=int(self.max_videos.get()),
             start_same_time=bool(self.start_same_time.get()),
             use_content_queue=bool(self.use_content_queue.get()),
+            task_type=str(self.task_type_var.get()),
+            task_template=str(self.task_template_var.get()),
+            scroll_after_post=bool(self.scroll_after_post.get()),
             blocked_countries=[
                 code.strip().upper()
                 for code in self.blocked_countries.get().split(",")
@@ -1335,6 +1350,7 @@ Recent Items:
                 for code in self.blocked_countries.get().split(",")
                 if code.strip()
             ]
+            task_handler.state_callback = self.update_device_runtime_state
         elif task_type == "reels":
             from core.task_handlers import ReelsTaskHandler
             task_handler = ReelsTaskHandler(
@@ -1344,6 +1360,12 @@ Recent Items:
                 lambda: self.running_event.is_set(),
                 self.content_manager if self.use_content_queue.get() else None
             )
+            task_handler.blocked_countries = [
+                code.strip().upper()
+                for code in self.blocked_countries.get().split(",")
+                if code.strip()
+            ]
+            task_handler.state_callback = self.update_device_runtime_state
         else:
             MessageBox.showwarning(
                 "Task Not Implemented",
@@ -1377,11 +1399,13 @@ Recent Items:
                 request = self.task_controller.build_request(
                     selected_ld_names=selected_ld_names,
                     task_type=task_type,
+                    task_template=self.task_template_var.get(),
                     parallel_ld=self.parallel_ld.get(),
                     start_same_time=self.start_same_time.get(),
                     boot_delay=self.boot_delay.get(),
                     task_duration_seconds=self.task_duration.get() * 60,
                     max_videos=self.max_videos.get(),
+                    scroll_after_post=self.scroll_after_post.get(),
                 )
                 main_window = self.task_controller.create_runner(
                     request=request,

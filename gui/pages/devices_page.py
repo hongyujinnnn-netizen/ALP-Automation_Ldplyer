@@ -120,6 +120,8 @@ class DevicesPageMixin:
         self.device_focus_progress.pack(fill="x", pady=(0, 8))
         self.device_focus_meta = tk.Label(focus, text="Runtime: 00:00  |  Queue: -", bg=self.palette["surface"], fg=self.palette["muted"], font=(self.mono_font, 9))
         self.device_focus_meta.pack(anchor="w")
+        self.device_focus_ip = tk.Label(focus, text="IP: -", bg=self.palette["surface"], fg=self.palette["muted"], font=(self.mono_font, 9))
+        self.device_focus_ip.pack(anchor="w", pady=(6, 0))
 
         queue_card = self._create_card_section(
             parent,
@@ -164,6 +166,8 @@ class DevicesPageMixin:
                 "account": account,
                 "selected": selected,
                 "progress": runtime.get("progress", 0),
+                "public_ip": runtime.get("public_ip") or "-",
+                "public_ip_country": runtime.get("public_ip_country") or "",
             })
         return rows
 
@@ -254,6 +258,7 @@ class DevicesPageMixin:
             self.device_focus_task.config(text="Select LDs from the fleet table to queue them here.")
             self.device_focus_progress.set(0)
             self.device_focus_meta.config(text="Runtime: 00:00  |  Queue: -")
+            self.device_focus_ip.config(text="IP: -")
             return
 
         accent = self.palette["primary"]
@@ -269,3 +274,8 @@ class DevicesPageMixin:
         self.device_focus_task.config(text=focus_row["task"])
         self.device_focus_progress.set(focus_row["progress"])
         self.device_focus_meta.config(text=f"Runtime: {focus_row['timer']}  |  Queue: {focus_row['queue']}")
+        ip_text = focus_row["public_ip"]
+        country = focus_row["public_ip_country"]
+        if country:
+            ip_text = f"{ip_text} ({country})"
+        self.device_focus_ip.config(text=f"IP: {ip_text}")

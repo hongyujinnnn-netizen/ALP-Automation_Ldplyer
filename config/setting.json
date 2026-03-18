@@ -1,10 +1,13 @@
 {
     "parallel_ld": 1,
-    "boot_delay": 10,
-    "task_duration": 2,
-    "max_videos": 2,
+    "boot_delay": 20,
+    "task_duration": 1,
+    "max_videos": 5,
     "start_same_time": true,
     "use_content_queue": false,
+    "task_type": "reels",
+    "task_template": "custom",
+    "scroll_after_post": true,
     "blocked_countries": [
         "KH"
     ]

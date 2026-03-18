@@ -13,20 +13,24 @@ class TaskController:
         self,
         selected_ld_names: list[str],
         task_type: str,
+        task_template: str,
         parallel_ld: int,
         start_same_time: bool,
         boot_delay: int,
         task_duration_seconds: int,
         max_videos: int,
+        scroll_after_post: bool,
     ) -> TaskRunRequest:
         return TaskRunRequest(
             selected_ld_names=selected_ld_names,
             task_type=task_type,
+            task_template=task_template,
             parallel_ld=parallel_ld,
             start_same_time=start_same_time,
             boot_delay=boot_delay,
             task_duration_seconds=task_duration_seconds,
             max_videos=max_videos,
+            scroll_after_post=scroll_after_post,
         )
 
     def create_runner(self, **kwargs) -> object:
