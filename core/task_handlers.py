@@ -71,7 +71,39 @@ class BaseTaskHandler(ABC):
 
 class ScrollTaskHandler(BaseTaskHandler):
     """Handler for Facebook scrolling tasks"""
-    def execute(self, name, duration=900, direction="down", intensity="medium"):
+    def _restart_scroll_task(self, name, serial, remaining_duration, direction, intensity, restart_attempts):
+        """Restart LD and resume the scroll task with the remaining duration."""
+        try:
+            if hasattr(self.emulator, "quit_ld"):
+                self.log(f"Restarting LD for scroll task on {name}")
+                self.emulator.quit_ld(name)
+                time.sleep(5)
+        except Exception as e:
+            self.log(f"Failed to quit LD {name}: {e}")
+            return False
+
+        if not self.emulator.start_ld(name):
+            self.log(f"Failed to restart LD: {name}")
+            return False
+
+        self.log(f"Waiting for emulator ready after restart: {name}")
+        if not self.ensure_device_ready(name, timeout=max(90, int(getattr(self.emulator, 'boot_delay', 20)) * 6)):
+            self.log(f"Device not ready after restart: {name}")
+            return False
+
+        if not self._ensure_adb_connection(serial):
+            self.log(f"Failed to reconnect ADB after restart for {name}")
+            return False
+
+        return self.execute(
+            name,
+            duration=max(1, int(remaining_duration)),
+            direction=direction,
+            intensity=intensity,
+            restart_attempts=restart_attempts + 1,
+        )
+
+    def execute(self, name, duration=900, direction="down", intensity="medium", restart_attempts=0):
         """
         Execute smooth scrolling on the specified device.
         
@@ -164,6 +196,8 @@ class ScrollTaskHandler(BaseTaskHandler):
         successful_swipes = 0
         failed_swipes = 0
         consecutive_failures = 0
+        consecutive_timeouts = 0
+        max_timeout_restarts = 1
         
         try:
             while time.time() - start_time < duration:
@@ -230,9 +264,11 @@ class ScrollTaskHandler(BaseTaskHandler):
                     if result.returncode == 0:
                         successful_swipes += 1
                         consecutive_failures = 0
+                        consecutive_timeouts = 0
                     else:
                         failed_swipes += 1
                         consecutive_failures += 1
+                        consecutive_timeouts = 0
                         self.log(f"ADB command failed: {result.stderr}")
                         
                         # If too many consecutive failures, try to reconnect
@@ -246,8 +282,25 @@ class ScrollTaskHandler(BaseTaskHandler):
                 except subprocess.TimeoutExpired:
                     failed_swipes += 1
                     consecutive_failures += 1
+                    consecutive_timeouts += 1
                     self.log(f"ADB command timed out for {name}")
-                    
+
+                    if consecutive_timeouts >= 5:
+                        if restart_attempts >= max_timeout_restarts:
+                            self.log(f"ADB command timed out for {name} 5 times after restart; aborting")
+                            return False
+
+                        remaining_duration = duration - (time.time() - start_time)
+                        self.log(f"ADB command timed out for {name} 5 times. Restarting LD and resuming scroll task")
+                        return self._restart_scroll_task(
+                            name,
+                            serial,
+                            remaining_duration,
+                            direction,
+                            intensity,
+                            restart_attempts,
+                        )
+
                     if consecutive_failures >= 3:
                         self.log("Too many timeouts, attempting to reconnect...")
                         if not self._ensure_adb_connection(serial):
@@ -610,7 +663,60 @@ class ReelsTaskHandler(BaseTaskHandler):
             if attempt < attempts:
                 time.sleep(delay)
         return False
-        
+
+    def _clear_recent_apps(self, d):
+        """Open Recents and clear all running apps when possible."""
+        serial = getattr(d, "serial", None)
+        try:
+            try:
+                d.press("recent")
+            except Exception:
+                if serial:
+                    subprocess.run(
+                        ["adb", "-s", serial, "shell", "input", "keyevent", "187"],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                    )
+            time.sleep(2)
+
+            clear_selectors = [
+                {"resourceId": "com.android.systemui:id/clear_all"},
+                {"text": "Clear all"},
+                {"text": "CLEAR ALL"},
+                {"text": "Close all"},
+                {"text": "CLOSE ALL"},
+                {"text": "Clear"},
+                {"text": "CLEAR"},
+            ]
+
+            for selector in clear_selectors:
+                try:
+                    obj = d(**selector)
+                    if obj.exists(timeout=1):
+                        obj.click()
+                        self.log("Cleared recent apps")
+                        time.sleep(2)
+                        break
+                except Exception:
+                    continue
+
+            if serial:
+                subprocess.run(
+                    ["adb", "-s", serial, "shell", "am", "kill-all"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+            try:
+                d.press("home")
+            except Exception:
+                pass
+            return True
+        except Exception as e:
+            self.log(f"Failed to clear recent apps: {e}")
+            return False
+
     def execute(self, name, duration=60, max_videos=2,scroll_after_post=True, use_content_queue=True):
         """
         Run Reels task: navigate to Page-1 and attempt to long-press the top video.
@@ -663,22 +769,35 @@ class ReelsTaskHandler(BaseTaskHandler):
             self.log(f"âŒ Failed to connect {serial}: {e}")
             return False
 
-        # Open Facebook
-        try:
-            time.sleep(5)
-            self.open_facebook(d)
-                       
-        except Exception:
-            self.log("âŒ Can't open Facebook!")
-            return False
+        setup_ready = False
+        max_setup_attempts = 2
+        for setup_attempt in range(1, max_setup_attempts + 1):
+            try:
+                time.sleep(5)
+                if not self.open_facebook(d):
+                    raise RuntimeError("Can't open Facebook")
+            except Exception:
+                self.log("âŒ Can't open Facebook!")
+                return False
 
-        # Navigate to video location
-        if not self._open_file_manager_with_retry(d, attempts=2, delay=2):
-            self.log(f"âŒ Failed to open file manager on {name}")
-            return False
-        
-        if not self.navigate_to_pictures(d):
-            self.log(f"âŒ Failed to navigate to pictures on {name}")
+            if self._open_file_manager_with_retry(d, attempts=2, delay=2):
+
+                time.sleep(5)
+                if self.navigate_to_pictures(d):
+                    setup_ready = True
+                    break
+                self.log(f"âŒ Failed to navigate to pictures on {name}")
+            else:
+                self.log(f"âŒ Failed to open file manager on {name}")
+
+            if setup_attempt >= max_setup_attempts:
+                break
+
+            self.log(f"Setup failed on {name}. Clearing all apps before retry {setup_attempt + 1}/{max_setup_attempts}")
+            self._clear_recent_apps(d)
+            time.sleep(2)
+
+        if not setup_ready:
             return False
 
         video_posted = 0
