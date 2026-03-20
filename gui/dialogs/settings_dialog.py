@@ -3,6 +3,60 @@ import ttkbootstrap as tb
 
 
 class SettingsDialogMixin:
+    def _bind_settings_mousewheel(self, widget, canvas):
+        def _on_mousewheel(event):
+            delta = 0
+            if getattr(event, "delta", 0):
+                delta = -1 * int(event.delta / 120)
+            elif getattr(event, "num", None) == 4:
+                delta = -1
+            elif getattr(event, "num", None) == 5:
+                delta = 1
+            if delta:
+                canvas.yview_scroll(delta, "units")
+
+        widget.bind("<MouseWheel>", _on_mousewheel, add="+")
+        widget.bind("<Button-4>", _on_mousewheel, add="+")
+        widget.bind("<Button-5>", _on_mousewheel, add="+")
+
+    def _create_scrollable_settings_page(self, parent, palette):
+        page = tk.Frame(parent, bg=palette["surface"])
+        page.place(relx=0, rely=0, relwidth=1, relheight=1)
+
+        canvas = tk.Canvas(
+            page,
+            bg=palette["surface"],
+            highlightthickness=0,
+            bd=0,
+        )
+        scrollbar = tb.Scrollbar(
+            page,
+            orient="vertical",
+            command=canvas.yview,
+            style="Vertical.TScrollbar",
+        )
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        body = tk.Frame(canvas, bg=palette["surface"])
+        window_id = canvas.create_window((0, 0), window=body, anchor="nw")
+
+        def _sync_scrollregion(_event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def _sync_width(event):
+            canvas.itemconfigure(window_id, width=event.width)
+
+        body.bind("<Configure>", _sync_scrollregion)
+        canvas.bind("<Configure>", _sync_width)
+
+        for target in (page, canvas, body):
+            self._bind_settings_mousewheel(target, canvas)
+
+        return page, body
+
     def show_settings_dialog(self):
         dialog = getattr(self, "_settings_dialog", None)
         if dialog is not None and dialog.winfo_exists():
@@ -26,6 +80,7 @@ class SettingsDialogMixin:
         max_videos_var = tk.IntVar(value=self.max_videos.get())
         start_same_var = tk.BooleanVar(value=self.start_same_time.get())
         use_queue_var = tk.BooleanVar(value=self.use_content_queue.get())
+        auto_arrange_var = tk.BooleanVar(value=self.auto_arrange_ld.get())
         # Reuse the main app variable for blocked countries so changes are live.
         blocked_countries_var = getattr(self, "blocked_countries", tk.StringVar(value=""))
 
@@ -42,6 +97,7 @@ class SettingsDialogMixin:
             max_videos_var,
             start_same_var,
             use_queue_var,
+            auto_arrange_var,
         )
 
     def _build_settings_shell(
@@ -55,6 +111,7 @@ class SettingsDialogMixin:
         max_videos_var,
         start_same_var,
         use_queue_var,
+        auto_arrange_var,
     ):
         wrapper = tk.Frame(parent, bg=palette["border_alt"], padx=1, pady=1)
         wrapper.pack(fill="both", expand=True)
@@ -93,15 +150,16 @@ class SettingsDialogMixin:
             max_videos_var,
             start_same_var,
             use_queue_var,
+            auto_arrange_var,
         )
 
         for key in ("general", "behavior", "profiles", "summary"):
-            page = tk.Frame(content, bg=palette["surface"])
-            page.place(relx=0, rely=0, relwidth=1, relheight=1)
+            page, body = self._create_scrollable_settings_page(content, palette)
             self._settings_pages[key] = page
+            self._settings_pages[f"{key}_body"] = body
 
         self._build_general_page(
-            self._settings_pages["general"],
+            self._settings_pages["general_body"],
             palette,
             parallel_var,
             boot_delay_var,
@@ -109,17 +167,18 @@ class SettingsDialogMixin:
             max_videos_var,
         )
         self._build_behavior_page(
-            self._settings_pages["behavior"],
+            self._settings_pages["behavior_body"],
             palette,
             start_same_var,
             use_queue_var,
+            auto_arrange_var,
             parallel_var,
             boot_delay_var,
             task_duration_var,
             max_videos_var,
         )
         self._build_profiles_page(
-            self._settings_pages["profiles"],
+            self._settings_pages["profiles_body"],
             palette,
             parallel_var,
             boot_delay_var,
@@ -127,9 +186,10 @@ class SettingsDialogMixin:
             max_videos_var,
             start_same_var,
             use_queue_var,
+            auto_arrange_var,
         )
         self._build_summary_page(
-            self._settings_pages["summary"],
+            self._settings_pages["summary_body"],
             palette,
             parallel_var,
             boot_delay_var,
@@ -137,6 +197,7 @@ class SettingsDialogMixin:
             max_videos_var,
             start_same_var,
             use_queue_var,
+            auto_arrange_var,
         )
 
         self._build_premium_footer(
@@ -149,6 +210,7 @@ class SettingsDialogMixin:
             max_videos_var,
             start_same_var,
             use_queue_var,
+            auto_arrange_var,
         )
 
         self._bind_summary_refresh(
@@ -158,6 +220,7 @@ class SettingsDialogMixin:
             max_videos_var,
             start_same_var,
             use_queue_var,
+            auto_arrange_var,
         )
         self._open_settings_page("general")
 
@@ -205,6 +268,7 @@ class SettingsDialogMixin:
         max_videos_var,
         start_same_var,
         use_queue_var,
+        auto_arrange_var,
     ):
         inner = tk.Frame(parent, bg=palette["surface_alt"], padx=16, pady=18)
         inner.pack(fill="both", expand=True)
@@ -321,11 +385,12 @@ class SettingsDialogMixin:
         self._info_row(notes, palette, "Safer setup", "Balanced pacing usually gives more stable startup and fewer connection issues.")
         self._info_row(notes, palette, "Best practice", "Change one value at a time, then test the workflow before raising throughput.")
 
-    def _build_behavior_page(self, parent, palette, start_same_var, use_queue_var, parallel_var, boot_delay_var, task_duration_var, max_videos_var):
+    def _build_behavior_page(self, parent, palette, start_same_var, use_queue_var, auto_arrange_var, parallel_var, boot_delay_var, task_duration_var, max_videos_var):
         self._page_heading(parent, palette, "BEHAVIOR", "Dispatch & Queue Logic", "Configure how sessions start and how content is delivered during execution.")
 
         self._toggle_feature_card(parent, palette, "Start at Same Time", "Launch all selected instances together for faster startup on stronger machines.", start_same_var)
         self._toggle_feature_card(parent, palette, "Use Content Queue", "Enable a safer and more organized content delivery flow during the session.", use_queue_var)
+        self._toggle_feature_card(parent, palette, "Auto Arrange LD", "Automatically arrange LD windows after the start stage completes.", auto_arrange_var)
 
         # Country / IP guard configuration
         outer, card = self._premium_card(
@@ -421,7 +486,7 @@ class SettingsDialogMixin:
         variable.trace_add("write", redraw)
         redraw()
 
-    def _build_profiles_page(self, parent, palette, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var):
+    def _build_profiles_page(self, parent, palette, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var):
         self._page_heading(parent, palette, "PROFILES", "Preset Profiles", "Apply a starter preset, then fine-tune individual values if needed.")
 
         profiles = [
@@ -485,7 +550,7 @@ class SettingsDialogMixin:
             for text in labels:
                 tk.Label(stats, text=text, bg=palette["surface"], fg=palette["text"], font=(self.mono_font, 8), padx=8, pady=4).pack(side="left", padx=(0, 6))
 
-    def _build_summary_page(self, parent, palette, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var):
+    def _build_summary_page(self, parent, palette, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var):
         self._page_heading(parent, palette, "SUMMARY", "Configuration Review", "Read the current setup before saving changes.")
 
         row = tk.Frame(parent, bg=palette["surface"])
@@ -514,7 +579,7 @@ class SettingsDialogMixin:
         tk.Label(card, textvariable=variable, bg=palette["surface_alt"], fg=palette["primary"], font=(self.display_font, 22)).pack(anchor="w", pady=(6, 0))
         tk.Label(card, text=unit, bg=palette["surface_alt"], fg=palette["muted"], font=(self.mono_font, 8)).pack(anchor="w")
 
-    def _build_premium_footer(self, parent, palette, dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var):
+    def _build_premium_footer(self, parent, palette, dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var):
         footer = tk.Frame(parent, bg=palette["surface_alt"], padx=18, pady=14, highlightthickness=1, highlightbackground=palette["border_alt"])
         footer.pack(fill="x")
 
@@ -541,7 +606,7 @@ class SettingsDialogMixin:
             "Save Settings",
             palette["surface"],
             palette["primary"],
-            lambda: self._save_settings_from_dialog(dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var),
+            lambda: self._save_settings_from_dialog(dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var),
             filled=True,
         )
 
@@ -563,7 +628,7 @@ class SettingsDialogMixin:
             command=command,
         ).pack()
 
-    def _bind_summary_refresh(self, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var):
+    def _bind_summary_refresh(self, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var):
         def refresh(*_):
             profile = self._detect_profile(parallel_var.get(), boot_delay_var.get(), task_duration_var.get(), max_videos_var.get(), bool(start_same_var.get()), bool(use_queue_var.get()))
             self._header_status_var.set(profile)
@@ -573,7 +638,7 @@ class SettingsDialogMixin:
             )
             if hasattr(self, "_summary_text_var"):
                 self._summary_text_var.set(
-                    f"Profile: {profile}\nParallel launch: {parallel_var.get()} device(s)\nBoot delay: {boot_delay_var.get()} second(s)\nTask duration: {task_duration_var.get()} minute(s)\nMax reels: {max_videos_var.get()} item(s)\nStart same time: {'Enabled' if start_same_var.get() else 'Disabled'}\nUse queue: {'Enabled' if use_queue_var.get() else 'Disabled'}"
+                    f"Profile: {profile}\nParallel launch: {parallel_var.get()} device(s)\nBoot delay: {boot_delay_var.get()} second(s)\nTask duration: {task_duration_var.get()} minute(s)\nMax reels: {max_videos_var.get()} item(s)\nStart same time: {'Enabled' if start_same_var.get() else 'Disabled'}\nUse queue: {'Enabled' if use_queue_var.get() else 'Disabled'}\nAuto arrange LD: {'Enabled' if auto_arrange_var.get() else 'Disabled'}"
                 )
             if hasattr(self, "_summary_detail_var"):
                 self._summary_detail_var.set(
@@ -585,7 +650,7 @@ class SettingsDialogMixin:
             if hasattr(self, "_footer_state_var"):
                 self._footer_state_var.set(f"Current profile: {profile}. Review summary before saving.")
 
-        for var in (parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var):
+        for var in (parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var):
             var.trace_add("write", refresh)
         refresh()
 
@@ -639,13 +704,14 @@ class SettingsDialogMixin:
         if hasattr(self, "_footer_state_var"):
             self._footer_state_var.set(f"Applied profile: {profile_name}.")
 
-    def _save_settings_from_dialog(self, dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var):
+    def _save_settings_from_dialog(self, dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var):
         self.parallel_ld.set(parallel_var.get())
         self.boot_delay.set(boot_delay_var.get())
         self.task_duration.set(task_duration_var.get())
         self.max_videos.set(max_videos_var.get())
         self.start_same_time.set(start_same_var.get())
         self.use_content_queue.set(use_queue_var.get())
+        self.auto_arrange_ld.set(auto_arrange_var.get())
         if hasattr(self, "save_settings"):
             try:
                 self.save_settings()

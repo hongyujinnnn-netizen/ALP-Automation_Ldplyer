@@ -8,7 +8,7 @@ from utils.ip_guard import get_ld_public_ip_info
 
 class MainWindow:
     def __init__(self, selected_ld_names, running_flag, ld_thread, log_func=print,
-                 start_same_time=False, task_type="scroll", task_template="custom", task_handler=None, progress_callback=None,
+                 start_same_time=False, auto_arrange_ld=False, task_type="scroll", task_template="custom", task_handler=None, progress_callback=None,
                  boot_delay=20, task_duration=900, max_videos=2, scroll_after_post=True, emulator=None, state_callback=None):
 
         # Import here to avoid circular imports when we need a fresh controller
@@ -46,6 +46,7 @@ class MainWindow:
         self.ld_thread = ld_thread
         self.task_duration = task_duration
         self.start_same_time = start_same_time
+        self.auto_arrange_ld = auto_arrange_ld
         self.pause_event = threading.Event()
         self.pause_event.set()  # Start unpaused
         self.task_type = task_type
@@ -58,6 +59,15 @@ class MainWindow:
         self.max_videos = max_videos
         self.scroll_after_post = scroll_after_post
         self._ip_lookup_inflight = set()
+
+    def _auto_arrange_windows(self):
+        if not self.auto_arrange_ld:
+            return
+        try:
+            self.em.sort_window()
+            self.log("Auto arranged LD windows")
+        except Exception as e:
+            self.log(f"Failed to auto arrange LD windows: {e}")
 
     def check_paused(self):
         """Check if operations should be paused - blocks if paused"""
@@ -210,6 +220,7 @@ class MainWindow:
                                 break
                             self.ld_task_stage(name, stage)
                             time.sleep(10)  # Fixed start delay
+                        self._auto_arrange_windows()
                     else:
                         threads = []
                         for name in batch:
@@ -224,6 +235,9 @@ class MainWindow:
                         # Especially important for the task stage to finish before close
                         for t in threads:
                             t.join(timeout=600)  # Increased timeout to 10 minutes for reels tasks
+
+                        if stage == "start":
+                            self._auto_arrange_windows()
                             
                         # For reels task, add extra delay after task stage before closing
                         if stage == "task" and self.task_type == "reels":

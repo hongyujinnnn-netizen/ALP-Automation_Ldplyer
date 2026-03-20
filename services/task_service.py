@@ -13,6 +13,7 @@ class TaskRunRequest:
     task_template: str
     parallel_ld: int
     start_same_time: bool
+    auto_arrange_ld: bool
     boot_delay: int
     task_duration_seconds: int
     max_videos: int
@@ -38,6 +39,7 @@ class TaskService:
             request.parallel_ld,
             log_func,
             request.start_same_time,
+            request.auto_arrange_ld,
             request.task_type,
             request.task_template,
             task_handler,

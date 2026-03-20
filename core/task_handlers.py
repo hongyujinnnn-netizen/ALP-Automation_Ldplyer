@@ -69,6 +69,16 @@ class BaseTaskHandler(ABC):
             time.sleep(2)
         return False
 
+    def auto_arrange_ld_windows(self):
+        """Arrange LD windows when enabled in settings."""
+        if not bool(getattr(self, "auto_arrange_ld", False)):
+            return
+        try:
+            self.emulator.sort_window()
+            self.log("Auto arranged LD windows")
+        except Exception as exc:
+            self.log(f"Failed to auto arrange LD windows: {exc}")
+
 class ScrollTaskHandler(BaseTaskHandler):
     """Handler for Facebook scrolling tasks"""
     def _restart_scroll_task(self, name, serial, remaining_duration, direction, intensity, restart_attempts):
@@ -85,6 +95,7 @@ class ScrollTaskHandler(BaseTaskHandler):
         if not self.emulator.start_ld(name):
             self.log(f"Failed to restart LD: {name}")
             return False
+        self.auto_arrange_ld_windows()
 
         self.log(f"Waiting for emulator ready after restart: {name}")
         if not self.ensure_device_ready(name, timeout=max(90, int(getattr(self.emulator, 'boot_delay', 20)) * 6)):
@@ -135,6 +146,7 @@ class ScrollTaskHandler(BaseTaskHandler):
             if not self.emulator.start_ld(name):
                 self.log(f"âŒ Failed to start LD: {name}")
                 return False
+            self.auto_arrange_ld_windows()
             self.log(f"Waiting for emulator ready: {name}")
             if not self.ensure_device_ready(name, timeout=max(90, int(getattr(self.emulator, 'boot_delay', 20)) * 6)):
                 self.log(f"Device not ready after startup: {name}")
@@ -735,6 +747,7 @@ class ReelsTaskHandler(BaseTaskHandler):
             if not self.emulator.start_ld(name):
                 self.log(f"âŒ Failed to start LD: {name}")
                 return False
+            self.auto_arrange_ld_windows()
             self.log(f"Waiting for emulator ready: {name}")
             if not self.ensure_device_ready(name, timeout=max(90, int(getattr(self.emulator, 'boot_delay', 20)) * 6)):
                 self.log(f"Device not ready after startup: {name}")
@@ -782,7 +795,7 @@ class ReelsTaskHandler(BaseTaskHandler):
 
             if self._open_file_manager_with_retry(d, attempts=2, delay=2):
 
-                time.sleep(5)
+                time.sleep(3)
                 if self.navigate_to_pictures(d):
                     setup_ready = True
                     break
@@ -867,7 +880,7 @@ class ReelsTaskHandler(BaseTaskHandler):
                     if scroll_after_post:
                         if self.emulator.is_ld_running(name):
                             self.log("Starting Reels scrolling after post...")
-                            self.scroll_facebook_reels(d, duration=20, intensity="light")
+                            self.scroll_facebook_reels(d, duration=20, intensity="medium")
                         else:
                             self.log("LD closed before post-scroll, skipping Reels scrolling")
 

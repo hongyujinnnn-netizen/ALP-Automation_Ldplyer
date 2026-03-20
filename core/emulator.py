@@ -1,3 +1,5 @@
+import ctypes
+import math
 import os
 import shlex
 import subprocess
@@ -187,6 +189,140 @@ class ControlEmulator:
                 print(f"Failed to start ADB server: {e2}")
             
             return False
+
+    def sort_window(self):
+        """Arrange visible LDPlayer windows in a grid without requiring dnconsole."""
+        if os.name != "nt":
+            print("Window arrangement is only supported on Windows")
+            return False
+
+        user32 = ctypes.windll.user32
+
+        class RECT(ctypes.Structure):
+            _fields_ = [
+                ("left", ctypes.c_long),
+                ("top", ctypes.c_long),
+                ("right", ctypes.c_long),
+                ("bottom", ctypes.c_long),
+            ]
+
+        work_area = RECT()
+        SPI_GETWORKAREA = 0x0030
+        if not user32.SystemParametersInfoW(SPI_GETWORKAREA, 0, ctypes.byref(work_area), 0):
+            work_area.left = 0
+            work_area.top = 0
+            work_area.right = user32.GetSystemMetrics(0)
+            work_area.bottom = user32.GetSystemMetrics(1)
+
+        known_names = sorted(self.name_to_serial.keys(), key=len, reverse=True)
+        matched = []
+        seen = set()
+
+        def _window_text(hwnd):
+            length = user32.GetWindowTextLengthW(hwnd)
+            if length <= 0:
+                return ""
+            buffer = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(hwnd, buffer, length + 1)
+            return buffer.value.strip()
+
+        def _class_name(hwnd):
+            buffer = ctypes.create_unicode_buffer(256)
+            user32.GetClassNameW(hwnd, buffer, 256)
+            return buffer.value.strip()
+
+        def _is_ld_window(title, class_name):
+            title_l = title.lower()
+            class_l = class_name.lower()
+            if any(name.lower() in title_l for name in known_names):
+                return True
+            if "ldplayer" in title_l or "dnplayer" in title_l:
+                return True
+            if "ldplayer" in class_l or "dnplayer" in class_l:
+                return True
+            return False
+
+        @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+        def enum_proc(hwnd, _lparam):
+            if not user32.IsWindowVisible(hwnd) or user32.IsIconic(hwnd):
+                return True
+
+            title = _window_text(hwnd)
+            if not title:
+                return True
+
+            class_name = _class_name(hwnd)
+            if not _is_ld_window(title, class_name):
+                return True
+
+            if hwnd not in seen:
+                matched.append((hwnd, title))
+                seen.add(hwnd)
+            return True
+
+        user32.EnumWindows(enum_proc, 0)
+
+        if not matched:
+            print("No visible LDPlayer windows found to arrange")
+            return False
+
+        matched.sort(key=lambda item: item[1].lower())
+        count = len(matched)
+        total_width = max(200, work_area.right - work_area.left)
+        total_height = max(200, work_area.bottom - work_area.top)
+
+        margin_x = 16
+        margin_y = 16
+        gap_x = 12
+        gap_y = 12
+        preferred_width = 420
+        preferred_height = 760
+        min_width = 320
+        min_height = 520
+
+        usable_width = max(200, total_width - (margin_x * 2))
+        usable_height = max(200, total_height - (margin_y * 2))
+
+        cols = max(1, usable_width // (preferred_width + gap_x))
+        cols = min(cols, count)
+        rows = max(1, math.ceil(count / cols))
+
+        width = preferred_width
+        height = preferred_height
+
+        while rows > 1 and (rows * height) + ((rows - 1) * gap_y) > usable_height and height > min_height:
+            height -= 40
+
+        while cols > 1 and (cols * width) + ((cols - 1) * gap_x) > usable_width and width > min_width:
+            width -= 20
+
+        if (cols * width) + ((cols - 1) * gap_x) > usable_width:
+            width = max(min_width, (usable_width - ((cols - 1) * gap_x)) // cols)
+
+        if (rows * height) + ((rows - 1) * gap_y) > usable_height:
+            height = max(min_height, (usable_height - ((rows - 1) * gap_y)) // rows)
+
+        SWP_NOZORDER = 0x0004
+        SWP_NOACTIVATE = 0x0010
+        SW_RESTORE = 9
+
+        start_x = work_area.left + margin_x
+        start_y = work_area.top + margin_y
+
+        for index, (hwnd, title) in enumerate(matched):
+            row = index // cols
+            col = index % cols
+            x = start_x + (col * (width + gap_x))
+            y = start_y + (row * (height + gap_y))
+
+            try:
+                user32.ShowWindow(hwnd, SW_RESTORE)
+                user32.SetWindowPos(hwnd, 0, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE)
+            except Exception as exc:
+                print(f"Failed to move window '{title}': {exc}")
+
+        print(f"Arranged {count} LDPlayer window(s)")
+        return True
     
     def list_emulators(self):
         """List all detected emulators"""

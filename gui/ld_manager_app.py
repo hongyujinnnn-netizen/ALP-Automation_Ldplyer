@@ -158,6 +158,7 @@ class LDManagerApp(
         self.schedule_repeat_hours = tk.IntVar(value=0)  # 0 means no repeat
         self.start_same_time = tk.BooleanVar(value=False)
         self.use_content_queue = tk.BooleanVar(value=True)
+        self.auto_arrange_ld = tk.BooleanVar(value=False)
         self.scroll_after_post = tk.BooleanVar(value=True)
         # Comma-separated list of blocked ISO country codes for IP guard.
         self.blocked_countries = tk.StringVar(
@@ -859,6 +860,7 @@ class LDManagerApp(
         self.max_videos.set(settings.max_videos)
         self.start_same_time.set(settings.start_same_time)
         self.use_content_queue.set(settings.use_content_queue)
+        self.auto_arrange_ld.set(settings.auto_arrange_ld)
         self.task_type_var.set(settings.task_type)
         self.task_template_var.set(settings.task_template)
         self.scroll_after_post.set(settings.scroll_after_post)
@@ -879,6 +881,7 @@ class LDManagerApp(
             max_videos=int(self.max_videos.get()),
             start_same_time=bool(self.start_same_time.get()),
             use_content_queue=bool(self.use_content_queue.get()),
+            auto_arrange_ld=bool(self.auto_arrange_ld.get()),
             task_type=str(self.task_type_var.get()),
             task_template=str(self.task_template_var.get()),
             scroll_after_post=bool(self.scroll_after_post.get()),
@@ -1350,6 +1353,7 @@ Recent Items:
                 for code in self.blocked_countries.get().split(",")
                 if code.strip()
             ]
+            task_handler.auto_arrange_ld = bool(self.auto_arrange_ld.get())
             task_handler.state_callback = self.update_device_runtime_state
         elif task_type == "reels":
             from core.task_handlers import ReelsTaskHandler
@@ -1365,6 +1369,7 @@ Recent Items:
                 for code in self.blocked_countries.get().split(",")
                 if code.strip()
             ]
+            task_handler.auto_arrange_ld = bool(self.auto_arrange_ld.get())
             task_handler.state_callback = self.update_device_runtime_state
         else:
             MessageBox.showwarning(
@@ -1402,6 +1407,7 @@ Recent Items:
                     task_template=self.task_template_var.get(),
                     parallel_ld=self.parallel_ld.get(),
                     start_same_time=self.start_same_time.get(),
+                    auto_arrange_ld=self.auto_arrange_ld.get(),
                     boot_delay=self.boot_delay.get(),
                     task_duration_seconds=self.task_duration.get() * 60,
                     max_videos=self.max_videos.get(),

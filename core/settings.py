@@ -21,6 +21,7 @@ class AppSettings:
     max_videos: int = 2
     start_same_time: bool = False
     use_content_queue: bool = True
+    auto_arrange_ld: bool = False
     task_type: str = "scroll"
     task_template: str = "custom"
     scroll_after_post: bool = True
@@ -59,6 +60,7 @@ class AppSettings:
                 max_videos=int(raw.get("max_videos", cls.max_videos)),
                 start_same_time=bool(raw.get("start_same_time", cls.start_same_time)),
                 use_content_queue=bool(raw.get("use_content_queue", cls.use_content_queue)),
+                auto_arrange_ld=bool(raw.get("auto_arrange_ld", cls.auto_arrange_ld)),
                 task_type=str(raw.get("task_type", cls.task_type)),
                 task_template=str(raw.get("task_template", cls.task_template)),
                 scroll_after_post=bool(raw.get("scroll_after_post", cls.scroll_after_post)),
