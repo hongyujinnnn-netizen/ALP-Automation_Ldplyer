@@ -5,9 +5,16 @@
     "max_videos": 4,
     "start_same_time": false,
     "use_content_queue": true,
+    "auto_arrange_ld": false,
     "task_type": "reels",
     "task_template": "content_day",
     "scroll_after_post": false,
+    "ld_groups": {
+        "Farm A": [
+            "US - 01",
+            "US - 02"
+        ]
+    },
     "blocked_countries": [
         "US",
         "KH",

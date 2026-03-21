@@ -5,14 +5,12 @@ from gui.gradient_progress import GradientProgressBar
 
 class DashboardPageMixin:
     def create_dashboard_tab(self):
-        """Create Dashboard tab"""
+        """Create Analytics tab."""
         dashboard_tab = tb.Frame(self.notebook)
-        self.notebook.add(dashboard_tab, text="Dashboard")
+        self.notebook.add(dashboard_tab, text="Analytics")
         
         # Analytics Dashboard
         self.create_analytics_dashboard(dashboard_tab)
-        self.create_ld_table_panel(dashboard_tab)
-
         lower = ttk.Panedwindow(dashboard_tab, orient=tk.HORIZONTAL)
         lower.pack(fill="both", expand=True, pady=(2, 0))
 

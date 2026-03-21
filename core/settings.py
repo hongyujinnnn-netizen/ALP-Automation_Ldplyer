@@ -25,6 +25,7 @@ class AppSettings:
     task_type: str = "scroll"
     task_template: str = "custom"
     scroll_after_post: bool = True
+    ld_groups: Dict[str, List[str]] = field(default_factory=dict)
     # Two-letter ISO country codes to block when detected as the host's
     # public IP country. If the country is blocked, automation will not start.
     blocked_countries: List[str] = field(
@@ -45,6 +46,21 @@ class AppSettings:
     @classmethod
     def from_dict(cls, raw: Dict) -> "AppSettings":
         try:
+            raw_groups = raw.get("ld_groups") or {}
+            ld_groups: Dict[str, List[str]] = {}
+            if isinstance(raw_groups, dict):
+                for group_name, members in raw_groups.items():
+                    cleaned_name = str(group_name).strip()
+                    if not cleaned_name:
+                        continue
+                    if isinstance(members, list):
+                        cleaned_members = []
+                        for member in members:
+                            text = str(member).strip()
+                            if text and text not in cleaned_members:
+                                cleaned_members.append(text)
+                        ld_groups[cleaned_name] = cleaned_members
+
             raw_blocked = raw.get("blocked_countries")
             if isinstance(raw_blocked, list):
                 blocked_countries = [str(code).upper() for code in raw_blocked if code]
@@ -64,6 +80,7 @@ class AppSettings:
                 task_type=str(raw.get("task_type", cls.task_type)),
                 task_template=str(raw.get("task_template", cls.task_template)),
                 scroll_after_post=bool(raw.get("scroll_after_post", cls.scroll_after_post)),
+                ld_groups=ld_groups,
                 blocked_countries=blocked_countries,
             )
         except (TypeError, ValueError) as exc:

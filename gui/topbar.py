@@ -25,7 +25,7 @@ class TopBarMixin:
 
         tb.Label(
             title_wrap,
-            text="Dashboard",
+            text="Analytics",
             style="TopTitle.TLabel"
         ).pack(anchor="w")
         self.top_status_label = tb.Label(
@@ -63,7 +63,7 @@ class TopBarMixin:
         tabs.pack(side="left", padx=(16, 0))
         self._top_tab_buttons = {}
         tab_defs = [
-            ("Overview", 0, None),
+            ("Analytics", 0, None),
             ("Devices", 1, self._focus_devices),
             ("Tasks", 2, None),
             ("Logs", 5, None),

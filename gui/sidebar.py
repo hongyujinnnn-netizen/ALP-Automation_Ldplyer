@@ -18,14 +18,13 @@ class SidebarMixin:
 
         self._nav_rows = {}
         nav_items = [
-            ("dashboard", "Dashboard", lambda: self.notebook.select(0), "CONTROL", ""),
+            ("analytics", "Analytics", lambda: self.notebook.select(0), "CONTROL", ""),
             ("devices", "Devices", self._focus_devices, "CONTROL", "0"),
             ("automation", "Automation", lambda: self.notebook.select(2), "CONTROL", ""),
             ("queue", "Task Queue", lambda: self.notebook.select(4), "CONTROL", "0"),
             ("accounts", "Accounts", self.show_account_manager, "MANAGE", ""),
             ("schedule", "Scheduler", lambda: self.notebook.select(3), "MANAGE", ""),
             ("backups", "Backups", self.create_backup, "MANAGE", ""),
-            ("analytics", "Analytics", lambda: self.notebook.select(0), "MANAGE", ""),
             ("settings", "Settings", self.show_settings_dialog, "SYSTEM", ""),
             ("adb_tools", "ADB Tools", self.show_adb_tools, "SYSTEM", ""),
         ]

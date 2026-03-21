@@ -14,8 +14,8 @@ class DevicesPageMixin:
 
         top = self._create_card_section(
             shell,
-            "Device Operations",
-            "Live task state, selected queue, and focus detail for every LD in the current run.",
+            "Device Fleet",
+            "All LD instances, group controls, runtime state, and quick actions in one place.",
             pady=(0, 12),
         )
         self._build_devices_hero(top)
@@ -28,7 +28,9 @@ class DevicesPageMixin:
         lower.add(left, stretch="always", minsize=540)
         lower.add(right, minsize=320)
 
+        self.create_ld_table_panel(left)
         self._build_devices_table_panel(left)
+        self._build_device_group_panel(right)
         self._build_devices_side_panel(right)
         self._render_devices_page()
 
@@ -101,7 +103,7 @@ class DevicesPageMixin:
         focus = self._create_card_section(
             parent,
             "Focus Device",
-            "Detailed view for the currently active or selected LD.",
+            "Detailed view for the clicked or currently active LD.",
             pady=(0, 12),
         )
         self.device_focus_name = tk.Label(focus, text="No device selected", bg=self.palette["surface"], fg=self.palette["text"], font=(self.display_font, 15))
@@ -142,6 +144,49 @@ class DevicesPageMixin:
             activestyle="none",
         )
         self.devices_waiting_list.pack(fill="both", expand=True)
+
+    def _build_device_group_panel(self, parent):
+        card = self._create_card_section(
+            parent,
+            "LD Groups",
+            "Create reusable device groups for quick selection and batch actions.",
+            pady=(0, 12),
+        )
+
+        self.device_group_summary = tk.Label(
+            card,
+            text="0 groups  |  0 assigned",
+            bg=self.palette["surface"],
+            fg=self.palette["muted"],
+            font=(self.mono_font, 9),
+        )
+        self.device_group_summary.pack(anchor="w", pady=(0, 8))
+
+        self.device_group_list = tk.Listbox(
+            card,
+            height=7,
+            bg="#030508",
+            fg="#c4b5fd",
+            selectbackground=self.palette["surface_alt"],
+            selectforeground=self.palette["text"],
+            relief="flat",
+            highlightthickness=0,
+            font=(self.mono_font, 10),
+            activestyle="none",
+        )
+        self.device_group_list.pack(fill="x", expand=False)
+        self.device_group_list.bind("<<ListboxSelect>>", lambda _e: self._sync_group_filter_from_list())
+
+        actions = tb.Frame(card, style="CardInner.TFrame")
+        actions.pack(fill="x", pady=(10, 0))
+        tb.Button(actions, text="Create", bootstyle="outline-primary", command=self.create_ld_group, width=10).pack(side="left", padx=(0, 6))
+        tb.Button(actions, text="Rename", bootstyle="outline-secondary", command=self.rename_selected_ld_group, width=10).pack(side="left", padx=(0, 6))
+        tb.Button(actions, text="Delete", bootstyle="outline-danger", command=self.delete_selected_ld_group, width=10).pack(side="left")
+
+        actions2 = tb.Frame(card, style="CardInner.TFrame")
+        actions2.pack(fill="x", pady=(8, 0))
+        tb.Button(actions2, text="Assign Selected", bootstyle="info", command=self.assign_selected_to_group, width=16).pack(side="left", padx=(0, 6))
+        tb.Button(actions2, text="Select Group", bootstyle="success", command=self.select_active_group_devices, width=14).pack(side="left")
 
     def _device_page_rows(self):
         names = set(getattr(self, "_ld_snapshot", {}).keys())
@@ -238,10 +283,17 @@ class DevicesPageMixin:
         if not hasattr(self, "device_focus_name"):
             return
         rows = rows or self._device_page_rows()
+
         selected_name = None
+        if hasattr(self, "ld_table"):
+            selected_item = self.ld_table.get_selected_item()
+            if selected_item:
+                values = self.ld_table.item(selected_item, "values")
+                if values:
+                    selected_name = values[0]
         if hasattr(self, "devices_tree"):
             current = self.devices_tree.selection()
-            if current:
+            if current and not selected_name:
                 values = self.devices_tree.item(current[0], "values")
                 if values:
                     selected_name = values[0]

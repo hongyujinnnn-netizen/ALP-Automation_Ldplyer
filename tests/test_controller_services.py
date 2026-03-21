@@ -40,13 +40,22 @@ class TestControllerAndServices(unittest.TestCase):
             paths.ensure_runtime_dirs()
             service = SettingsService(paths)
 
-            service.save_app_settings(AppSettings(parallel_ld=5, boot_delay=12, task_type="reels", task_template="content_day"))
+            service.save_app_settings(
+                AppSettings(
+                    parallel_ld=5,
+                    boot_delay=12,
+                    task_type="reels",
+                    task_template="content_day",
+                    ld_groups={"Night Shift": ["US - 01"]},
+                )
+            )
             loaded = service.load_app_settings()
 
             self.assertEqual(loaded.parallel_ld, 5)
             self.assertEqual(loaded.boot_delay, 12)
             self.assertEqual(loaded.task_type, "reels")
             self.assertEqual(loaded.task_template, "content_day")
+            self.assertEqual(loaded.ld_groups, {"Night Shift": ["US - 01"]})
 
     def test_app_controller_returns_defaults_when_settings_load_fails(self) -> None:
         settings_service = Mock()
@@ -138,6 +147,7 @@ class TestControllerAndServices(unittest.TestCase):
             task_template="custom",
             parallel_ld=2,
             start_same_time=False,
+            auto_arrange_ld=False,
             boot_delay=8,
             task_duration_seconds=900,
             max_videos=2,

@@ -112,6 +112,8 @@ class LDManagerApp(
         self.ld_sort_var = tk.StringVar(value="Status")
         self.ld_status_filter_var = tk.StringVar(value="All")
         self.ld_account_filter_var = tk.StringVar(value="All")
+        self.ld_group_filter_var = tk.StringVar(value="All Groups")
+        self._ld_groups = {}
         
         # Configure custom styles
         configure_styles(self.root, self.style, self.palette, self.display_font, self.mono_font)
@@ -258,6 +260,7 @@ class LDManagerApp(
         control_configs = [
             ("Refresh", self.refresh_emulator_list, "outline-primary"),
             ("Select All", self.select_all, "outline-success"),
+            ("Select Online", self.select_online, "outline-info"),
             ("Clear", self.deselect_all, "outline-danger"),
             ("Invert", self.invert_selection, "outline-warning")
         ]
@@ -301,16 +304,34 @@ class LDManagerApp(
         account_combo.pack(side="left", padx=(6, 12))
         account_combo.bind("<<ComboboxSelected>>", lambda _e: self._render_ld_table())
 
+        tb.Label(filter_frame, text="Group", style="Subtitle.TLabel").pack(side="left")
+        self.group_filter_combo = tb.Combobox(
+            filter_frame,
+            textvariable=self.ld_group_filter_var,
+            values=("All Groups", "Ungrouped"),
+            state="readonly",
+            width=14
+        )
+        self.group_filter_combo.pack(side="left", padx=(6, 12))
+        self.group_filter_combo.bind("<<ComboboxSelected>>", lambda _e: self._render_ld_table())
+
         tb.Label(filter_frame, text="Sort", style="Subtitle.TLabel").pack(side="left")
         sort_combo = tb.Combobox(
             filter_frame,
             textvariable=self.ld_sort_var,
-            values=("Status", "Name", "ADB", "Account"),
+            values=("Status", "Name", "ADB", "Account", "Group"),
             state="readonly",
             width=11
         )
         sort_combo.pack(side="left", padx=(6, 0))
         sort_combo.bind("<<ComboboxSelected>>", lambda _e: self._render_ld_table())
+        tb.Button(
+            filter_frame,
+            text="Create Group",
+            bootstyle="outline-primary",
+            command=self.create_ld_group,
+            width=12
+        ).pack(side="right", padx=(8, 0))
         tb.Button(
             filter_frame,
             text="Clear Filters",
@@ -351,7 +372,7 @@ class LDManagerApp(
         tree_frame.pack(fill="both", expand=True)
         
         # Define columns
-        columns = ("name", "serial", "status", "task", "progress", "account", "actions")
+        columns = ("name", "serial", "status", "task", "progress", "account", "groups", "actions")
         
         # Create Treeview with custom style
         self.ld_table = CheckboxTreeview(
@@ -384,6 +405,9 @@ class LDManagerApp(
         
         self.ld_table.heading("account", text="Account", anchor="w")
         self.ld_table.column("account", width=110, anchor="w")
+
+        self.ld_table.heading("groups", text="Groups", anchor="w")
+        self.ld_table.column("groups", width=150, anchor="w")
 
         self.ld_table.heading("actions", text="Actions", anchor="w")
         self.ld_table.column("actions", width=88, anchor="w")
@@ -422,7 +446,7 @@ class LDManagerApp(
         
         self.ld_table.pack(fill="both", expand=True)
         self.ld_table.bind("<Button-3>", self._show_instance_context_menu)
-        self.ld_table.bind("<ButtonRelease-1>", lambda _e: self.update_selection_info(), add="+")
+        self.ld_table.bind("<ButtonRelease-1>", lambda _e: (self.update_selection_info(), self._update_device_focus_card()), add="+")
 
         self.instance_context_menu = tk.Menu(self.root, tearoff=0)
         self.instance_context_menu.add_command(label="Run Automation", command=self._context_run_automation)
@@ -431,6 +455,8 @@ class LDManagerApp(
         self.instance_context_menu.add_command(label="Stop", command=self._context_stop_instance)
         self.instance_context_menu.add_command(label="Restart", command=self._context_restart_instance)
         self.instance_context_menu.add_separator()
+        self.instance_group_menu = tk.Menu(self.instance_context_menu, tearoff=0)
+        self.instance_context_menu.add_cascade(label="Groups", menu=self.instance_group_menu)
         self.instance_context_menu.add_command(label="Copy ADB Serial", command=self._context_copy_serial)
         self.instance_context_menu.add_separator()
         self.instance_context_menu.add_command(label="Settings", command=self.show_settings_dialog)
@@ -451,22 +477,22 @@ class LDManagerApp(
         self.create_content_tab()
         self.create_logs_tab()
         self.notebook.bind("<<NotebookTabChanged>>", self._on_notebook_tab_changed)
-        self._set_sidebar_nav_active("dashboard")
+        self._set_sidebar_nav_active("analytics")
         self._on_notebook_tab_changed()
 
     def _on_notebook_tab_changed(self, _event=None):
         idx = self.notebook.index("current")
         tab_to_nav = {
-            0: "dashboard",
+            0: "analytics",
             1: "devices",
             2: "automation",
             3: "schedule",
             4: "content",
             5: "logs",
         }
-        self._set_sidebar_nav_active(tab_to_nav.get(idx, "dashboard"))
+        self._set_sidebar_nav_active(tab_to_nav.get(idx, "analytics"))
         if hasattr(self, "_top_tab_buttons"):
-            active_label = "Overview"
+            active_label = "Analytics"
             if idx == 1:
                 active_label = "Devices"
             elif idx == 2:
@@ -549,15 +575,193 @@ class LDManagerApp(
     def _get_checked_names(self):
         return set(self._ld_checked_names)
 
+    def _collect_selected_ld_names(self):
+        selected_names = set(self._ld_checked_names)
+        if hasattr(self, "ld_table"):
+            for item in self.ld_table.get_checked_items():
+                values = self.ld_table.item(item, "values")
+                if values:
+                    selected_names.add(values[0])
+        return selected_names
+
+    def _normalize_ld_groups(self, groups=None):
+        source = groups if groups is not None else self._ld_groups
+        normalized = {}
+        for raw_name, raw_members in (source or {}).items():
+            name = str(raw_name).strip()
+            if not name:
+                continue
+            members = []
+            for member in raw_members or []:
+                member_name = str(member).strip()
+                if member_name and member_name not in members:
+                    members.append(member_name)
+            normalized[name] = sorted(members, key=str.lower)
+        return normalized
+
+    def _sync_ld_groups_with_snapshot(self):
+        snapshot_names = set(self._ld_snapshot.keys())
+        normalized = {}
+        changed = False
+        for group_name, members in self._normalize_ld_groups().items():
+            kept = list(members) if not snapshot_names else [name for name in members if name in snapshot_names]
+            normalized[group_name] = kept
+            if kept != members:
+                changed = True
+        if normalized != self._ld_groups:
+            self._ld_groups = normalized
+            changed = True
+        self._refresh_group_ui()
+        if changed:
+            self.save_settings()
+
+    def _device_groups(self, ld_name):
+        return [group_name for group_name, members in self._ld_groups.items() if ld_name in members]
+
+    def _device_group_text(self, ld_name):
+        groups = self._device_groups(ld_name)
+        return ", ".join(groups) if groups else "Ungrouped"
+
+    def _refresh_group_ui(self):
+        group_names = sorted(self._ld_groups.keys(), key=str.lower)
+        group_values = ["All Groups", "Ungrouped", *group_names]
+        if hasattr(self, "group_filter_combo"):
+            self.group_filter_combo.configure(values=group_values)
+        current_filter = self.ld_group_filter_var.get().strip() or "All Groups"
+        if current_filter not in group_values:
+            self.ld_group_filter_var.set("All Groups")
+
+        if hasattr(self, "device_group_list"):
+            selected_group = self._get_active_group_name()
+            self.device_group_list.delete(0, "end")
+            for group_name in group_names:
+                count = len(self._ld_groups.get(group_name, []))
+                self.device_group_list.insert("end", f"{group_name}  ({count})")
+            if selected_group in group_names:
+                index = group_names.index(selected_group)
+                self.device_group_list.selection_set(index)
+        if hasattr(self, "device_group_summary"):
+            assigned = sum(len(members) for members in self._ld_groups.values())
+            self.device_group_summary.config(text=f"{len(group_names)} groups  |  {assigned} assigned")
+
+    def _extract_group_name(self, display_text):
+        if not display_text:
+            return None
+        return str(display_text).rsplit("  (", 1)[0].strip()
+
+    def _get_active_group_name(self):
+        if hasattr(self, "device_group_list"):
+            selection = self.device_group_list.curselection()
+            if selection:
+                return self._extract_group_name(self.device_group_list.get(selection[0]))
+        current_filter = self.ld_group_filter_var.get().strip()
+        if current_filter not in ("", "All Groups", "Ungrouped"):
+            return current_filter
+        return None
+
+    def _sync_group_filter_from_list(self):
+        group_name = self._get_active_group_name()
+        if group_name:
+            self.ld_group_filter_var.set(group_name)
+            self._render_ld_table()
+
+    def create_ld_group(self):
+        group_name = simpledialog.askstring("Create Group", "Group name:", parent=self.root)
+        group_name = (group_name or "").strip()
+        if not group_name:
+            return
+        if group_name in self._ld_groups:
+            MessageBox.showwarning("Create Group", f"Group '{group_name}' already exists.")
+            return
+        self._ld_groups[group_name] = []
+        self._refresh_group_ui()
+        self.save_settings()
+        self.log(f"Created group: {group_name}", "SUCCESS")
+
+    def rename_selected_ld_group(self):
+        current_name = self._get_active_group_name()
+        if not current_name:
+            MessageBox.showerror("Rename Group", "Select a group first.")
+            return
+        new_name = simpledialog.askstring("Rename Group", "New group name:", initialvalue=current_name, parent=self.root)
+        new_name = (new_name or "").strip()
+        if not new_name or new_name == current_name:
+            return
+        if new_name in self._ld_groups:
+            MessageBox.showwarning("Rename Group", f"Group '{new_name}' already exists.")
+            return
+        self._ld_groups[new_name] = self._ld_groups.pop(current_name, [])
+        if self.ld_group_filter_var.get() == current_name:
+            self.ld_group_filter_var.set(new_name)
+        self._refresh_group_ui()
+        self.save_settings()
+        self._render_ld_table()
+        self.log(f"Renamed group: {current_name} -> {new_name}", "SUCCESS")
+
+    def delete_selected_ld_group(self):
+        group_name = self._get_active_group_name()
+        if not group_name:
+            MessageBox.showerror("Delete Group", "Select a group first.")
+            return
+        if not MessageBox.askyesno("Delete Group", f"Delete group '{group_name}'?"):
+            return
+        self._ld_groups.pop(group_name, None)
+        if self.ld_group_filter_var.get() == group_name:
+            self.ld_group_filter_var.set("All Groups")
+        self._refresh_group_ui()
+        self.save_settings()
+        self._render_ld_table()
+        self.log(f"Deleted group: {group_name}", "INFO")
+
+    def assign_selected_to_group(self):
+        self.update_selection_info()
+        target_group = self._get_active_group_name()
+        if not target_group:
+            target_group = simpledialog.askstring("Assign Group", "Assign selected LDs to group:", parent=self.root)
+            target_group = (target_group or "").strip()
+        if not target_group:
+            return
+        if target_group not in self._ld_groups:
+            self._ld_groups[target_group] = []
+        selected_names = sorted(self._collect_selected_ld_names(), key=str.lower)
+        if not selected_names and self._context_ld_name:
+            selected_names = [self._context_ld_name]
+        if not selected_names:
+            MessageBox.showerror("Assign Group", "Select at least one LD first.")
+            return
+        members = set(self._ld_groups.get(target_group, []))
+        members.update(name for name in selected_names if name in self._ld_snapshot)
+        self._ld_groups[target_group] = sorted(members, key=str.lower)
+        self._refresh_group_ui()
+        self.save_settings()
+        self._render_ld_table()
+        self.log(f"Assigned {len(selected_names)} LD(s) to group: {target_group}", "SUCCESS")
+
+    def select_active_group_devices(self):
+        group_name = self._get_active_group_name()
+        if not group_name:
+            MessageBox.showerror("Select Group", "Select a group first.")
+            return
+        members = [name for name in self._ld_groups.get(group_name, []) if name in self._ld_snapshot]
+        if not members:
+            MessageBox.showwarning("Select Group", f"Group '{group_name}' has no active LD instances.")
+            return
+        self._ld_checked_names = set(members)
+        self._render_ld_table()
+        self.log(f"Selected {len(members)} LD(s) from group: {group_name}", "INFO")
+
     def _filtered_snapshot_rows(self):
         query = self.ld_search_var.get().strip().lower()
         status_filter = self.ld_status_filter_var.get().strip()
         account_filter = self.ld_account_filter_var.get().strip()
+        group_filter = self.ld_group_filter_var.get().strip()
         rows = []
         for name, serial in self._ld_snapshot.items():
             status = self._ld_status_cache.get(name, "Inactive")
             account_text = self._ld_account_cache.get(name, "No account")
-            row_text = f"{name} {serial} {account_text} {status}".lower()
+            group_text = self._device_group_text(name)
+            device_groups = self._device_groups(name)
+            row_text = f"{name} {serial} {account_text} {status} {group_text}".lower()
             if query and query not in row_text:
                 continue
             if status_filter != "All" and status != status_filter:
@@ -567,7 +771,11 @@ class LDManagerApp(
                 continue
             if account_filter == "No Account" and has_account:
                 continue
-            rows.append((name, serial, status, account_text))
+            if group_filter == "Ungrouped" and device_groups:
+                continue
+            if group_filter not in ("", "All Groups", "Ungrouped") and group_filter not in device_groups:
+                continue
+            rows.append((name, serial, status, account_text, group_text))
 
         sort_mode = self.ld_sort_var.get()
         if sort_mode == "Name":
@@ -576,6 +784,8 @@ class LDManagerApp(
             rows.sort(key=lambda r: r[1].lower())
         elif sort_mode == "Account":
             rows.sort(key=lambda r: (r[3] == "No account", r[3].lower(), r[0].lower()))
+        elif sort_mode == "Group":
+            rows.sort(key=lambda r: (r[4] == "Ungrouped", r[4].lower(), r[0].lower()))
         else:
             status_order = {"Running": 0, "Active": 1, "Paused": 2, "Completed": 3, "Inactive": 4}
             rows.sort(key=lambda r: (status_order.get(r[2], 3), r[0].lower()))
@@ -596,30 +806,30 @@ class LDManagerApp(
         for item in self.ld_table.get_children():
             self.ld_table.delete(item)
 
-        for idx, (name, serial, status, account_text) in enumerate(rows):
+        for idx, (name, serial, status, account_text, group_text) in enumerate(rows):
             if status == "Running":
                 task_text = "Scroll Feed" if self.task_type_var.get() == "scroll" else "Watch Reels"
                 progress_text = f"{random.randint(24, 96)}%"
-                actions_text = "⏸ ⏹ 🔍"
+                actions_text = "Pause | Stop | More"
             elif status == "Active":
                 task_text = "Starting"
                 progress_text = f"{random.randint(8, 30)}%"
-                actions_text = "⏸ ⏹ 🔍"
+                actions_text = "Pause | Stop | More"
             elif status == "Inactive":
                 task_text = "—"
                 progress_text = "0%"
-                actions_text = "▶ ⏹ 🔍"
+                actions_text = "Start | Stop | More"
             else:
                 task_text = "—"
                 progress_text = "0%"
-                actions_text = "↺ ⏹ 🔍"
+                actions_text = "Restart | Stop | More"
             zebra_tag = "odd_row" if idx % 2 == 0 else "even_row"
             is_checked = name in checked_names
             item_id = self.ld_table.insert(
                 "",
                 "end",
                 text="☑" if is_checked else "☐",
-                values=(name, serial, self._status_text(status), task_text, progress_text, account_text, actions_text),
+                values=(name, serial, self._status_text(status), task_text, progress_text, account_text, group_text, actions_text),
             )
             self.ld_table.checkboxes[item_id] = is_checked
             base_tags = [zebra_tag, self._status_tag(status)]
@@ -640,6 +850,7 @@ class LDManagerApp(
 
         self._ld_snapshot = snapshot
         self._ld_checked_names.intersection_update(snapshot.keys())
+        self._sync_ld_groups_with_snapshot()
         if status_cache is not None:
             self._ld_status_cache = status_cache
         if account_cache is not None:
@@ -662,8 +873,77 @@ class LDManagerApp(
         self.ld_table.select_item(item)
         self._context_ld_name = values[0]
         self._context_ld_serial = values[1]
+        self._rebuild_instance_group_menu()
         self.instance_context_menu.tk_popup(event.x_root, event.y_root)
         return "break"
+
+    def _rebuild_instance_group_menu(self):
+        self.instance_group_menu.delete(0, "end")
+        self.instance_group_menu.add_command(label="Create Group...", command=self.create_ld_group)
+        self.instance_group_menu.add_separator()
+        target_names = self._context_target_ld_names()
+        current_groups = set(self._device_groups(self._context_ld_name))
+        if not self._ld_groups:
+            self.instance_group_menu.add_command(label="No groups yet", state="disabled")
+        else:
+            for group_name in sorted(self._ld_groups.keys(), key=str.lower):
+                prefix = "Remove from" if len(target_names) == 1 and group_name in current_groups else "Assign to"
+                self.instance_group_menu.add_command(
+                    label=f"{prefix} {group_name}",
+                    command=lambda group=group_name: self._toggle_context_group(group),
+                )
+        self.instance_group_menu.add_separator()
+        self.instance_group_menu.add_command(label="Remove From All Groups", command=self._remove_context_ld_from_groups)
+
+    def _context_target_ld_names(self):
+        selected_names = sorted(self._collect_selected_ld_names(), key=str.lower)
+        if selected_names:
+            if self._context_ld_name and self._context_ld_name not in selected_names:
+                selected_names.append(self._context_ld_name)
+                selected_names.sort(key=str.lower)
+            return selected_names
+        return [self._context_ld_name] if self._context_ld_name else []
+
+    def _toggle_context_group(self, group_name):
+        target_names = self._context_target_ld_names()
+        if not target_names or group_name not in self._ld_groups:
+            return
+        members = set(self._ld_groups.get(group_name, []))
+        target_set = set(target_names)
+        if len(target_names) == 1 and target_names[0] in members:
+            members.remove(target_names[0])
+            action = "Removed"
+        else:
+            members.update(name for name in target_names if name in self._ld_snapshot)
+            action = "Assigned"
+        if members:
+            self._ld_groups[group_name] = sorted(members, key=str.lower)
+        else:
+            self._ld_groups.pop(group_name, None)
+        self._refresh_group_ui()
+        self.save_settings()
+        self._render_ld_table()
+        self.log(f"{action} {len(target_names)} LD(s) {'from' if action == 'Removed' else 'to'} group: {group_name}", "INFO")
+
+    def _remove_context_ld_from_groups(self):
+        target_names = set(self._context_target_ld_names())
+        if not target_names:
+            return
+        changed = False
+        for group_name in list(self._ld_groups.keys()):
+            members = [name for name in self._ld_groups[group_name] if name not in target_names]
+            if len(members) != len(self._ld_groups[group_name]):
+                changed = True
+            if members:
+                self._ld_groups[group_name] = members
+            else:
+                self._ld_groups.pop(group_name, None)
+        if not changed:
+            return
+        self._refresh_group_ui()
+        self.save_settings()
+        self._render_ld_table()
+        self.log(f"Removed {len(target_names)} LD(s) from all groups", "INFO")
 
     def _context_start_instance(self):
         name = self._context_ld_name
@@ -864,6 +1144,8 @@ class LDManagerApp(
         self.task_type_var.set(settings.task_type)
         self.task_template_var.set(settings.task_template)
         self.scroll_after_post.set(settings.scroll_after_post)
+        self._ld_groups = self._normalize_ld_groups(settings.ld_groups)
+        self._refresh_group_ui()
         try:
             # Store as comma-separated, upper-case country codes.
             blocked = ",".join(settings.blocked_countries)
@@ -885,6 +1167,7 @@ class LDManagerApp(
             task_type=str(self.task_type_var.get()),
             task_template=str(self.task_template_var.get()),
             scroll_after_post=bool(self.scroll_after_post.get()),
+            ld_groups=self._normalize_ld_groups(),
             blocked_countries=[
                 code.strip().upper()
                 for code in self.blocked_countries.get().split(",")
@@ -1147,11 +1430,10 @@ Recent Items:
         if hasattr(self, "fleet_visible_chip"):
             self.fleet_visible_chip.config(text=f"Visible: {visible}")
         badge_values = {
-            "dashboard": str(total),
+            "analytics": str(total),
             "devices": str(online),
             "automation": str(running),
             "queue": str(len(self.content_manager.get_queue_items())) if hasattr(self, "content_manager") else "0",
-            "analytics": str(errors),
             "schedule": "ON" if self.schedule_running else "OFF",
         }
         for key, value in badge_values.items():
@@ -1163,6 +1445,7 @@ Recent Items:
         self.ld_search_var.set("")
         self.ld_status_filter_var.set("All")
         self.ld_account_filter_var.set("All")
+        self.ld_group_filter_var.set("All Groups")
         self.ld_sort_var.set("Status")
         self._render_ld_table()
         self.log("Device filters cleared", "INFO")
@@ -1300,20 +1583,21 @@ Recent Items:
             values = self.ld_table.item(item)["values"]
             if values[0] == ld_name:
                 # Update values
-                task_text = values[3] if len(values) > 3 else "—"
+                task_text = values[3] if len(values) > 3 else "-"
                 progress_text = values[4] if len(values) > 4 else "0%"
                 account_text = values[5] if len(values) > 5 else "No account"
-                actions_text = values[6] if len(values) > 6 else "⏸ ⏹ 🔍"
+                group_text = values[6] if len(values) > 6 else self._device_group_text(ld_name)
+                actions_text = values[7] if len(values) > 7 else "Pause | Stop | More"
                 if status == "Inactive":
-                    task_text = "—"
+                    task_text = "-"
                     progress_text = "0%"
-                    actions_text = "▶ ⏹ 🔍"
-                elif status == "Running" and task_text in ("—", "Starting"):
+                    actions_text = "Start | Stop | More"
+                elif status == "Running" and task_text in ("-", "Starting"):
                     task_text = "Scroll Feed" if self.task_type_var.get() == "scroll" else "Watch Reels"
-                    actions_text = "⏸ ⏹ 🔍"
+                    actions_text = "Pause | Stop | More"
                 self.ld_table.item(
                     item,
-                    values=(values[0], values[1], self._status_text(status), task_text, progress_text, account_text, actions_text),
+                    values=(values[0], values[1], self._status_text(status), task_text, progress_text, account_text, group_text, actions_text),
                 )
                 
                 # Update tags

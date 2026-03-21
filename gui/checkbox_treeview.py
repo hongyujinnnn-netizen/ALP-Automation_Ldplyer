@@ -49,18 +49,10 @@ class CheckboxTreeview(ttk.Treeview):
     def _on_click(self, event):
         """Handle single click for selection"""
         item = self.identify_row(event.y)
-        column = self.identify_column(event.x)
-        
         if item:
             self._clicked_item = item
             self._click_time = time.time()
-            
-            # In heading-only mode use first visible column for checkbox toggle behavior
-            if column in ("#0", "#1"):
-                self.toggle_checkbox(item)
-            else:
-                # Single click selection
-                self.select_item(item)
+            self.select_item(item)
 
     def select_item(self, item):
         """Select an item (visual feedback)"""
@@ -108,6 +100,13 @@ class CheckboxTreeview(ttk.Treeview):
         item = self.identify_row(event.y)
         if item:
             self.toggle_checkbox(item)
+
+    def get_selected_item(self):
+        """Return the visually selected item, if any."""
+        for item in self.get_children():
+            if "selected" in self.item(item, "tags"):
+                return item
+        return None
 
     def _select_all(self, event):
         """Select all items with Ctrl+A"""

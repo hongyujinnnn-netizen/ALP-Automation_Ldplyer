@@ -28,6 +28,7 @@ class TestCoreUtilities(unittest.TestCase):
             task_type="reels",
             task_template="content_day",
             scroll_after_post=False,
+            ld_groups={"Farm A": ["US - 01", "US - 02"]},
         )
         save_app_settings(tmp_path, original)
         loaded = load_app_settings(tmp_path)
@@ -38,6 +39,7 @@ class TestCoreUtilities(unittest.TestCase):
         self.assertEqual(loaded.task_type, "reels")
         self.assertEqual(loaded.task_template, "content_day")
         self.assertFalse(loaded.scroll_after_post)
+        self.assertEqual(loaded.ld_groups, {"Farm A": ["US - 01", "US - 02"]})
 
     def test_rate_limiter_budget_and_wait(self) -> None:
         limiter = RateLimiter(max_actions_per_hour=3)

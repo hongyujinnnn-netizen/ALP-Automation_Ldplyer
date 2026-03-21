@@ -1,15 +1,35 @@
 {
-    "parallel_ld": 2,
+    "parallel_ld": 1,
     "boot_delay": 20,
-    "task_duration": 30,
-    "max_videos": 10,
+    "task_duration": 5,
+    "max_videos": 2,
     "start_same_time": true,
     "use_content_queue": false,
     "auto_arrange_ld": true,
     "task_type": "scroll",
     "task_template": "custom",
     "scroll_after_post": true,
+    "ld_groups": {
+        "Post-Reel": [
+            "US - Rual Kelly",
+            "US - Shii Kuu",
+            "US - Tayla Hoysted",
+            "US -James Hopkins",
+            "US -Roger J. Medley"
+        ],
+        "Test-LD": [
+            "US - Test2",
+            "US-Test"
+        ],
+        "US-New": [
+            "US - clone-27",
+            "US - James Roberts",
+            "US - Jamort Bran_new",
+            "US - Kame Nazu_new",
+            "US - Udar Emily_new"
+        ]
+    },
     "blocked_countries": [
-        "KH"
+        "US"
     ]
 }
