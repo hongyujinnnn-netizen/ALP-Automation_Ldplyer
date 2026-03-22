@@ -144,7 +144,8 @@ class MainWindow:
                 self.em.open_facebook(name)
                 self._push_state(name, phase="facebook", state="Ready", task="Facebook opened", progress=60)
         elif stage == "task":
-            self.log(f"Running {self.task_type} task on LD: {name}")
+            if self.task_type != "scroll":
+                self.log(f"Running {self.task_type} task on LD: {name}")
             self._start_ip_lookup(name, force=(self.task_type == "reels"))
             self._push_state(
                 name,
@@ -202,11 +203,9 @@ class MainWindow:
                 batch = self.thread_ld[batch_start:batch_start + self.ld_thread]
                 self.log(f"Processing batch: {batch}")
 
-                # Define stages based on task type
-                if self.task_type == "scroll":
-                    stages = ["start", "facebook", "task", "close"]
-                else:  # reels
-                    stages = ["start", "task", "close"]
+                # Scroll tasks open Facebook inside the task handler after the
+                # IP guard passes, so skip the legacy pre-open stage here.
+                stages = ["start", "task", "close"]
 
                 for stage in stages:
                     if not self.running_flag():

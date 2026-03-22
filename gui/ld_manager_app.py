@@ -449,6 +449,9 @@ class LDManagerApp(
         self.ld_table.bind("<ButtonRelease-1>", lambda _e: (self.update_selection_info(), self._update_device_focus_card()), add="+")
 
         self.instance_context_menu = tk.Menu(self.root, tearoff=0)
+        self.instance_context_menu.add_command(label="Select All", command=self.select_all)
+        self.instance_context_menu.add_command(label="Clear Selection", command=self.deselect_all)
+        self.instance_context_menu.add_separator()
         self.instance_context_menu.add_command(label="Run Automation", command=self._context_run_automation)
         self.instance_context_menu.add_separator()
         self.instance_context_menu.add_command(label="Start", command=self._context_start_instance)

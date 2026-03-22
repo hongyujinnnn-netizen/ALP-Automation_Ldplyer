@@ -1,11 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
 
 datas = []
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('uiautomator2')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+datas += collect_data_files('uiautomator2', includes=['assets/*', 'ext/htmlreport/assets/*'])
+hiddenimports += collect_submodules('uiautomator2')
 
 
 a = Analysis(

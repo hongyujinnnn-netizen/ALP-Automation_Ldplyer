@@ -21,15 +21,14 @@
             "US - Test2",
             "US-Test"
         ],
-        "US-New": [
-            "US - clone-27",
-            "US - James Roberts",
+        "New-US": [
+            "US - Franky Claw_new",
             "US - Jamort Bran_new",
             "US - Kame Nazu_new",
             "US - Udar Emily_new"
         ]
     },
     "blocked_countries": [
-        "US"
+        "KH"
     ]
 }

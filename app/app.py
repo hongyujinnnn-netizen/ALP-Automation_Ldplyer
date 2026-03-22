@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ctypes
+import contextlib
 import os
 import subprocess
 import sys
@@ -81,8 +82,65 @@ def _relaunch_in_project_venv_if_available() -> None:
     raise SystemExit(completed.returncode)
 
 
+def _patch_uiautomator2_frozen_resources() -> None:
+    """Make uiautomator2 package assets discoverable in frozen builds."""
+    try:
+        import uiautomator2.utils as u2_utils
+    except Exception:
+        return
+
+    if getattr(u2_utils, "_alp_resource_patch_applied", False):
+        return
+
+    @contextlib.contextmanager
+    def _with_package_resource(filename: str):
+        try:
+            from importlib.resources import as_file, files
+
+            anchor = files("uiautomator2") / filename
+            with as_file(anchor) as resource_path:
+                if resource_path.exists():
+                    yield resource_path
+                    return
+        except Exception:
+            pass
+
+        search_roots = []
+        if getattr(sys, "_MEIPASS", None):
+            meipass = Path(sys._MEIPASS)
+            search_roots.extend(
+                [
+                    meipass,
+                    meipass / "uiautomator2",
+                    meipass / "_internal",
+                    meipass / "_internal" / "uiautomator2",
+                ]
+            )
+
+        binary_path = Path(sys.executable if getattr(sys, "frozen", False) else sys.argv[0]).resolve()
+        search_roots.extend([binary_path.parent, Path.cwd()])
+
+        for root in search_roots:
+            candidate = root / filename
+            if candidate.exists():
+                yield candidate
+                return
+
+        raise FileNotFoundError(f"Resource {filename} not found in uiautomator2 package.")
+
+    u2_utils.with_package_resource = _with_package_resource
+    try:
+        import uiautomator2.core as u2_core
+
+        u2_core.with_package_resource = _with_package_resource
+    except Exception:
+        pass
+    u2_utils._alp_resource_patch_applied = True
+
+
 def main() -> None:
     _relaunch_in_project_venv_if_available()
+    _patch_uiautomator2_frozen_resources()
 
     try:
         from gui.ld_manager_app import LDManagerApp

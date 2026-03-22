@@ -108,20 +108,6 @@ class ScrollTaskHandler(BaseTaskHandler):
             self.log(f"Failed to reconnect ADB after restart for {name}")
             return False
 
-        try:
-            if not U2_AVAILABLE:
-                self.log("uiautomator2 not available after restart; cannot reopen Facebook")
-                return False
-            d = u2.connect(serial)
-        except Exception as exc:
-            self.log(f"Failed to reconnect UI automation after restart for {name}: {exc}")
-            return False
-
-        self.log(f"Reopening Facebook after restart: {name}")
-        if not self.open_facebook(d):
-            self.log(f"Failed to reopen Facebook after restart: {name}")
-            return False
-
         return self.execute(
             name,
             duration=max(1, int(remaining_duration)),
@@ -195,6 +181,12 @@ class ScrollTaskHandler(BaseTaskHandler):
         except Exception as e:
             self.log(f"âŒ Failed to connect {serial}: {e}")
             return False
+
+        self.log(f"Opening Facebook after IP check: {name}")
+        if not self.open_facebook(d):
+            self.log(f"Failed to open Facebook before scrolling: {name}")
+            return False
+        self.log(f"Running scroll task on LD: {name}")
 
         # Configure scroll parameters based on intensity.
         # Durations are in milliseconds for the ADB swipe command.
