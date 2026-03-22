@@ -16,6 +16,7 @@ class BaseTaskHandler(ABC):
         self.log = log_func
         self.pause_event = pause_event
         self.running_flag = running_flag
+        self._last_runtime_state = {}
     
     @abstractmethod
     def execute(self, name, duration=None, **kwargs):
@@ -29,11 +30,25 @@ class BaseTaskHandler(ABC):
 
     def push_runtime_state(self, name, **payload):
         callback = getattr(self, "state_callback", None)
-        if callable(callback):
+        if not callable(callback):
+            return
+
+        previous_payload = self._last_runtime_state.get(name)
+        self._last_runtime_state[name] = dict(payload)
+
+        # Some UI updates are occasionally dropped when the background task
+        # thread posts a single state update. Resend changed payloads once.
+        attempts = 2 if previous_payload != payload else 1
+        retry_delay = float(getattr(self, "runtime_state_retry_delay", 0.15) or 0.0)
+
+        for attempt in range(attempts):
             try:
-                callback(name, payload)
+                callback(name, dict(payload))
             except Exception:
-                pass
+                if attempt == attempts - 1:
+                    break
+            if attempt < attempts - 1 and retry_delay > 0:
+                time.sleep(retry_delay)
 
     def ensure_device_ready(self, name, timeout=120):
         """

@@ -300,6 +300,11 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         if not self._click_any_selector(d, start_selectors, timeout=8):
             return False
 
+        time.sleep(2)
+        if self._click_any_selector(d, start_selectors, timeout=3, required=False):
+            self.log("Registration entry still visible, clicked it again")
+            time.sleep(2)
+
         self._click_any_selector(
             d,
             [

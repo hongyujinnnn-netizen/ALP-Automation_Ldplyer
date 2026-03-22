@@ -15,23 +15,14 @@
     "ld_groups": {
         "Post-Reel": [
             "US - Rual Kelly",
-            "US - Shii Kuu",
             "US - Tayla Hoysted",
             "US -James Hopkins",
             "US -Roger J. Medley"
         ],
         "Test-LD": [
-            "US - Test2",
-            "US - Tools_testing_1",
-            "US - Tools_testing_2",
-            "US-Test"
+            "US_Reg_Test"
         ],
-        "New-US": [
-            "US - Franky Claw_new",
-            "US - Jamort Bran_new",
-            "US - Kame Nazu_new",
-            "US - Udar Emily_new"
-        ]
+        "New-US": []
     },
     "blocked_countries": [
         "US"
