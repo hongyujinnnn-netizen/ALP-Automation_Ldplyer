@@ -1,4 +1,5 @@
 import json
+import csv
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -16,14 +17,22 @@ class AccountManager:
     
     def load_accounts(self) -> dict:
         if self.accounts_file.exists():
-            with open(self.accounts_file, 'r') as f:
-                return json.load(f)
+            with open(self.accounts_file, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+            return self._normalize_accounts(raw)
         return {}
     
     def assign_account_to_device(self, device_name: str, account_data: dict) -> None:
+        device_name = str(device_name).strip()
+        if not device_name:
+            raise ValueError("device_name is required")
+
+        existing = dict(self.accounts.get(device_name, {}))
+        clean = self._normalize_account_record(device_name, account_data)
         self.accounts[device_name] = {
-            **account_data,
-            'assigned_date': datetime.now().isoformat(),
+            **existing,
+            **clean,
+            'assigned_date': existing.get('assigned_date') or datetime.now().isoformat(),
             'last_used': datetime.now().isoformat()
         }
         self.save_accounts()
@@ -56,7 +65,7 @@ class AccountManager:
         rows: list[dict] = []
         for instance, data in self.accounts.items():
             # Existing data may come from older versions; be defensive.
-            username = data.get("username") or data.get("name") or instance
+            username = data.get("username") or data.get("name") or data.get("email") or instance
             status = data.get("status") or "active"
             rows.append(
                 {
@@ -67,6 +76,88 @@ class AccountManager:
                 }
             )
         return rows
+
+    def import_accounts(self, file_path: str | Path) -> int:
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(path)
+
+        suffix = path.suffix.lower()
+        if suffix == ".csv":
+            records = self._load_accounts_from_csv(path)
+        elif suffix == ".json":
+            records = self._load_accounts_from_json(path)
+        else:
+            raise ValueError("Only .csv and .json account files are supported")
+
+        imported = 0
+        for record in records:
+            device_name = str(
+                record.get("device_name")
+                or record.get("instance")
+                or record.get("ld_name")
+                or record.get("emulator")
+                or ""
+            ).strip()
+            if not device_name:
+                continue
+            self.assign_account_to_device(device_name, record)
+            imported += 1
+        return imported
+
+    def _normalize_accounts(self, raw) -> dict:
+        if not isinstance(raw, dict):
+            return {}
+        normalized = {}
+        for device_name, account_data in raw.items():
+            key = str(device_name).strip()
+            if not key or not isinstance(account_data, dict):
+                continue
+            normalized[key] = self._normalize_account_record(key, account_data)
+        return normalized
+
+    def _normalize_account_record(self, device_name: str, account_data: dict) -> dict:
+        clean = {}
+        for key, value in (account_data or {}).items():
+            if value is None:
+                continue
+            text = value.strip() if isinstance(value, str) else value
+            clean[str(key)] = text
+
+        email = str(clean.get("email") or "").strip()
+        username = str(clean.get("username") or clean.get("name") or email or device_name).strip()
+        clean["device_name"] = device_name
+        clean["instance"] = device_name
+        clean["username"] = username
+        clean["name"] = str(clean.get("name") or username)
+        clean["email"] = email
+        clean["password"] = str(clean.get("password") or "")
+        clean["status"] = str(clean.get("status") or "active").lower()
+        return clean
+
+    def _load_accounts_from_json(self, path: Path) -> list[dict]:
+        with open(path, "r", encoding="utf-8") as fh:
+            raw = json.load(fh)
+
+        if isinstance(raw, dict):
+            if all(isinstance(value, dict) for value in raw.values()):
+                rows = []
+                for key, value in raw.items():
+                    row = dict(value)
+                    row.setdefault("device_name", key)
+                    rows.append(row)
+                return rows
+            return [raw]
+
+        if isinstance(raw, list):
+            return [row for row in raw if isinstance(row, dict)]
+
+        return []
+
+    def _load_accounts_from_csv(self, path: Path) -> list[dict]:
+        with open(path, "r", encoding="utf-8-sig", newline="") as fh:
+            reader = csv.DictReader(fh)
+            return [dict(row) for row in reader if row]
 
 # ==================== CONTENT MANAGER ====================
 class ContentManager:

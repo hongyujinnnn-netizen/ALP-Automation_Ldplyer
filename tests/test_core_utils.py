@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from core.emulator import ControlEmulator
-from core.task_handlers import ReelsTaskHandler
+from core.logic.task_reels import ReelsTaskHandler
 from core.managers import AccountManager
 from core.paths import get_app_paths
 from core.settings import AppSettings, save_app_settings, load_app_settings
@@ -85,7 +85,7 @@ class TestCoreUtilities(unittest.TestCase):
             timeout=15,
         )
 
-    @patch("core.task_handlers.check_ld_ip_allowed")
+    @patch("core.logic.task_reels.check_ld_ip_allowed")
     def test_reels_task_blocks_when_ld_ip_is_blocked(self, mock_check_ld_ip_allowed) -> None:
         mock_check_ld_ip_allowed.return_value = False
         emulator = unittest.mock.Mock()

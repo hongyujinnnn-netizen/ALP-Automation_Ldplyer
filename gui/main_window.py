@@ -134,7 +134,7 @@ class MainWindow:
                 self._push_state(name, phase="ready", state="Active", task="Device online", progress=36)
                 self._start_ip_lookup(name)
         elif stage == "facebook":
-            if self.task_type == "scroll":
+            if self.task_type in {"scroll", "reg_account"}:
                 if not self.em.wait_for_ld_ready(name, timeout=60, poll_interval=2):
                     self.log(f"Skip Facebook; LD not ready: {name}")
                     self._push_state(name, phase="facebook", state="Attention", task="Facebook skipped", progress=0)
@@ -144,7 +144,7 @@ class MainWindow:
                 self.em.open_facebook(name)
                 self._push_state(name, phase="facebook", state="Ready", task="Facebook opened", progress=60)
         elif stage == "task":
-            if self.task_type != "scroll":
+            if self.task_type not in {"scroll", "reg_account"}:
                 self.log(f"Running {self.task_type} task on LD: {name}")
             self._start_ip_lookup(name, force=(self.task_type == "reels"))
             self._push_state(

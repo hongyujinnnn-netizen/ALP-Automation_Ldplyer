@@ -9,6 +9,9 @@
     "task_type": "reels",
     "task_template": "content_day",
     "scroll_after_post": false,
+    "reg_contact_mode": "random_email",
+    "reg_contact_value": "",
+    "reg_phone_prefix": "+1",
     "ld_groups": {
         "Farm A": [
             "US - 01",

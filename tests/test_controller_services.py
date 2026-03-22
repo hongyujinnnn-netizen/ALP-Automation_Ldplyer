@@ -7,6 +7,7 @@ from unittest.mock import Mock
 
 from controllers.app_controller import AppController
 from controllers.task_controller import TaskController
+from core.managers import AccountManager
 from core.paths import AppPaths
 from core.settings import AppSettings, SettingsError
 from services.adb_service import ADBService
@@ -159,6 +160,54 @@ class TestControllerAndServices(unittest.TestCase):
         self.assertEqual(request.task_type, "scroll")
         self.assertEqual(request.task_template, "custom")
         self.assertTrue(request.scroll_after_post)
+
+    def test_account_manager_imports_json_accounts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            paths = build_test_paths(Path(tmp_dir))
+            paths.ensure_runtime_dirs()
+            source = paths.config_dir / "import_accounts.json"
+            source.write_text(
+                json.dumps(
+                    [
+                        {
+                            "instance": "US - 01",
+                            "name": "Alice",
+                            "email": "alice@example.com",
+                            "password": "Secret123!",
+                            "status": "active",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            manager = AccountManager(paths)
+            imported = manager.import_accounts(source)
+
+            self.assertEqual(imported, 1)
+            account = manager.get_device_account("US - 01")
+            self.assertEqual(account["email"], "alice@example.com")
+            self.assertEqual(account["instance"], "US - 01")
+
+    def test_account_manager_imports_csv_accounts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            paths = build_test_paths(Path(tmp_dir))
+            paths.ensure_runtime_dirs()
+            source = paths.config_dir / "import_accounts.csv"
+            source.write_text(
+                "instance,name,email,password,status\n"
+                "US - 02,Bob,bob@example.com,TopSecret!,idle\n",
+                encoding="utf-8",
+            )
+
+            manager = AccountManager(paths)
+            imported = manager.import_accounts(source)
+
+            self.assertEqual(imported, 1)
+            rows = manager.list_accounts()
+            self.assertEqual(rows[0]["instance"], "US - 02")
+            self.assertEqual(rows[0]["status"], "idle")
+            self.assertEqual(rows[0]["email"], "bob@example.com")
 
     def test_new_layer_modules_are_importable(self) -> None:
         from app.app import main

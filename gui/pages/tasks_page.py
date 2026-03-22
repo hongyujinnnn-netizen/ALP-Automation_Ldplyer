@@ -110,6 +110,7 @@ class TasksPageMixin:
         # Task type radio buttons with icons
         task_types = [
             ("Facebook Active", "scroll"),
+            ("Register Account", "reg_account"),
             ("Post Reels", "reels"),
             ("Auto Scroll", "autoscroll"),
             ("Like Posts", "likes")

@@ -81,6 +81,9 @@ class SettingsDialogMixin:
         start_same_var = tk.BooleanVar(value=self.start_same_time.get())
         use_queue_var = tk.BooleanVar(value=self.use_content_queue.get())
         auto_arrange_var = tk.BooleanVar(value=self.auto_arrange_ld.get())
+        reg_contact_mode_var = tk.StringVar(value=self.reg_contact_mode.get())
+        reg_contact_value_var = tk.StringVar(value=self.reg_contact_value.get())
+        reg_phone_prefix_var = tk.StringVar(value=self.reg_phone_prefix.get())
         # Reuse the main app variable for blocked countries so changes are live.
         blocked_countries_var = getattr(self, "blocked_countries", tk.StringVar(value=""))
 
@@ -98,6 +101,9 @@ class SettingsDialogMixin:
             start_same_var,
             use_queue_var,
             auto_arrange_var,
+            reg_contact_mode_var,
+            reg_contact_value_var,
+            reg_phone_prefix_var,
         )
 
     def _build_settings_shell(
@@ -112,6 +118,9 @@ class SettingsDialogMixin:
         start_same_var,
         use_queue_var,
         auto_arrange_var,
+        reg_contact_mode_var,
+        reg_contact_value_var,
+        reg_phone_prefix_var,
     ):
         wrapper = tk.Frame(parent, bg=palette["border_alt"], padx=1, pady=1)
         wrapper.pack(fill="both", expand=True)
@@ -176,6 +185,9 @@ class SettingsDialogMixin:
             boot_delay_var,
             task_duration_var,
             max_videos_var,
+            reg_contact_mode_var,
+            reg_contact_value_var,
+            reg_phone_prefix_var,
         )
         self._build_profiles_page(
             self._settings_pages["profiles_body"],
@@ -198,6 +210,9 @@ class SettingsDialogMixin:
             start_same_var,
             use_queue_var,
             auto_arrange_var,
+            reg_contact_mode_var,
+            reg_contact_value_var,
+            reg_phone_prefix_var,
         )
 
         self._build_premium_footer(
@@ -211,6 +226,9 @@ class SettingsDialogMixin:
             start_same_var,
             use_queue_var,
             auto_arrange_var,
+            reg_contact_mode_var,
+            reg_contact_value_var,
+            reg_phone_prefix_var,
         )
 
         self._bind_summary_refresh(
@@ -221,6 +239,9 @@ class SettingsDialogMixin:
             start_same_var,
             use_queue_var,
             auto_arrange_var,
+            reg_contact_mode_var,
+            reg_contact_value_var,
+            reg_phone_prefix_var,
         )
         self._open_settings_page("general")
 
@@ -385,7 +406,7 @@ class SettingsDialogMixin:
         self._info_row(notes, palette, "Safer setup", "Balanced pacing usually gives more stable startup and fewer connection issues.")
         self._info_row(notes, palette, "Best practice", "Change one value at a time, then test the workflow before raising throughput.")
 
-    def _build_behavior_page(self, parent, palette, start_same_var, use_queue_var, auto_arrange_var, parallel_var, boot_delay_var, task_duration_var, max_videos_var):
+    def _build_behavior_page(self, parent, palette, start_same_var, use_queue_var, auto_arrange_var, parallel_var, boot_delay_var, task_duration_var, max_videos_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var):
         self._page_heading(parent, palette, "BEHAVIOR", "Dispatch & Queue Logic", "Configure how sessions start and how content is delivered during execution.")
 
         self._toggle_feature_card(parent, palette, "Start at Same Time", "Launch all selected instances together for faster startup on stronger machines.", start_same_var)
@@ -435,6 +456,51 @@ class SettingsDialogMixin:
             insertbackground=palette["text"],
         )
         entry.pack(fill="x")
+
+        outer, reg_card = self._premium_card(
+            parent,
+            palette,
+            "Register Account Contact",
+            "Choose whether signup uses phone or email, and whether the value is fixed or generated.",
+        )
+        outer.pack(fill="x", pady=(12, 0))
+
+        tk.Label(reg_card, text="Contact Type", bg=palette["surface_alt"], fg=palette["text"], font=(self.mono_font, 8)).pack(anchor="w")
+        tb.Combobox(
+            reg_card,
+            textvariable=reg_contact_mode_var,
+            values=("random_phone", "fixed_phone", "random_email", "fixed_email"),
+            state="readonly",
+            width=22,
+        ).pack(anchor="w", pady=(4, 10))
+
+        tk.Label(reg_card, text="Fixed Contact", bg=palette["surface_alt"], fg=palette["text"], font=(self.mono_font, 8)).pack(anchor="w")
+        tk.Entry(
+            reg_card,
+            textvariable=reg_contact_value_var,
+            bg=palette["surface"],
+            fg=palette["text"],
+            insertbackground=palette["text"],
+        ).pack(fill="x", pady=(4, 10))
+
+        tk.Label(reg_card, text="Phone Prefix", bg=palette["surface_alt"], fg=palette["text"], font=(self.mono_font, 8)).pack(anchor="w")
+        tk.Entry(
+            reg_card,
+            textvariable=reg_phone_prefix_var,
+            bg=palette["surface"],
+            fg=palette["text"],
+            insertbackground=palette["text"],
+        ).pack(fill="x")
+
+        tk.Label(
+            reg_card,
+            text="Modes: random_phone, fixed_phone, random_email, fixed_email",
+            bg=palette["surface_alt"],
+            fg=palette["muted"],
+            justify="left",
+            wraplength=520,
+            font=(self.mono_font, 8),
+        ).pack(anchor="w", pady=(8, 0))
 
         outer, notes = self._premium_card(parent, palette, "Operational Notes", "Behavior settings should match your hardware and launch pacing.")
         outer.pack(fill="x", pady=(12, 0))
@@ -550,7 +616,7 @@ class SettingsDialogMixin:
             for text in labels:
                 tk.Label(stats, text=text, bg=palette["surface"], fg=palette["text"], font=(self.mono_font, 8), padx=8, pady=4).pack(side="left", padx=(0, 6))
 
-    def _build_summary_page(self, parent, palette, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var):
+    def _build_summary_page(self, parent, palette, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var):
         self._page_heading(parent, palette, "SUMMARY", "Configuration Review", "Read the current setup before saving changes.")
 
         row = tk.Frame(parent, bg=palette["surface"])
@@ -579,7 +645,7 @@ class SettingsDialogMixin:
         tk.Label(card, textvariable=variable, bg=palette["surface_alt"], fg=palette["primary"], font=(self.display_font, 22)).pack(anchor="w", pady=(6, 0))
         tk.Label(card, text=unit, bg=palette["surface_alt"], fg=palette["muted"], font=(self.mono_font, 8)).pack(anchor="w")
 
-    def _build_premium_footer(self, parent, palette, dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var):
+    def _build_premium_footer(self, parent, palette, dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var):
         footer = tk.Frame(parent, bg=palette["surface_alt"], padx=18, pady=14, highlightthickness=1, highlightbackground=palette["border_alt"])
         footer.pack(fill="x")
 
@@ -606,7 +672,7 @@ class SettingsDialogMixin:
             "Save Settings",
             palette["surface"],
             palette["primary"],
-            lambda: self._save_settings_from_dialog(dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var),
+            lambda: self._save_settings_from_dialog(dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var),
             filled=True,
         )
 
@@ -628,7 +694,7 @@ class SettingsDialogMixin:
             command=command,
         ).pack()
 
-    def _bind_summary_refresh(self, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var):
+    def _bind_summary_refresh(self, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var):
         def refresh(*_):
             profile = self._detect_profile(parallel_var.get(), boot_delay_var.get(), task_duration_var.get(), max_videos_var.get(), bool(start_same_var.get()), bool(use_queue_var.get()))
             self._header_status_var.set(profile)
@@ -638,7 +704,7 @@ class SettingsDialogMixin:
             )
             if hasattr(self, "_summary_text_var"):
                 self._summary_text_var.set(
-                    f"Profile: {profile}\nParallel launch: {parallel_var.get()} device(s)\nBoot delay: {boot_delay_var.get()} second(s)\nTask duration: {task_duration_var.get()} minute(s)\nMax reels: {max_videos_var.get()} item(s)\nStart same time: {'Enabled' if start_same_var.get() else 'Disabled'}\nUse queue: {'Enabled' if use_queue_var.get() else 'Disabled'}\nAuto arrange LD: {'Enabled' if auto_arrange_var.get() else 'Disabled'}"
+                    f"Profile: {profile}\nParallel launch: {parallel_var.get()} device(s)\nBoot delay: {boot_delay_var.get()} second(s)\nTask duration: {task_duration_var.get()} minute(s)\nMax reels: {max_videos_var.get()} item(s)\nStart same time: {'Enabled' if start_same_var.get() else 'Disabled'}\nUse queue: {'Enabled' if use_queue_var.get() else 'Disabled'}\nAuto arrange LD: {'Enabled' if auto_arrange_var.get() else 'Disabled'}\nReg contact mode: {reg_contact_mode_var.get()}\nReg contact value: {reg_contact_value_var.get() or '-'}\nReg phone prefix: {reg_phone_prefix_var.get() or '-'}"
                 )
             if hasattr(self, "_summary_detail_var"):
                 self._summary_detail_var.set(
@@ -650,7 +716,7 @@ class SettingsDialogMixin:
             if hasattr(self, "_footer_state_var"):
                 self._footer_state_var.set(f"Current profile: {profile}. Review summary before saving.")
 
-        for var in (parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var):
+        for var in (parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var):
             var.trace_add("write", refresh)
         refresh()
 
@@ -704,7 +770,7 @@ class SettingsDialogMixin:
         if hasattr(self, "_footer_state_var"):
             self._footer_state_var.set(f"Applied profile: {profile_name}.")
 
-    def _save_settings_from_dialog(self, dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var):
+    def _save_settings_from_dialog(self, dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var):
         self.parallel_ld.set(parallel_var.get())
         self.boot_delay.set(boot_delay_var.get())
         self.task_duration.set(task_duration_var.get())
@@ -712,6 +778,9 @@ class SettingsDialogMixin:
         self.start_same_time.set(start_same_var.get())
         self.use_content_queue.set(use_queue_var.get())
         self.auto_arrange_ld.set(auto_arrange_var.get())
+        self.reg_contact_mode.set(reg_contact_mode_var.get())
+        self.reg_contact_value.set(reg_contact_value_var.get())
+        self.reg_phone_prefix.set(reg_phone_prefix_var.get())
         if hasattr(self, "save_settings"):
             try:
                 self.save_settings()

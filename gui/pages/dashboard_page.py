@@ -181,6 +181,7 @@ class DashboardPageMixin:
         self._task_type_buttons = {}
         task_buttons = [
             ("📜 Scroll Feed", "scroll"),
+            ("🆕 Register Account", "reg_account"),
             ("🎬 Watch Reels", "reels"),
             ("❤️ React Posts", "likes"),
             ("👥 Add Friends", "friends"),
@@ -229,8 +230,8 @@ class DashboardPageMixin:
 
 
     def _select_task_type(self, value):
-        # "friends" and "likes" are currently UI stubs. Backend supports scroll/reels.
-        if value in ("scroll", "reels", "likes", "friends"):
+        # "friends" and "likes" are currently UI stubs. Backend supports scroll/reels/reg_account.
+        if value in ("scroll", "reels", "reg_account", "likes", "friends"):
             self.task_type_var.set(value)
         for key, btn in getattr(self, "_task_type_buttons", {}).items():
             btn.configure(bootstyle="info" if key == value else "secondary-outline")

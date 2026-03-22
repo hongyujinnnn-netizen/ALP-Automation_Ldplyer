@@ -1,0 +1,73 @@
+import time
+from abc import ABC, abstractmethod
+
+# Import uiautomator2
+try:
+    import uiautomator2 as u2
+    U2_AVAILABLE = True
+except Exception as e:
+    u2 = None
+    U2_AVAILABLE = False
+
+class BaseTaskHandler(ABC):
+    """Abstract base class for task handlers"""
+    def __init__(self, emulator, log_func, pause_event, running_flag):
+        self.emulator = emulator
+        self.log = log_func
+        self.pause_event = pause_event
+        self.running_flag = running_flag
+    
+    @abstractmethod
+    def execute(self, name, duration=None, **kwargs):
+        pass
+    
+    def check_paused(self):
+        """Check if operations should be paused - blocks if paused"""
+        while not self.pause_event.is_set() and self.running_flag():
+            time.sleep(0.5)
+        return not self.running_flag()
+
+    def push_runtime_state(self, name, **payload):
+        callback = getattr(self, "state_callback", None)
+        if callable(callback):
+            try:
+                callback(name, payload)
+            except Exception:
+                pass
+
+    def ensure_device_ready(self, name, timeout=120):
+        """
+        Wait for emulator/device readiness.
+        Prefers emulator.wait_for_ld_ready when available.
+        """
+        wait_fn = getattr(self.emulator, "wait_for_ld_ready", None)
+        if callable(wait_fn):
+            try:
+                return bool(wait_fn(name, timeout=timeout, poll_interval=2))
+            except TypeError:
+                # Backward compatibility if signature differs
+                return bool(wait_fn(name))
+            except Exception as exc:
+                self.log(f"Readiness check failed for {name}: {exc}")
+                return False
+
+        # Fallback for older emulator implementations
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                if self.emulator.is_ld_running(name):
+                    return True
+            except Exception:
+                pass
+            time.sleep(2)
+        return False
+
+    def auto_arrange_ld_windows(self):
+        """Arrange LD windows when enabled in settings."""
+        if not bool(getattr(self, "auto_arrange_ld", False)):
+            return
+        try:
+            self.emulator.sort_window()
+            self.log("Auto arranged LD windows")
+        except Exception as exc:
+            self.log(f"Failed to auto arrange LD windows: {exc}")

@@ -25,6 +25,9 @@ class AppSettings:
     task_type: str = "scroll"
     task_template: str = "custom"
     scroll_after_post: bool = True
+    reg_contact_mode: str = "random_phone"
+    reg_contact_value: str = ""
+    reg_phone_prefix: str = "+1"
     ld_groups: Dict[str, List[str]] = field(default_factory=dict)
     # Two-letter ISO country codes to block when detected as the host's
     # public IP country. If the country is blocked, automation will not start.
@@ -80,6 +83,9 @@ class AppSettings:
                 task_type=str(raw.get("task_type", cls.task_type)),
                 task_template=str(raw.get("task_template", cls.task_template)),
                 scroll_after_post=bool(raw.get("scroll_after_post", cls.scroll_after_post)),
+                reg_contact_mode=str(raw.get("reg_contact_mode", cls.reg_contact_mode)),
+                reg_contact_value=str(raw.get("reg_contact_value", cls.reg_contact_value)),
+                reg_phone_prefix=str(raw.get("reg_phone_prefix", cls.reg_phone_prefix)),
                 ld_groups=ld_groups,
                 blocked_countries=blocked_countries,
             )

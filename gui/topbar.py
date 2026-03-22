@@ -98,6 +98,7 @@ class TopBarMixin:
 
         task_label = {
             "scroll": "Scroll",
+            "reg_account": "Register",
             "reels": "Reels",
             "autoscroll": "Auto Scroll",
             "likes": "Likes",

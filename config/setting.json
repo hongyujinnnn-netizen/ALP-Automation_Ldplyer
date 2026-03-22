@@ -1,14 +1,17 @@
 {
     "parallel_ld": 1,
     "boot_delay": 20,
-    "task_duration": 5,
+    "task_duration": 2,
     "max_videos": 2,
     "start_same_time": true,
     "use_content_queue": false,
-    "auto_arrange_ld": true,
-    "task_type": "scroll",
+    "auto_arrange_ld": false,
+    "task_type": "reg_account",
     "task_template": "custom",
     "scroll_after_post": true,
+    "reg_contact_mode": "fixed_phone",
+    "reg_contact_value": "067670749",
+    "reg_phone_prefix": "",
     "ld_groups": {
         "Post-Reel": [
             "US - Rual Kelly",
@@ -19,6 +22,8 @@
         ],
         "Test-LD": [
             "US - Test2",
+            "US - Tools_testing_1",
+            "US - Tools_testing_2",
             "US-Test"
         ],
         "New-US": [
@@ -29,6 +34,6 @@
         ]
     },
     "blocked_countries": [
-        "KH"
+        "US"
     ]
 }

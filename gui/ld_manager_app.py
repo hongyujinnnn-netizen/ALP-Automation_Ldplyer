@@ -162,6 +162,9 @@ class LDManagerApp(
         self.use_content_queue = tk.BooleanVar(value=True)
         self.auto_arrange_ld = tk.BooleanVar(value=False)
         self.scroll_after_post = tk.BooleanVar(value=True)
+        self.reg_contact_mode = tk.StringVar(value="random_phone")
+        self.reg_contact_value = tk.StringVar(value="")
+        self.reg_phone_prefix = tk.StringVar(value="+1")
         # Comma-separated list of blocked ISO country codes for IP guard.
         self.blocked_countries = tk.StringVar(
             value="US,KH,CN,TH,VN,PH,ID,MY,LA,MM"
@@ -811,7 +814,11 @@ class LDManagerApp(
 
         for idx, (name, serial, status, account_text, group_text) in enumerate(rows):
             if status == "Running":
-                task_text = "Scroll Feed" if self.task_type_var.get() == "scroll" else "Watch Reels"
+                task_text = {
+                    "scroll": "Scroll Feed",
+                    "reels": "Watch Reels",
+                    "reg_account": "Register Account",
+                }.get(self.task_type_var.get(), self.task_type_var.get().title())
                 progress_text = f"{random.randint(24, 96)}%"
                 actions_text = "Pause | Stop | More"
             elif status == "Active":
@@ -1147,6 +1154,9 @@ class LDManagerApp(
         self.task_type_var.set(settings.task_type)
         self.task_template_var.set(settings.task_template)
         self.scroll_after_post.set(settings.scroll_after_post)
+        self.reg_contact_mode.set(settings.reg_contact_mode)
+        self.reg_contact_value.set(settings.reg_contact_value)
+        self.reg_phone_prefix.set(settings.reg_phone_prefix)
         self._ld_groups = self._normalize_ld_groups(settings.ld_groups)
         self._refresh_group_ui()
         try:
@@ -1170,6 +1180,9 @@ class LDManagerApp(
             task_type=str(self.task_type_var.get()),
             task_template=str(self.task_template_var.get()),
             scroll_after_post=bool(self.scroll_after_post.get()),
+            reg_contact_mode=str(self.reg_contact_mode.get()),
+            reg_contact_value=str(self.reg_contact_value.get()),
+            reg_phone_prefix=str(self.reg_phone_prefix.get()),
             ld_groups=self._normalize_ld_groups(),
             blocked_countries=[
                 code.strip().upper()
@@ -1577,7 +1590,14 @@ Recent Items:
         elif status == "Active":
             runtime_defaults.update({"task": "Device active", "progress": 30})
         elif status == "Running":
-            runtime_defaults.update({"task": "Scroll Feed" if self.task_type_var.get() == "scroll" else "Watch Reels", "progress": 72})
+            runtime_defaults.update({
+                "task": {
+                    "scroll": "Scroll Feed",
+                    "reels": "Watch Reels",
+                    "reg_account": "Register Account",
+                }.get(self.task_type_var.get(), self.task_type_var.get().title()),
+                "progress": 72,
+            })
         elif status == "Completed":
             runtime_defaults.update({"task": "Task completed", "progress": 100})
         self.update_device_runtime_state(ld_name, runtime_defaults)
@@ -1596,7 +1616,11 @@ Recent Items:
                     progress_text = "0%"
                     actions_text = "Start | Stop | More"
                 elif status == "Running" and task_text in ("-", "Starting"):
-                    task_text = "Scroll Feed" if self.task_type_var.get() == "scroll" else "Watch Reels"
+                    task_text = {
+                        "scroll": "Scroll Feed",
+                        "reels": "Watch Reels",
+                        "reg_account": "Register Account",
+                    }.get(self.task_type_var.get(), self.task_type_var.get().title())
                     actions_text = "Pause | Stop | More"
                 self.ld_table.item(
                     item,
@@ -1627,7 +1651,7 @@ Recent Items:
         task_type = self.task_type_var.get()
 
         if task_type == "scroll":
-            from core.task_handlers import ScrollTaskHandler
+            from core.logic.task_scroll import ScrollTaskHandler
             task_handler = ScrollTaskHandler(
                 self.emulator,
                 self.log,
@@ -1640,10 +1664,31 @@ Recent Items:
                 for code in self.blocked_countries.get().split(",")
                 if code.strip()
             ]
+            task_handler.contact_mode = self.reg_contact_mode.get()
+            task_handler.contact_value = self.reg_contact_value.get().strip()
+            task_handler.phone_prefix = self.reg_phone_prefix.get().strip()
+            task_handler.auto_arrange_ld = bool(self.auto_arrange_ld.get())
+            task_handler.state_callback = self.update_device_runtime_state
+        elif task_type == "reg_account":
+            from core.logic.reg_account import RegAccountTaskHandler
+            task_handler = RegAccountTaskHandler(
+                self.emulator,
+                self.log,
+                self.pause_event,
+                lambda: self.running_event.is_set(),
+            )
+            task_handler.blocked_countries = [
+                code.strip().upper()
+                for code in self.blocked_countries.get().split(",")
+                if code.strip()
+            ]
+            task_handler.contact_mode = self.reg_contact_mode.get()
+            task_handler.contact_value = self.reg_contact_value.get().strip()
+            task_handler.phone_prefix = self.reg_phone_prefix.get().strip()
             task_handler.auto_arrange_ld = bool(self.auto_arrange_ld.get())
             task_handler.state_callback = self.update_device_runtime_state
         elif task_type == "reels":
-            from core.task_handlers import ReelsTaskHandler
+            from core.logic.task_reels import ReelsTaskHandler
             task_handler = ReelsTaskHandler(
                 self.emulator,
                 self.log,
@@ -1661,7 +1706,7 @@ Recent Items:
         else:
             MessageBox.showwarning(
                 "Task Not Implemented",
-                "This task type is UI-only right now. Please use Scroll Feed or Watch Reels."
+                "This task type is UI-only right now. Please use Scroll Feed, Register Account, or Watch Reels."
             )
             return
 
