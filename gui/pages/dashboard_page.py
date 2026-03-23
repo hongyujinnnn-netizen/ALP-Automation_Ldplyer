@@ -196,7 +196,7 @@ class DashboardPageMixin:
             )
             btn.pack(side="left", padx=4, pady=2)
             self._task_type_buttons[value] = btn
-        self._select_task_type(self.task_type_var.get())
+        self._sync_analytics_task_buttons()
 
         grid = tb.Frame(panel, style="CardInner.TFrame")
         grid.pack(fill="x")
@@ -233,8 +233,12 @@ class DashboardPageMixin:
         # "friends" and "likes" are currently UI stubs. Backend supports scroll/reels/reg_account.
         if value in ("scroll", "reels", "reg_account", "likes", "friends"):
             self.task_type_var.set(value)
+        self._sync_analytics_task_buttons(value)
+
+    def _sync_analytics_task_buttons(self, selected_value=None):
+        selected = selected_value or self.task_type_var.get()
         for key, btn in getattr(self, "_task_type_buttons", {}).items():
-            btn.configure(bootstyle="info" if key == value else "secondary-outline")
+            btn.configure(bootstyle="info" if key == selected else "secondary-outline")
 
 
     def create_schedule_overview_panel(self, parent):
@@ -347,6 +351,7 @@ class DashboardPageMixin:
         self.live_log_text.tag_configure("WARNING", foreground="#FBBF24")
         self.live_log_text.tag_configure("ERROR", foreground="#F87171")
         self.live_log_text.tag_configure("DEBUG", foreground="#9b59b6")
+        self.live_log_text.tag_configure("EMULATOR_COUNT", foreground="#2563EB")
         self.live_log_text.tag_configure("TIMESTAMP", foreground="#2D3748")
         self.live_log_text.config(state="disabled")
 

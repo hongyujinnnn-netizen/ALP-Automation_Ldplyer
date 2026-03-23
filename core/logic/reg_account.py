@@ -1,9 +1,14 @@
+import json
 import random
 import string
 import time
+import uuid
 from dataclasses import dataclass
+from datetime import datetime
 
 from core.logic.task_scroll import ScrollTaskHandler
+from core.paths import get_app_paths
+from core.settings import _atomic_write_json
 from core.task_base import U2_AVAILABLE, u2
 from utils.ip_guard import check_ld_ip_allowed
 
@@ -29,10 +34,58 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
     FIRST_NAMES = [
-        "Liam", "Noah", "Mason", "Ethan", "Lucas", "Ava", "Emma", "Mia", "Sofia", "Ella",
+        "Liam", "Noah", "Mason", "Ethan", "Lucas",
+        "Ava", "Emma", "Mia", "Sofia", "Ella",
+
+        "James", "William", "Benjamin", "Elijah", "Oliver",
+        "Henry", "Alexander", "Michael", "Daniel", "Jacob",
+
+        "Logan", "Jackson", "Levi", "Sebastian", "Mateo",
+        "Jack", "Owen", "Theodore", "Aiden", "Samuel",
+
+        "Joseph", "John", "David", "Wyatt", "Matthew",
+        "Luke", "Asher", "Carter", "Julian", "Grayson",
+
+        "Leo", "Jayden", "Gabriel", "Isaac", "Lincoln",
+        "Anthony", "Hudson", "Dylan", "Ezra", "Thomas",
+
+        "Charlotte", "Amelia", "Harper", "Evelyn", "Abigail",
+        "Emily", "Ella", "Elizabeth", "Camila", "Luna",
+
+        "Sofia", "Avery", "Mila", "Aria", "Scarlett",
+        "Penelope", "Layla", "Chloe", "Victoria", "Madison",
+
+        "Eleanor", "Grace", "Nora", "Riley", "Zoey",
+        "Hannah", "Lily", "Addison", "Aubrey", "Ellie",
+
+        "Stella", "Natalie", "Zoe", "Leah", "Hazel",
+        "Violet", "Aurora", "Savannah", "Audrey", "Brooklyn"
     ]
+
     LAST_NAMES = [
-        "Smith", "Johnson", "Brown", "Taylor", "Anderson", "Thomas", "Martin", "Walker",
+        "Smith", "Johnson", "Brown", "Taylor", "Anderson",
+        "Thomas", "Martin", "Walker", "White", "Harris",
+
+        "Clark", "Lewis", "Robinson", "Young", "Allen",
+        "King", "Wright", "Scott", "Torres", "Nguyen",
+
+        "Hill", "Flores", "Green", "Adams", "Nelson",
+        "Baker", "Hall", "Rivera", "Campbell", "Mitchell",
+
+        "Carter", "Roberts", "Gomez", "Phillips", "Evans",
+        "Turner", "Diaz", "Parker", "Cruz", "Edwards",
+
+        "Collins", "Stewart", "Morris", "Rogers", "Reed",
+        "Cook", "Morgan", "Bell", "Murphy", "Bailey",
+
+        "Cooper", "Richardson", "Cox", "Howard", "Ward",
+        "Peterson", "Gray", "Ramirez", "James", "Watson",
+
+        "Brooks", "Kelly", "Sanders", "Price", "Bennett",
+        "Wood", "Barnes", "Ross", "Henderson", "Coleman",
+
+        "Jenkins", "Perry", "Powell", "Long", "Patterson",
+        "Hughes", "Washington", "Butler", "Simmons", "Foster"
     ]
 
     def execute(self, name, duration=300, **kwargs):
@@ -99,38 +152,59 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             self.log(f"Failed on name step for {name}")
             return False
         
-        time.sleep(2)
+        time.sleep(3)
 
         if not self._fill_birthdate_step(d, name, profile):
+            try:
+                self._fill_contact_step(d, name, profile)
+                time.sleep(3)
+                self._fill_birthdate_step(d, name, profile)
+            except Exception:
+                pass
             self.log(f"Failed on birth date step for {name}")
             return False
         
-        time.sleep(2)
+        time.sleep(4)
 
         if not self._fill_gender_step(d, name, profile):
             self.log(f"Failed on gender step for {name}")
             return False
 
-        time.sleep(2)
+        time.sleep(4)
 
         if not self._fill_contact_step(d, name, profile):
             self.log(f"Failed on contact step for {name}")
             return False
         
         time.sleep(2)
+        self._handle_contact_continue_step(d)
+        time.sleep(4)
 
         if not self._fill_password_step(d, name, profile):
             self.log(f"Failed on password step for {name}")
             return False
         
-        time.sleep(2)
+        time.sleep(4)
 
+        self._handle_save_step(d)
         self.tap_i_agree(d)
-        
+
+        self._handle_create_new_step(d)
+
+        time.sleep(15)
+                        
+        d.app_stop("com.facebook.katana")
+        time.sleep(3)
+
+        d.app_start("com.facebook.katana", "com.facebook.katana.LoginActivity")
+        time.sleep(10)
+
+
         if not self._submit_signup_step(d, name):
             self.log(f"Failed on final signup step for {name}")
             return False
 
+        self._save_created_account(name, profile)
         self.log(f"Create-account flow completed on LD: {name}")
         self.log(f"Generated account {profile.contact_label}: {profile.contact_value}")
         self.log(f"Generated account password: {profile.password}")
@@ -140,7 +214,7 @@ class RegAccountTaskHandler(ScrollTaskHandler):
     def _build_profile(self, kwargs):
         first_name = str(kwargs.get("first_name") or random.choice(self.FIRST_NAMES))
         last_name = str(kwargs.get("last_name") or random.choice(self.LAST_NAMES))
-        birth_day = int(kwargs.get("birth_day") or random.randint(23, 25))
+        birth_day = int(kwargs.get("birth_day") or random.randint(24, 26))
         birth_month = int(kwargs.get("birth_month") or random.randint(3, 5))
         birth_year = int(kwargs.get("birth_year") or random.randint(2005, 2007))
         gender = str(kwargs.get("gender") or random.choice(["Female", "Male"]))
@@ -162,14 +236,32 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         mode = str(kwargs.get("contact_mode") or getattr(self, "contact_mode", "random_phone")).strip().lower()
         fixed_value = str(kwargs.get("contact_value") or getattr(self, "contact_value", "")).strip()
         phone_prefix = str(kwargs.get("phone_prefix") or getattr(self, "phone_prefix", "+1")).strip() or "+1"
+        fixed_pool = self._parse_contact_pool(fixed_value)
 
         if mode == "fixed_email" and fixed_value:
-            return "email", fixed_value
+            return "email", random.choice(fixed_pool) if fixed_pool else fixed_value
         if mode == "fixed_phone" and fixed_value:
-            return "phone", fixed_value
+            return "phone", random.choice(fixed_pool) if fixed_pool else fixed_value
         if mode == "random_phone":
             return "phone", self._generate_phone(phone_prefix)
         return "email", self._generate_email(first_name, last_name)
+
+    def _parse_contact_pool(self, raw_value):
+        cleaned = str(raw_value or "").strip()
+        if not cleaned:
+            return []
+
+        if cleaned[0] in "([{" and cleaned[-1] in ")]}":
+            cleaned = cleaned[1:-1].strip()
+
+        if not cleaned:
+            return []
+
+        return [
+            part.strip().strip("\"'")
+            for part in cleaned.split(",")
+            if part.strip().strip("\"'")
+        ]
 
     def _generate_email(self, first_name, last_name):
         suffix = random.randint(1000, 99999)
@@ -183,6 +275,42 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         letters = "".join(random.choices(string.ascii_letters, k=7))
         digits = "".join(random.choices(string.digits, k=3))
         return f"{letters}{digits}Aa!"
+
+    def _save_created_account(self, ld_name, profile):
+        paths = get_app_paths()
+        account_file = paths.config_dir / "created_accounts.json"
+        record = {
+            "uid": uuid.uuid4().hex,
+            "name": f"{profile.first_name} {profile.last_name}".strip(),
+            "gender": profile.gender,
+            "status": "",
+            "phone": profile.contact_value if profile.contact_label == "phone" else "",
+            "email": profile.contact_value if profile.contact_label == "email" else "",
+            "password": profile.password,
+            "ld_name": str(ld_name),
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+        }
+
+        existing_records = []
+        if account_file.exists():
+            try:
+                with account_file.open("r", encoding="utf-8") as handle:
+                    loaded = json.load(handle)
+                if isinstance(loaded, list):
+                    existing_records = []
+                    for row in loaded:
+                        if not isinstance(row, dict):
+                            continue
+                        normalized = dict(row)
+                        normalized.setdefault("gender", "")
+                        normalized.setdefault("status", "")
+                        existing_records.append(normalized)
+            except (OSError, json.JSONDecodeError) as exc:
+                self.log(f"Created account file was invalid, resetting it: {exc}")
+
+        existing_records.append(record)
+        _atomic_write_json(account_file, existing_records)
+        self.log(f"Saved created account to {account_file}")
 
     def _check_and_allow_contacts_permission(self, d):
         try:
@@ -503,17 +631,45 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         else:
             hints = ("mobile", "phone", "number", "contact")
 
-        if not self._set_text_inputs(d, [profile.contact_value], hints=hints):
+        if not self._set_text_inputs(d, [profile.contact_value], hints=hints, require_hint_match=True):
             return False
         self.push_runtime_state(name, task=f"{profile.contact_label.title()} entered", progress=80)
-        return self._tap_continue(d)
+        return self._click_any_selector(
+            d,
+            [
+                {"text": "Next"},
+                {"text": "Continue"},
+                {"textContains": "Next"},
+                {"textContains": "Continue"},
+            ],
+            timeout=6,
+            required=False,
+        )  
 
     def _fill_password_step(self, d, name, profile):
         self.log("Entering password")
-        if not self._set_text_inputs(d, [profile.password], hints=("password",)):
+        if not self._set_text_inputs(d, [profile.password], hints=("password",), require_hint_match=True):
             return False
         self.push_runtime_state(name, task="Password entered", progress=86)
         return self._tap_continue(d)
+
+    def _handle_save_step(self, d, timeout=5):
+        self.log("Checking for Save button")
+        if self._click_any_selector(
+            d,
+            [
+                {"text": "Save"},
+                {"textContains": "Save"},
+            ],
+            timeout=timeout,
+            required=False,
+        ):
+            self.log("Save button tapped")
+            time.sleep(2)
+            return True
+
+        self.log("Save button not shown, continuing")
+        return False
 
     def _submit_signup_step(self, d, name):
         self.log("Submitting create-account form")
@@ -544,6 +700,74 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         if self._selector_exists(d, verification_markers, timeout=8):
             self.push_runtime_state(name, task="Waiting for verification code", progress=94)
         return True
+
+    def _handle_create_new_step(self, d):
+        if self._click_any_selector(
+            d,
+            [
+                {"text": "No, creating new account"},
+                {"textContains": "No, creating new account"},
+                {"description": "No, creating new account"},
+                {"descriptionContains": "No, creating new account"},
+            ],
+            timeout=5,
+            required=False,
+        ):
+            return True
+        self.log("No continue button detected after contact step")
+        return False
+
+    def _handle_contact_continue_step(self, d):
+        
+        if self._click_any_selector(
+            d,
+            [
+                {"text": "Continue creating account"},
+                {"textContains": "Continue creating account"},
+                {"description": "Continue creating account"},
+                {"descriptionContains": "Continue creating account"},
+            ],
+            timeout=5,
+            required=False,
+        ):
+            return self._wait_for_password_step(d)
+
+        if self._click_any_selector(
+            d,
+            [
+                {"text": "Next"},
+                {"text": "Continue"},
+                {"textContains": "Next"},
+                {"textContains": "Continue"},
+                {"description": "Next"},
+                {"description": "Continue"},
+                {"descriptionContains": "Next"},
+                {"descriptionContains": "Continue"},
+            ],
+            timeout=6,
+            required=False,
+        ):
+            return self._wait_for_password_step(d)
+
+        try:
+            buttons = [
+                btn for btn in list(d(className="android.widget.Button"))
+                if btn.exists and btn.info.get("enabled", True)
+            ]
+            if buttons:
+                rightmost = max(
+                    buttons,
+                    key=lambda btn: (btn.info.get("bounds", {}) or {}).get("right", 0),
+                )
+                rightmost.click()
+                self.log("Clicked right-side action button after contact step")
+                time.sleep(2)
+                return self._wait_for_password_step(d)
+        except Exception:
+            pass
+
+        self.log("No continue button detected after contact step")
+        return False    
 
     def _tap_continue(self, d, required=True):
         return self._click_any_selector(
@@ -587,7 +811,36 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             time.sleep(0.5)
         return not required
 
-    def _set_text_inputs(self, d, values, hints=(), exact_count=None):
+    def _wait_for_password_step(self, d, timeout=8):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                for field in list(d(className="android.widget.EditText")):
+                    info = getattr(field, "info", {}) or {}
+                    label = " ".join(
+                        str(info.get(key, "") or "")
+                        for key in ("text", "hint", "contentDescription", "resourceId")
+                    ).lower()
+                    if "password" in label:
+                        return True
+            except Exception:
+                pass
+
+            if self._selector_exists(
+                d,
+                [
+                    {"textContains": "password"},
+                    {"descriptionContains": "password"},
+                ],
+                timeout=0.5,
+            ):
+                return True
+            time.sleep(0.5)
+
+        self.log("Password step did not appear after contact continue")
+        return False
+
+    def _set_text_inputs(self, d, values, hints=(), exact_count=None, require_hint_match=False):
         deadline = time.time() + 8
         while time.time() < deadline:
             edit_fields = []
@@ -610,7 +863,10 @@ class RegAccountTaskHandler(ScrollTaskHandler):
                             rank += 1
                     ranked.append((rank, field))
                 ranked.sort(key=lambda item: item[0], reverse=True)
-                edit_fields = [field for _, field in ranked]
+                if require_hint_match:
+                    edit_fields = [field for rank, field in ranked if rank > 0]
+                else:
+                    edit_fields = [field for _, field in ranked]
 
             if exact_count is not None and len(edit_fields) < exact_count:
                 time.sleep(0.5)

@@ -173,7 +173,7 @@ class LDManagerApp(
         # Task type variables
         self.task_type_var = tk.StringVar(value="scroll")
         self.task_template_var = tk.StringVar(value="custom")
-        self.task_type_var.trace_add("write", lambda *_: self._update_header_chips())
+        self.task_type_var.trace_add("write", lambda *_: self._handle_task_type_change())
         
         # Days of week for scheduling
         self.schedule_days = {
@@ -235,6 +235,11 @@ class LDManagerApp(
 
     def _is_main_thread(self):
         return threading.get_ident() == self._main_thread_id
+
+    def _handle_task_type_change(self):
+        self._update_header_chips()
+        if hasattr(self, "_sync_analytics_task_buttons"):
+            self._sync_analytics_task_buttons()
 
     def _schedule_ld_table_render(self, delay_ms=140):
         if self._ld_search_job is not None:
@@ -1282,6 +1287,7 @@ class LDManagerApp(
 
         message = str(message).strip()
         timestamp = datetime.now().strftime("%H:%M:%S")
+        tag = "EMULATOR_COUNT" if message.startswith("Available emulators:") else level
         
         # Determine color based on level
         colors = {
@@ -1304,7 +1310,7 @@ class LDManagerApp(
         self.logs_text.insert("end", f"[{timestamp}] ", "TIMESTAMP")
         
         # Insert message with level tag
-        self.logs_text.insert("end", f"{message}\n", level)
+        self.logs_text.insert("end", f"{message}\n", tag)
         
         # Auto-scroll to end
         self.logs_text.see("end")
@@ -1313,7 +1319,7 @@ class LDManagerApp(
         if hasattr(self, "live_log_text"):
             self.live_log_text.config(state="normal")
             self.live_log_text.insert("end", f"[{timestamp}] ", "TIMESTAMP")
-            self.live_log_text.insert("end", f"{message}\n", level)
+            self.live_log_text.insert("end", f"{message}\n", tag)
             if int(float(self.live_log_text.index("end-1c").split(".")[0])) > 300:
                 self.live_log_text.delete("1.0", "120.0")
             self.live_log_text.see("end")

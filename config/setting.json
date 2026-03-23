@@ -10,21 +10,38 @@
     "task_template": "custom",
     "scroll_after_post": true,
     "reg_contact_mode": "fixed_phone",
-    "reg_contact_value": "067670749",
+    "reg_contact_value": "+19715017663,+15032384411,+15032349694",
     "reg_phone_prefix": "",
     "ld_groups": {
-        "Post-Reel": [
-            "US - Rual Kelly",
-            "US - Tayla Hoysted",
-            "US -James Hopkins",
-            "US -Roger J. Medley"
-        ],
+        "Post-Reel": [],
         "Test-LD": [
-            "US_Reg_Test"
+            "US - Clone-Reg",
+            "US - Test2",
+            "US-Test"
         ],
-        "New-US": []
+        "New-US": [
+            "US - Ella Aderson_new",
+            "US - Ellie Carter_new",
+            "US - Ethan Green_new",
+            "US - Franky Claw_new",
+            "US - Jamort Bran_new",
+            "US - John Hughes_new",
+            "US - Kame Nazu_new",
+            "US - Lucas Reed_new",
+            "US - Madison Ward_new",
+            "US - Mia Brown_new",
+            "US - Naoh Walker_new",
+            "US - Sofia Matin_new",
+            "US - Sofia Taylor_new",
+            "US - Udar Emily_new",
+            "US - Zoey Parker_new"
+        ],
+        "Create_Us": [],
+        "US-Novery": [
+            "US - Clone-Reg-39"
+        ]
     },
     "blocked_countries": [
-        "US"
+        "KH"
     ]
 }

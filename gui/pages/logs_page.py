@@ -54,6 +54,7 @@ class LogsPageMixin:
         self.logs_text.tag_configure("WARNING", foreground=self.palette["warning"])
         self.logs_text.tag_configure("ERROR", foreground=self.palette["danger"])
         self.logs_text.tag_configure("DEBUG", foreground="#9b59b6")
+        self.logs_text.tag_configure("EMULATOR_COUNT", foreground="#2563EB")
         self.logs_text.tag_configure("TIMESTAMP", foreground="#95a5a6")
 
         v_scrollbar = tb.Scrollbar(logs_container, style="Vertical.TScrollbar")

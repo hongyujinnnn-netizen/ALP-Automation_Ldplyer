@@ -24,7 +24,8 @@ class MainWindow:
         
         # Debug: print what we're trying to process
         log_func(f"Selected LD names: {selected_ld_names}")
-        log_func(f"Available emulators: {list(self.em.name_to_serial.keys())}")
+        emulator_count = len(self.em.name_to_serial)
+        log_func(f"Available emulators: [{emulator_count} - Emulator ]")
         
         # Filter only the names that exist in our emulator mapping
         self.thread_ld = []
