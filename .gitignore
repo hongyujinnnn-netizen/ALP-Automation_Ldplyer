@@ -44,6 +44,14 @@ logs/
 .env
 .env.*
 
+# Local runtime config/state
+config/created_accounts.json
+config/content_queue.json
+config/setting.json
+config/setting_schedule.json
+config/scheduled_tasks.json
+config/*.tmp
+
 # Optional local backups
 backups/
 app_backup.py

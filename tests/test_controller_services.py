@@ -188,7 +188,8 @@ class TestControllerAndServices(unittest.TestCase):
             account = manager.get_device_account("US - 01")
             self.assertEqual(account["email"], "alice@example.com")
             self.assertEqual(account["instance"], "US - 01")
-            self.assertEqual(account["ld_name"], "US - 01")
+            self.assertEqual(account["instance"], "US - 01")
+            self.assertEqual(account["device_name"], "US - 01")
 
     def test_account_manager_imports_csv_accounts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -218,7 +219,7 @@ class TestControllerAndServices(unittest.TestCase):
 
             created = manager.create_account(
                 {
-                    "ld_name": "US - 03",
+                    "instance": "US - 03",
                     "name": "Cara",
                     "phone": "+15551234567",
                     "password": "EditMe123!",
@@ -227,7 +228,7 @@ class TestControllerAndServices(unittest.TestCase):
             )
 
             updated = manager.update_account(
-                created["uid"],
+                created["account_id"],
                 {
                     "status": "error",
                     "notes": "verification required",
@@ -237,8 +238,35 @@ class TestControllerAndServices(unittest.TestCase):
             self.assertEqual(updated["status"], "error")
             self.assertEqual(updated["notes"], "verification required")
 
-            manager.remove_account(created["uid"])
+            manager.remove_account(created["account_id"])
             self.assertEqual(manager.list_accounts(), [])
+
+    def test_account_manager_exports_txt_and_pdf(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            paths = build_test_paths(Path(tmp_dir))
+            paths.ensure_runtime_dirs()
+            manager = AccountManager(paths)
+            manager.create_account(
+                {
+                    "instance": "US - 07",
+                    "name": "Delta",
+                    "phone": "+15557654321",
+                    "password": "TopSecret123!",
+                    "status": "novery",
+                    "ld_adb": "127.0.0.1:5555",
+                }
+            )
+
+            txt_path = paths.config_dir / "accounts.txt"
+            pdf_path = paths.config_dir / "accounts.pdf"
+
+            manager.export_accounts(txt_path)
+            manager.export_accounts(pdf_path)
+
+            self.assertTrue(txt_path.exists())
+            self.assertIn("Delta", txt_path.read_text(encoding="utf-8"))
+            self.assertTrue(pdf_path.exists())
+            self.assertTrue(pdf_path.read_bytes().startswith(b"%PDF-1.4"))
 
     def test_new_layer_modules_are_importable(self) -> None:
         from app.app import main

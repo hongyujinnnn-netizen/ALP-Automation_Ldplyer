@@ -194,10 +194,12 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         self._handle_create_new_step(d)
 
         time.sleep(20)
-                        
+        account_status = self.detect_account_status(d)
+        self.log(f"Detected account status for {name}: {account_status}")
+
         d.app_stop("com.facebook.katana")
         time.sleep(3)
-
+        
         d.app_start("com.facebook.katana", "com.facebook.katana.LoginActivity")
         time.sleep(10)
 
@@ -212,13 +214,49 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             self.log(f"Failed on final signup step for {name}")
             return False
 
-        self._save_created_account(name, profile, facebook_uid=facebook_uid)
+        self._save_created_account(
+            name,
+            serial,
+            profile,
+            facebook_uid=facebook_uid,
+            account_status=account_status,
+        )
         self.log(f"Create-account flow completed on LD: {name}")
         self.log(f"Generated account {profile.contact_label}: {profile.contact_value}")
         self.log(f"Generated account password: {profile.password}")
         self.push_runtime_state(name, state="Completed", task="Account form submitted", progress=100)
         return True
     
+    def detect_account_status(self, d):
+        """
+        Detect account status from screen text.
+
+        Returns:
+            "Novery"  -> need verification (OTP screen)
+            "Dead"    -> account suspended
+            "Unknown" -> nothing matched
+        """
+
+        try:
+            # Get all visible text from screen
+            xml = d.dump_hierarchy()
+            xml_lower = xml.lower()
+
+            # Case 1: OTP verification screen
+            if "enter the confirmation code" in xml_lower:
+                return "Novery"
+
+            # Case 2: Account suspended
+            if "account suspended" in xml_lower or "180 days" in xml_lower:
+                return "Dead"
+
+            return "Unknown"
+
+        except Exception as e:
+            print(f"[ERROR] detect_account_status: {e}")
+            return "Error"
+
+
     def check_uid_account(self, d):
         if d is None:
             self.log("Cannot check Facebook UID without a device session")
@@ -507,18 +545,20 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         digits = "".join(random.choices(string.digits, k=3))
         return f"{letters}{digits}Aa!"
 
-    def _save_created_account(self, ld_name, profile, facebook_uid=""):
+    def _save_created_account(self, ld_name, ld_adb, profile, facebook_uid="", account_status=""):
         paths = get_app_paths()
         account_file = paths.config_dir / "created_accounts.json"
         record = {
             "facebook_uid": str(facebook_uid or "").strip(),
             "name": f"{profile.first_name} {profile.last_name}".strip(),
             "gender": profile.gender,
-            "status": "",
+            "status": str(account_status or "").strip(),
             "phone": profile.contact_value if profile.contact_label == "phone" else "",
             "email": profile.contact_value if profile.contact_label == "email" else "",
             "password": profile.password,
-            "ld_name": str(ld_name),
+            "ld_adb": str(ld_adb or "").strip(),
+            "instance": str(ld_name or "").strip(),
+            "device_name": str(ld_name or "").strip(),
             "created_at": datetime.now().isoformat(timespec="seconds"),
         }
 
@@ -691,29 +731,47 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         return self._tap_continue(d)
 
     def _fill_birthdate_step(self, d, name, profile):
-        target_year = random.randint(2005, 2007)
+        target_year = int(profile.birth_year)
+        target_month = self.MONTHS[profile.birth_month - 1]
+        target_day = str(int(profile.birth_day))
+        self.log(
+            f"Selecting birth date: {profile.birth_day:02d}/{profile.birth_month:02d}/{target_year}"
+        )
 
         pickers = list(d(className="android.widget.NumberPicker"))
         if len(pickers) < 3:
             self.log("Birth date picker not found")
             return False
 
-        targets = [
-            self.MONTHS[profile.birth_month - 1],   # month text like "Aug"
-            str(profile.birth_day),            # day like "19"
-            str(target_year),                  # year like "1994"
-        ]
+        detected = self._detect_date_pickers(pickers[:3])
+        month_picker = detected.get("month")
+        day_picker = detected.get("day")
+        year_picker = detected.get("year")
 
-        for index, (picker, target) in enumerate(zip(pickers[:3], targets)):
-            year_bounds = (2005, 2007) if index == 2 else None
-            if not self._scroll_picker_to_value(d, picker, target, numeric_bounds=year_bounds):
-                self.log(f"Failed to set picker to {target}")
-                return False
+        if not month_picker or not day_picker or not year_picker:
+            self.log(f"Could not reliably detect all birth date pickers: {sorted(detected.keys())}")
+            return False
 
-        self.log(
-            f"Selecting birth date: {profile.birth_day:02d}/{profile.birth_month:02d}/{target_year}"
-        )
+        if not self._scroll_picker_to_value(d, month_picker, target_month, kind="month"):
+            self.log(f"Failed to set month picker to {target_month}")
+            return False
+
+        if not self._scroll_picker_to_value(d, day_picker, target_day, kind="day", numeric_bounds=(1, 31)):
+            self.log(f"Failed to set day picker to {target_day}")
+            return False
+
+        if not self._scroll_picker_to_value(
+            d,
+            year_picker,
+            str(target_year),
+            kind="year",
+            numeric_bounds=(1900, 2100),
+        ):
+            self.log(f"Failed to set year picker to {target_year}")
+            return False
+
         self.push_runtime_state(name, task="Birth date selected", progress=68)
+        time.sleep(0.8)
         return self._tap_set_or_continue(d)
 
     def tap_i_agree(self, d, timeout=10):
@@ -741,71 +799,171 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         except Exception as exc:
             self.log(f"Failed while checking agreement button: {exc}")
             return False
-    def _scroll_picker_to_value(self, d, picker, target, max_attempts=30, numeric_bounds=None):
-        for _ in range(max_attempts):
-            current = self._get_picker_center_value(picker)
-            if current is None:
-                time.sleep(0.2)
-                continue
+    def _detect_date_pickers(self, pickers):
+        detected = {}
+        for picker in pickers:
+            value = self._get_picker_center_value(picker)
+            kind = self._classify_picker_value(value)
+            if kind and kind not in detected:
+                detected[kind] = picker
+        return detected
 
-            if str(current).strip() == str(target).strip():
+    def _classify_picker_value(self, value):
+        text = str(value or "").strip()
+        if not text:
+            return None
+
+        month_text = text[:3].title()
+        if month_text in self.MONTHS:
+            return "month"
+
+        if text.isdigit() and len(text) == 4:
+            return "year"
+
+        if text.isdigit():
+            number = int(text)
+            if 1 <= number <= 31:
+                return "day"
+
+        return None
+
+    def _scroll_picker_to_value(self, d, picker, target, kind="generic", numeric_bounds=None, max_attempts=20):
+        target = str(target).strip()
+        for attempt in range(max_attempts):
+            current = self._get_picker_center_value(picker)
+            current_text = str(current or "").strip()
+            if current_text == target:
                 return True
 
-            bounds = picker.info.get("bounds", {})
-            cx = (bounds["left"] + bounds["right"]) // 2
-            top = bounds["top"] + int((bounds["bottom"] - bounds["top"]) * 0.25)
-            bottom = bounds["bottom"] - int((bounds["bottom"] - bounds["top"]) * 0.25)
+            direction = self._decide_picker_direction(current_text, target, kind, numeric_bounds=numeric_bounds)
 
-            if numeric_bounds is not None:
-                try:
-                    current_num = int(str(current).strip())
-                    target_num = int(str(target).strip())
-                    min_year, max_year = numeric_bounds
-                    current_num = min(max_year, max(min_year, current_num))
-                    target_num = min(max_year, max(min_year, target_num))
-                    if current_num < target_num:
-                        d.swipe(cx, bottom, cx, top, 0.15)
-                    else:
-                        d.swipe(cx, top, cx, bottom, 0.15)
-                except Exception:
-                    d.swipe(cx, bottom, cx, top, 0.15)
+            if direction == "up":
+                self._swipe_picker_up(d, picker)
+            elif direction == "down":
+                self._swipe_picker_down(d, picker)
             else:
-                d.swipe(cx, bottom, cx, top, 0.15)
-            time.sleep(0.4)
+                if attempt % 2 == 0:
+                    self._swipe_picker_up(d, picker)
+                else:
+                    self._swipe_picker_down(d, picker)
+            time.sleep(0.35)
 
-        return False
+        self.log(f"[{kind}] smart picker scrolling failed, trying brute-force recovery")
+        for direction, retries in (("up", 8), ("down", 16)):
+            for _ in range(retries):
+                current = self._get_picker_center_value(picker)
+                if str(current or "").strip() == target:
+                    return True
+                if direction == "up":
+                    self._swipe_picker_up(d, picker)
+                else:
+                    self._swipe_picker_down(d, picker)
+                time.sleep(0.25)
 
+        return str(self._get_picker_center_value(picker) or "").strip() == target
 
     def _get_picker_center_value(self, picker):
         try:
             children = picker.child(className="android.widget.EditText")
             if children.exists:
-                return children.get_text()
+                try:
+                    text = children.get_text()
+                    if text:
+                        return str(text).strip()
+                except Exception:
+                    pass
+
+            info = picker.info
+            text = str(info.get("text") or "").strip()
+            if text:
+                return text
 
             text_views = list(picker.descendants(className="android.widget.TextView"))
-            if not text_views:
-                return None
+            if text_views:
+                picker_bounds = info.get("bounds", {})
+                picker_center_y = (picker_bounds["top"] + picker_bounds["bottom"]) // 2
 
-            picker_bounds = picker.info.get("bounds", {})
-            picker_center_y = (picker_bounds["top"] + picker_bounds["bottom"]) // 2
+                best_text = None
+                best_dist = float("inf")
+                for tv in text_views:
+                    tv_info = tv.info
+                    tv_text = str(tv_info.get("text") or "").strip()
+                    bounds = tv_info.get("bounds", {})
+                    cy = (bounds.get("top", 0) + bounds.get("bottom", 0)) // 2
+                    dist = abs(cy - picker_center_y)
+                    if tv_text and dist < best_dist:
+                        best_dist = dist
+                        best_text = tv_text
+                if best_text:
+                    return best_text
 
-            best_text = None
-            best_dist = float("inf")
-
-            for tv in text_views:
-                info = tv.info
-                text = info.get("text", "").strip()
-                bounds = info.get("bounds", {})
-                cy = (bounds.get("top", 0) + bounds.get("bottom", 0)) // 2
-                dist = abs(cy - picker_center_y)
-
-                if text and dist < best_dist:
-                    best_dist = dist
-                    best_text = text
-
-            return best_text
+            for child in picker.children():
+                try:
+                    child_text = str(child.info.get("text") or "").strip()
+                    if child_text:
+                        return child_text
+                except Exception:
+                    continue
         except Exception:
+            pass
+
+        return None
+
+    def _decide_picker_direction(self, current, target, kind, numeric_bounds=None):
+        current = str(current or "").strip()
+        target = str(target or "").strip()
+        if not current or current == target:
             return None
+
+        if kind == "month":
+            month_map = {month: index for index, month in enumerate(self.MONTHS, start=1)}
+            current_num = month_map.get(current[:3].title())
+            target_num = month_map.get(target[:3].title())
+        elif current.isdigit() and target.isdigit():
+            current_num = int(current)
+            target_num = int(target)
+            if numeric_bounds is not None:
+                min_value, max_value = numeric_bounds
+                current_num = min(max_value, max(min_value, current_num))
+                target_num = min(max_value, max(min_value, target_num))
+        else:
+            return None
+
+        if current_num is None or target_num is None or current_num == target_num:
+            return None
+
+        # Default assumption: swipe up moves to a larger value.
+        return "up" if target_num > current_num else "down"
+
+    def _swipe_picker_up(self, d, picker):
+        bounds = (picker.info.get("bounds", {}) or {})
+        left = int(bounds.get("left", 0))
+        right = int(bounds.get("right", 0))
+        top = int(bounds.get("top", 0))
+        bottom = int(bounds.get("bottom", 0))
+        cx = (left + right) // 2
+        start_y = bottom - int((bottom - top) * 0.28)
+        end_y = top + int((bottom - top) * 0.28)
+
+        try:
+            d.swipe(cx, start_y, cx, end_y, 0.18)
+        except Exception as exc:
+            self.log(f"Picker swipe up failed: {exc}")
+
+    def _swipe_picker_down(self, d, picker):
+        bounds = (picker.info.get("bounds", {}) or {})
+        left = int(bounds.get("left", 0))
+        right = int(bounds.get("right", 0))
+        top = int(bounds.get("top", 0))
+        bottom = int(bounds.get("bottom", 0))
+        cx = (left + right) // 2
+        start_y = top + int((bottom - top) * 0.28)
+        end_y = bottom - int((bottom - top) * 0.28)
+
+        try:
+            d.swipe(cx, start_y, cx, end_y, 0.18)
+        except Exception as exc:
+            self.log(f"Picker swipe down failed: {exc}")
 
 
     def _tap_set_or_continue(self, d):

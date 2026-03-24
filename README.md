@@ -215,7 +215,7 @@ Important config files:
 
 - `config/setting.json`
 - `config/setting_schedule.json`
-- `config/accounts.json`
+- `config/created_accounts.json`
 - `config/content_queue.json`
 - `config/scheduled_tasks.json`
 

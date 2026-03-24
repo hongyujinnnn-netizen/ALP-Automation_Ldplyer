@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import zipfile
 import os
+import textwrap
 from core.paths import get_app_paths, AppPaths
 from core.settings import _atomic_write_json
 
@@ -70,7 +71,8 @@ class AccountManager:
 
         candidate = self.get_device_account(device_name)
         payload = dict(account_data or {})
-        payload["ld_name"] = device_name
+        payload["device_name"] = device_name
+        payload["instance"] = device_name
         if candidate:
             return self.update_account(self._get_account_identifier(candidate), payload)
         return self.create_account(payload)
@@ -83,7 +85,7 @@ class AccountManager:
         matches = [
             dict(account)
             for account in self.accounts
-            if str(account.get("ld_name") or account.get("instance") or account.get("device_name") or "").strip() == device_name
+            if str(account.get("device_name") or account.get("instance") or account.get("ld_name") or "").strip() == device_name
         ]
         if not matches:
             return {}
@@ -106,15 +108,15 @@ class AccountManager:
         self.accounts = [
             account for account in self.accounts
             if self._get_account_identifier(account) != identifier
-            and str(account.get("ld_name") or "") != identifier
+            and str(account.get("device_name") or account.get("instance") or account.get("ld_name") or "") != identifier
         ]
         if len(self.accounts) != original_count:
             self.save_accounts()
 
-    def export_accounts(self, file_path: str | Path) -> Path:
+    def export_accounts(self, file_path: str | Path, rows: list[dict] | None = None) -> Path:
         path = Path(file_path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        rows = self.list_accounts()
+        rows = [dict(row) for row in (rows if rows is not None else self.list_accounts())]
 
         if path.suffix.lower() == ".csv":
             fieldnames = [
@@ -123,18 +125,20 @@ class AccountManager:
                 "phone",
                 "email",
                 "password",
-                "ld_name",
+                "ld_adb",
+                "instance",
+                "device_name",
                 "gender",
                 "status",
                 "notes",
                 "created_at",
                 "updated_at",
             ]
-            with open(path, "w", encoding="utf-8-sig", newline="") as fh:
-                writer = csv.DictWriter(fh, fieldnames=fieldnames)
-                writer.writeheader()
-                for row in rows:
-                    writer.writerow({key: row.get(key, "") for key in fieldnames})
+            self._write_accounts_csv(path, rows, fieldnames)
+        elif path.suffix.lower() == ".txt":
+            self._write_accounts_txt(path, rows)
+        elif path.suffix.lower() == ".pdf":
+            self._write_accounts_pdf(path, rows)
         else:
             _atomic_write_json(path, rows)
         return path
@@ -145,12 +149,15 @@ class AccountManager:
             "active": 0,
             "idle": 0,
             "error": 0,
+            "novery": 0,
+            "dead": 0,
+            "unknown": 0,
             "with_phone": 0,
             "with_email": 0,
         }
         for account in self.accounts:
             status = str(account.get("status") or "").strip().lower()
-            if status in {"active", "idle", "error"}:
+            if status in {"active", "idle", "error", "novery", "dead", "unknown"}:
                 summary[status] += 1
             if str(account.get("phone") or "").strip():
                 summary["with_phone"] += 1
@@ -169,7 +176,7 @@ class AccountManager:
         for data in self.accounts:
             account = self._with_account_metadata(data)
             account["uid"] = str(account.get("facebook_uid") or "")
-            account["instance"] = str(account.get("ld_name") or account.get("instance") or account.get("device_name") or "")
+            account["instance"] = str(account.get("instance") or account.get("device_name") or account.get("ld_name") or "")
             account["device_name"] = account["instance"]
             account["username"] = str(
                 account.get("username")
@@ -218,7 +225,8 @@ class AccountManager:
                 if not isinstance(account_data, dict):
                     continue
                 row = dict(account_data)
-                row.setdefault("ld_name", str(device_name).strip())
+                row.setdefault("device_name", str(device_name).strip())
+                row.setdefault("instance", str(device_name).strip())
                 iterable.append(row)
         elif isinstance(raw, list):
             iterable = [row for row in raw if isinstance(row, dict)]
@@ -248,12 +256,17 @@ class AccountManager:
             clean[str(key)] = text
 
         device_name = str(
-            clean.get("ld_name")
+            clean.get("device_name")
             or clean.get("instance")
-            or clean.get("device_name")
-            or existing.get("ld_name")
-            or existing.get("instance")
+            or clean.get("ld_name")
             or existing.get("device_name")
+            or existing.get("instance")
+            or existing.get("ld_name")
+            or ""
+        ).strip()
+        adb_serial = str(
+            clean.get("ld_adb")
+            or existing.get("ld_adb")
             or ""
         ).strip()
         email = str(clean.get("email") or existing.get("email") or "").strip()
@@ -276,10 +289,11 @@ class AccountManager:
             or ""
         ).strip()
         clean.pop("uid", None)
+        clean.pop("ld_name", None)
         clean["facebook_uid"] = facebook_uid
+        clean["ld_adb"] = adb_serial
         clean["device_name"] = device_name
         clean["instance"] = device_name
-        clean["ld_name"] = device_name
         clean["username"] = name
         clean["name"] = name
         clean["phone"] = phone
@@ -332,9 +346,9 @@ class AccountManager:
             return facebook_uid
 
         device_name = str(
-            (account or {}).get("ld_name")
+            (account or {}).get("device_name")
             or (account or {}).get("instance")
-            or (account or {}).get("device_name")
+            or (account or {}).get("ld_name")
             or ""
         ).strip()
         created_at = str((account or {}).get("created_at") or "").strip()
@@ -345,6 +359,123 @@ class AccountManager:
         row = dict(account or {})
         row["account_id"] = self._get_account_identifier(row)
         return row
+
+    def _write_accounts_csv(self, path: Path, rows: list[dict], fieldnames: list[str]) -> None:
+        with open(path, "w", encoding="utf-8-sig", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=fieldnames)
+            writer.writeheader()
+            for row in rows:
+                writer.writerow({key: row.get(key, "") for key in fieldnames})
+
+    def _write_accounts_txt(self, path: Path, rows: list[dict]) -> None:
+        lines = [
+            f"Account Export - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"Total Accounts: {len(rows)}",
+            "",
+        ]
+        for index, row in enumerate(rows, start=1):
+            lines.extend(
+                [
+                    f"[{index}] {row.get('name') or row.get('username') or 'account'}",
+                    f"UID: {row.get('facebook_uid', '')}",
+                    f"Status: {row.get('status', '')}",
+                    f"Gender: {row.get('gender', '')}",
+                    f"Phone: {row.get('phone', '')}",
+                    f"Email: {row.get('email', '')}",
+                    f"ADB Serial: {row.get('ld_adb', '')}",
+                    f"LD Instance: {row.get('instance') or row.get('device_name') or ''}",
+                    f"Created: {row.get('created_at', '')}",
+                    f"Updated: {row.get('updated_at', '')}",
+                    f"Notes: {row.get('notes', '')}",
+                    "-" * 72,
+                ]
+            )
+        path.write_text("\n".join(lines), encoding="utf-8")
+
+    def _write_accounts_pdf(self, path: Path, rows: list[dict]) -> None:
+        page_width = 612
+        page_height = 792
+        left_margin = 40
+        top_margin = 40
+        line_height = 14
+        max_chars = 88
+
+        def _escape_pdf_text(value: str) -> str:
+            return (
+                str(value)
+                .replace("\\", "\\\\")
+                .replace("(", "\\(")
+                .replace(")", "\\)")
+            )
+
+        content_lines = [
+            "BT",
+            "/F1 11 Tf",
+        ]
+        y = page_height - top_margin
+
+        def add_line(text: str) -> None:
+            nonlocal y
+            if y <= 50:
+                content_lines.extend(["ET", "BT", "/F1 11 Tf"])
+                y = page_height - top_margin
+            content_lines.append(f"1 0 0 1 {left_margin} {y} Tm ({_escape_pdf_text(text)}) Tj")
+            y -= line_height
+
+        add_line(f"Account Export - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        add_line(f"Total Accounts: {len(rows)}")
+        add_line("")
+
+        for index, row in enumerate(rows, start=1):
+            block = [
+                f"[{index}] {row.get('name') or row.get('username') or 'account'}",
+                f"UID: {row.get('facebook_uid', '')}",
+                f"Status: {row.get('status', '')}",
+                f"Gender: {row.get('gender', '')}",
+                f"Phone: {row.get('phone', '')}",
+                f"Email: {row.get('email', '')}",
+                f"ADB Serial: {row.get('ld_adb', '')}",
+                f"LD Instance: {row.get('instance') or row.get('device_name') or ''}",
+                f"Created: {row.get('created_at', '')}",
+                f"Updated: {row.get('updated_at', '')}",
+                f"Notes: {row.get('notes', '')}",
+                "",
+            ]
+            for line in block:
+                wrapped = textwrap.wrap(str(line), width=max_chars) or [""]
+                for segment in wrapped:
+                    add_line(segment)
+
+        content_lines.append("ET")
+        content_stream = "\n".join(content_lines).encode("latin-1", errors="replace")
+
+        objects: list[bytes] = []
+        objects.append(b"<< /Type /Catalog /Pages 2 0 R >>")
+        objects.append(b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+        objects.append(
+            f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {page_width} {page_height}] "
+            f"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>".encode("ascii")
+        )
+        objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+        objects.append(f"<< /Length {len(content_stream)} >>\nstream\n".encode("ascii") + content_stream + b"\nendstream")
+
+        pdf = bytearray(b"%PDF-1.4\n")
+        offsets = [0]
+        for index, obj in enumerate(objects, start=1):
+            offsets.append(len(pdf))
+            pdf.extend(f"{index} 0 obj\n".encode("ascii"))
+            pdf.extend(obj)
+            pdf.extend(b"\nendobj\n")
+
+        xref_offset = len(pdf)
+        pdf.extend(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
+        pdf.extend(b"0000000000 65535 f \n")
+        for offset in offsets[1:]:
+            pdf.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
+        pdf.extend(
+            f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF".encode("ascii")
+        )
+        path.write_bytes(pdf)
 
 # ==================== CONTENT MANAGER ====================
 class ContentManager:
