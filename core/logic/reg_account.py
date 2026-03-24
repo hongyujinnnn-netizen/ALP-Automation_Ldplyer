@@ -2,9 +2,11 @@ import json
 import random
 import string
 import time
-import uuid
 from dataclasses import dataclass
 from datetime import datetime
+
+import re
+from typing import Optional
 
 from core.logic.task_scroll import ScrollTaskHandler
 from core.paths import get_app_paths
@@ -191,7 +193,7 @@ class RegAccountTaskHandler(ScrollTaskHandler):
 
         self._handle_create_new_step(d)
 
-        time.sleep(15)
+        time.sleep(20)
                         
         d.app_stop("com.facebook.katana")
         time.sleep(3)
@@ -199,17 +201,246 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         d.app_start("com.facebook.katana", "com.facebook.katana.LoginActivity")
         time.sleep(10)
 
+        d.app_stop("com.facebook.katana")
+        time.sleep(3)
+        
+        facebook_uid = self.check_uid_account(d)
+
+        time.sleep(3)
 
         if not self._submit_signup_step(d, name):
             self.log(f"Failed on final signup step for {name}")
             return False
 
-        self._save_created_account(name, profile)
+        self._save_created_account(name, profile, facebook_uid=facebook_uid)
         self.log(f"Create-account flow completed on LD: {name}")
         self.log(f"Generated account {profile.contact_label}: {profile.contact_value}")
         self.log(f"Generated account password: {profile.password}")
         self.push_runtime_state(name, state="Completed", task="Account form submitted", progress=100)
         return True
+    
+    def check_uid_account(self, d):
+        if d is None:
+            self.log("Cannot check Facebook UID without a device session")
+            return ""
+
+        if not self._open_settings_accounts(d):
+            return ""
+        time.sleep(3)
+
+        account_number_uid = self.detect_facebook_account_number(d)
+        if account_number_uid:
+            self.log(f"Detected Facebook account number: {account_number_uid}")
+            return account_number_uid
+        
+        self.log("Facebook account number not found in Settings > Accounts")
+        return ""
+    
+    def _open_settings_accounts(self, d, max_scrolls=8):
+        self.log("Opening Android Settings")
+
+        try:
+            d.app_stop("com.android.settings")
+        except Exception:
+            pass
+
+        try:
+            d.app_start("com.android.settings")
+        except Exception as exc:
+            self.log(f"Failed to open Settings: {exc}")
+            return False
+
+        time.sleep(3)
+
+        account_patterns = (
+            "accounts",
+            "users & accounts",
+            "passwords & accounts",
+        )
+
+        for attempt in range(max_scrolls):
+            self.log(f"Searching Accounts in Settings (attempt {attempt + 1}/{max_scrolls})")
+
+            # 1) Try exact visible text search first
+            if self._click_settings_accounts_row(d, account_patterns):
+                if self._is_accounts_screen_open(d):
+                    self.log("Opened Accounts in Settings")
+                    return True
+
+            # 2) Fallback selectors
+            selectors = [
+                d(textMatches=r"(?i)^accounts$"),
+                d(textMatches=r"(?i)^users\s*&\s*accounts$"),
+                d(textMatches=r"(?i)^passwords\s*&\s*accounts$"),
+                d(textContains="Accounts"),
+                d(descriptionContains="Accounts"),
+            ]
+
+            for obj in selectors:
+                try:
+                    if obj.exists:
+                        if self._click_best_target(d, obj):
+                            time.sleep(2)
+                            if self._is_accounts_screen_open(d):
+                                self.log("Opened Accounts in Settings")
+                                return True
+                except Exception:
+                    pass
+
+            # 3) Scroll down and retry
+            try:
+                scrollable = d(scrollable=True)
+                if scrollable.exists:
+                    scrollable.scroll.vert.forward(steps=30)
+                else:
+                    d.swipe(360, 1180, 360, 420, 0.2)
+            except Exception:
+                try:
+                    d.swipe(360, 1180, 360, 420, 0.2)
+                except Exception:
+                    pass
+
+            time.sleep(1.5)
+
+        self.log("Could not find Accounts in Settings")
+        return False
+
+    def _click_settings_accounts_row(self, d, patterns):
+        """
+        Find visible Accounts-like text and click the full row or fallback to bounds center.
+        """
+        text_views = list(d(className="android.widget.TextView"))
+
+        for node in text_views:
+            try:
+                text = (node.info.get("text") or "").strip()
+                if not text:
+                    continue
+
+                normalized = re.sub(r"\s+", " ", text.lower()).strip()
+                if normalized in patterns:
+                    self.log(f"Matched settings row text: {text}")
+                    return self._click_best_target(d, node)
+
+            except Exception:
+                continue
+
+        return False
+
+    def _click_best_target(self, d, obj):
+        """
+        Try clicking object directly, then clickable parent, then bounds center.
+        """
+        try:
+            if obj.exists:
+                info = obj.info
+
+                if info.get("clickable"):
+                    obj.click()
+                    return True
+        except Exception:
+            pass
+
+        # Try parent / clickable ancestor
+        try:
+            current = obj
+            for _ in range(5):
+                current = current.xpath("..")
+                if not current.exists:
+                    break
+
+                try:
+                    parent_info = current.info
+                    if parent_info.get("clickable"):
+                        current.click()
+                        return True
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # Fallback: click center of bounds
+        try:
+            info = obj.info
+            bounds = info.get("bounds", {})
+            left = bounds.get("left", 0)
+            top = bounds.get("top", 0)
+            right = bounds.get("right", 0)
+            bottom = bounds.get("bottom", 0)
+
+            if right > left and bottom > top:
+                cx = (left + right) // 2
+                cy = (top + bottom) // 2
+                d.click(cx, cy)
+                return True
+        except Exception:
+            pass
+
+        return False
+    
+    def _is_accounts_screen_open(self, d):
+        """
+        Verify that we are really inside the Accounts page.
+        """
+        checks = [
+            d(textMatches=r"(?i)^accounts$"),
+            d(textContains="Accounts for"),
+            d(textContains="Add account"),
+            d(textContains="Automatically sync data"),
+            d(textContains="Google"),
+            d(textContains="Facebook"),
+        ]
+
+        for obj in checks:
+            try:
+                if obj.exists:
+                    return True
+            except Exception:
+                pass
+
+        return False
+
+    def detect_facebook_account_number(self, d) -> Optional[str]:
+        """
+        Try to detect the numeric Facebook account on the Accounts screen.
+        """
+        for _ in range(5):
+            try:
+                text_views = list(d(className="android.widget.TextView"))
+            except Exception:
+                text_views = []
+
+            for i, node in enumerate(text_views):
+                try:
+                    text = (node.info.get("text") or "").strip()
+                    if not text:
+                        continue
+
+                    if re.fullmatch(r"\d{10,20}", text):
+                        return text
+
+                    if "facebook" in text.lower():
+                        for j in range(max(0, i - 3), min(len(text_views), i + 4)):
+                            near_text = (text_views[j].info.get("text") or "").strip()
+                            if re.fullmatch(r"\d{10,20}", near_text):
+                                return near_text
+                except Exception:
+                    continue
+
+            try:
+                scrollable = d(scrollable=True)
+                if scrollable.exists:
+                    scrollable.scroll.vert.forward(steps=25)
+                else:
+                    d.swipe(360, 1180, 360, 420, 0.2)
+            except Exception:
+                try:
+                    d.swipe(360, 1180, 360, 420, 0.2)
+                except Exception:
+                    pass
+            time.sleep(1)
+
+        return None
 
     def _build_profile(self, kwargs):
         first_name = str(kwargs.get("first_name") or random.choice(self.FIRST_NAMES))
@@ -276,11 +507,11 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         digits = "".join(random.choices(string.digits, k=3))
         return f"{letters}{digits}Aa!"
 
-    def _save_created_account(self, ld_name, profile):
+    def _save_created_account(self, ld_name, profile, facebook_uid=""):
         paths = get_app_paths()
         account_file = paths.config_dir / "created_accounts.json"
         record = {
-            "uid": uuid.uuid4().hex,
+            "facebook_uid": str(facebook_uid or "").strip(),
             "name": f"{profile.first_name} {profile.last_name}".strip(),
             "gender": profile.gender,
             "status": "",

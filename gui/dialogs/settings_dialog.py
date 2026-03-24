@@ -1,8 +1,78 @@
+import re
 import tkinter as tk
+from tkinter import filedialog
 import ttkbootstrap as tb
 
 
 class SettingsDialogMixin:
+    def _import_fixed_contacts_from_text(self, mode_var, value_var):
+        mode = str(mode_var.get() or "").strip().lower()
+        if mode not in {"fixed_phone", "fixed_email"}:
+            self.log("Import TXT only works with fixed_phone or fixed_email mode.", "WARNING")
+            return
+
+        file_path = filedialog.askopenfilename(
+            parent=getattr(self, "root", None),
+            title="Import Fixed Contacts From Text",
+            filetypes=[
+                ("Text Files", "*.txt"),
+                ("All Files", "*.*"),
+            ],
+        )
+        if not file_path:
+            return
+
+        try:
+            with open(file_path, "r", encoding="utf-8") as handle:
+                content = handle.read()
+        except UnicodeDecodeError:
+            with open(file_path, "r", encoding="utf-8-sig") as handle:
+                content = handle.read()
+        except OSError as exc:
+            self.log(f"Failed to read text file: {exc}", "ERROR")
+            return
+
+        items = (
+            self._extract_phone_candidates(content)
+            if mode == "fixed_phone"
+            else self._extract_email_candidates(content)
+        )
+        if not items:
+            target = "phone numbers" if mode == "fixed_phone" else "emails"
+            self.log(f"No valid {target} found in {file_path}", "WARNING")
+            return
+
+        value_var.set(",".join(items))
+        self.log(f"Imported {len(items)} {'phone numbers' if mode == 'fixed_phone' else 'emails'} from {file_path}", "SUCCESS")
+
+    def _extract_phone_candidates(self, content):
+        seen = set()
+        phones = []
+        for match in re.finditer(r"\+?\d[\d\s().-]{6,}\d", str(content or "")):
+            raw = match.group(0).strip()
+            has_plus = raw.startswith("+")
+            normalized = re.sub(r"[^\d]", "", raw)
+            if len(normalized) < 7:
+                continue
+            phone = f"+{normalized}" if has_plus else normalized
+            if phone in seen:
+                continue
+            seen.add(phone)
+            phones.append(phone)
+        return phones
+
+    def _extract_email_candidates(self, content):
+        seen = set()
+        emails = []
+        for match in re.finditer(r"(?i)\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b", str(content or "")):
+            email = match.group(0).strip()
+            key = email.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            emails.append(email)
+        return emails
+
     def _bind_settings_mousewheel(self, widget, canvas):
         def _on_mousewheel(event):
             delta = 0
@@ -482,6 +552,31 @@ class SettingsDialogMixin:
             fg=palette["text"],
             insertbackground=palette["text"],
         ).pack(fill="x", pady=(4, 10))
+
+        import_row = tk.Frame(reg_card, bg=palette["surface_alt"])
+        import_row.pack(fill="x", pady=(0, 10))
+        tk.Button(
+            import_row,
+            text="Import TXT",
+            bg=palette["surface"],
+            fg=palette["text"],
+            activebackground=palette["primary"],
+            activeforeground=palette["surface"],
+            relief="flat",
+            bd=0,
+            font=(self.mono_font, 9, "bold"),
+            padx=12,
+            pady=6,
+            cursor="hand2",
+            command=lambda: self._import_fixed_contacts_from_text(reg_contact_mode_var, reg_contact_value_var),
+        ).pack(side="left")
+        tk.Label(
+            import_row,
+            text="fixed_phone imports only phone numbers, fixed_email imports only emails",
+            bg=palette["surface_alt"],
+            fg=palette["muted"],
+            font=(self.mono_font, 8),
+        ).pack(side="left", padx=(10, 0))
 
         tk.Label(reg_card, text="Phone Prefix", bg=palette["surface_alt"], fg=palette["text"], font=(self.mono_font, 8)).pack(anchor="w")
         tk.Entry(

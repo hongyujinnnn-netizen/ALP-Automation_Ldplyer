@@ -355,7 +355,7 @@ class AccountDialogMixin:
 
     def _open_account_editor(self, account):
         win = tk.Toplevel(self.root)
-        win.title("Edit Account" if account.get("uid") else "New Account")
+        win.title("Edit Account" if account.get("account_id") else "New Account")
         win.geometry("520x560")
         win.resizable(False, False)
         win.transient(self._account_dialog)
@@ -384,7 +384,7 @@ class AccountDialogMixin:
 
         tk.Label(
             card,
-            text="Edit Account" if account.get("uid") else "New Account",
+            text="Edit Account" if account.get("account_id") else "New Account",
             bg=self._ACCOUNT_CARD,
             fg=self._ACCOUNT_TEXT,
             font=(self.display_font, 14, "bold"),
@@ -481,17 +481,17 @@ class AccountDialogMixin:
                 return
 
             try:
-                if account.get("uid"):
-                    saved = self.account_manager.update_account(str(account["uid"]), payload)
-                    self.log(f"Account updated: {saved.get('name') or saved.get('uid')}", "SUCCESS")
+                if account.get("account_id"):
+                    saved = self.account_manager.update_account(str(account["account_id"]), payload)
+                    self.log(f"Account updated: {saved.get('name') or saved.get('facebook_uid')}", "SUCCESS")
                 else:
                     saved = self.account_manager.create_account(payload)
-                    self.log(f"Account added: {saved.get('name') or saved.get('uid')}", "SUCCESS")
+                    self.log(f"Account added: {saved.get('name') or saved.get('facebook_uid')}", "SUCCESS")
             except Exception as exc:
                 self.log(f"Failed to save account: {exc}", "ERROR")
                 return
 
-            self._refresh_account_tree(select_uid=str(saved.get("uid") or ""))
+            self._refresh_account_tree(select_uid=str(saved.get("facebook_uid") or saved.get("account_id") or ""))
             win.destroy()
 
         self._acct_btn(footer, "Cancel", win.destroy, "left")
@@ -562,7 +562,8 @@ class AccountDialogMixin:
         visible_index = 0
         selected_uid = None
         for acc in accounts:
-            uid = str(acc.get("uid") or "")
+            account_id = str(acc.get("account_id") or "")
+            uid = str(acc.get("facebook_uid") or "")
             name = str(acc.get("name") or acc.get("username") or acc.get("email") or "account")
             gender = str(acc.get("gender") or "")
             status = str(acc.get("status") or "idle").lower()
@@ -582,12 +583,12 @@ class AccountDialogMixin:
             tree.insert(
                 "",
                 "end",
-                iid=uid,
+                iid=account_id,
                 values=(f"{visible_index:02d}", uid, name, gender, contact, instance, status.title(), created),
                 tags=tuple(tags),
             )
-            if select_uid and uid == select_uid:
-                selected_uid = uid
+            if select_uid and (uid == select_uid or account_id == select_uid):
+                selected_uid = account_id
 
         self._acct_pill_active.config(text=f"{summary.get('active', 0)} Active")
         self._acct_pill_idle.config(text=f"{summary.get('idle', 0)} Idle")

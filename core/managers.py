@@ -30,38 +30,37 @@ class AccountManager:
         _atomic_write_json(self.accounts_file, self.accounts)
 
     def get_all_accounts(self) -> list[dict]:
-        return [dict(account) for account in self.accounts]
+        return [self._with_account_metadata(account) for account in self.accounts]
 
     def create_account(self, account_data: dict) -> dict:
         clean = self._normalize_account_record(account_data)
         self.accounts.append(clean)
         self._sort_accounts()
         self.save_accounts()
-        return dict(clean)
+        return self._with_account_metadata(clean)
 
-    def update_account(self, uid: str, account_data: dict) -> dict:
-        uid = str(uid or "").strip()
-        if not uid:
-            raise ValueError("uid is required")
+    def update_account(self, identifier: str, account_data: dict) -> dict:
+        identifier = str(identifier or "").strip()
+        if not identifier:
+            raise ValueError("account identifier is required")
 
         for index, account in enumerate(self.accounts):
-            if str(account.get("uid") or "") != uid:
+            if self._get_account_identifier(account) != identifier:
                 continue
             merged = dict(account)
             merged.update(account_data or {})
-            merged["uid"] = uid
             clean = self._normalize_account_record(merged, existing=account)
             self.accounts[index] = clean
             self._sort_accounts()
             self.save_accounts()
-            return dict(clean)
-        raise ValueError(f"Account not found: {uid}")
+            return self._with_account_metadata(clean)
+        raise ValueError(f"Account not found: {identifier}")
 
-    def get_account(self, uid: str) -> dict:
-        uid = str(uid or "").strip()
+    def get_account(self, identifier: str) -> dict:
+        identifier = str(identifier or "").strip()
         for account in self.accounts:
-            if str(account.get("uid") or "") == uid:
-                return dict(account)
+            if self._get_account_identifier(account) == identifier:
+                return self._with_account_metadata(account)
         return {}
 
     def assign_account_to_device(self, device_name: str, account_data: dict) -> dict:
@@ -72,8 +71,8 @@ class AccountManager:
         candidate = self.get_device_account(device_name)
         payload = dict(account_data or {})
         payload["ld_name"] = device_name
-        if candidate and candidate.get("uid"):
-            return self.update_account(str(candidate["uid"]), payload)
+        if candidate:
+            return self.update_account(self._get_account_identifier(candidate), payload)
         return self.create_account(payload)
 
     def get_device_account(self, device_name: str) -> dict:
@@ -92,11 +91,11 @@ class AccountManager:
             key=lambda row: (
                 str(row.get("created_at") or ""),
                 str(row.get("updated_at") or ""),
-                str(row.get("uid") or ""),
+                self._get_account_identifier(row),
             ),
             reverse=True,
         )
-        return matches[0]
+        return self._with_account_metadata(matches[0])
 
     def remove_account(self, identifier: str) -> None:
         identifier = str(identifier or "").strip()
@@ -106,7 +105,7 @@ class AccountManager:
         original_count = len(self.accounts)
         self.accounts = [
             account for account in self.accounts
-            if str(account.get("uid") or "") != identifier
+            if self._get_account_identifier(account) != identifier
             and str(account.get("ld_name") or "") != identifier
         ]
         if len(self.accounts) != original_count:
@@ -119,7 +118,7 @@ class AccountManager:
 
         if path.suffix.lower() == ".csv":
             fieldnames = [
-                "uid",
+                "facebook_uid",
                 "name",
                 "phone",
                 "email",
@@ -168,7 +167,8 @@ class AccountManager:
         """
         rows: list[dict] = []
         for data in self.accounts:
-            account = dict(data)
+            account = self._with_account_metadata(data)
+            account["uid"] = str(account.get("facebook_uid") or "")
             account["instance"] = str(account.get("ld_name") or account.get("instance") or account.get("device_name") or "")
             account["device_name"] = account["instance"]
             account["username"] = str(
@@ -199,9 +199,9 @@ class AccountManager:
         imported = 0
         for record in records:
             clean = self._normalize_account_record(record)
-            existing_uid = str(clean.get("uid") or "")
-            if existing_uid and any(str(row.get("uid") or "") == existing_uid for row in self.accounts):
-                self.update_account(existing_uid, clean)
+            existing_identifier = self._get_account_identifier(clean)
+            if existing_identifier and any(self._get_account_identifier(row) == existing_identifier for row in self.accounts):
+                self.update_account(existing_identifier, clean)
             else:
                 self.accounts.append(clean)
             imported += 1
@@ -232,7 +232,7 @@ class AccountManager:
             key=lambda row: (
                 str(row.get("created_at") or ""),
                 str(row.get("updated_at") or ""),
-                str(row.get("uid") or ""),
+                self._get_account_identifier(row),
             ),
             reverse=True,
         )
@@ -270,7 +270,13 @@ class AccountManager:
         ).strip()
         created_at = str(clean.get("created_at") or existing.get("created_at") or datetime.now().isoformat(timespec="seconds"))
         updated_at = str(clean.get("updated_at") or datetime.now().isoformat(timespec="seconds"))
-        clean["uid"] = str(clean.get("uid") or existing.get("uid") or time.time_ns())
+        facebook_uid = str(
+            clean.get("facebook_uid")
+            or existing.get("facebook_uid")
+            or ""
+        ).strip()
+        clean.pop("uid", None)
+        clean["facebook_uid"] = facebook_uid
         clean["device_name"] = device_name
         clean["instance"] = device_name
         clean["ld_name"] = device_name
@@ -315,10 +321,30 @@ class AccountManager:
             key=lambda row: (
                 str(row.get("created_at") or ""),
                 str(row.get("updated_at") or ""),
-                str(row.get("uid") or ""),
+                self._get_account_identifier(row),
             ),
             reverse=True,
         )
+
+    def _get_account_identifier(self, account: dict) -> str:
+        facebook_uid = str((account or {}).get("facebook_uid") or "").strip()
+        if facebook_uid:
+            return facebook_uid
+
+        device_name = str(
+            (account or {}).get("ld_name")
+            or (account or {}).get("instance")
+            or (account or {}).get("device_name")
+            or ""
+        ).strip()
+        created_at = str((account or {}).get("created_at") or "").strip()
+        name = str((account or {}).get("name") or (account or {}).get("username") or "").strip()
+        return f"fallback::{device_name}::{created_at}::{name}"
+
+    def _with_account_metadata(self, account: dict) -> dict:
+        row = dict(account or {})
+        row["account_id"] = self._get_account_identifier(row)
+        return row
 
 # ==================== CONTENT MANAGER ====================
 class ContentManager:

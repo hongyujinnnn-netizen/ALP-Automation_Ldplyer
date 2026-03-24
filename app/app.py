@@ -18,7 +18,7 @@ def _is_windows_admin() -> bool:
 
 
 def _request_admin_and_relaunch() -> bool:
-    """Try to elevate; if the user declines, keep running without admin instead of quitting."""
+    """Require elevation on Windows; exit the current process if elevation is not granted."""
     if os.name != "nt":
         return False
 
@@ -27,10 +27,14 @@ def _request_admin_and_relaunch() -> bool:
 
     if not messagebox.askyesno(
         "Administrator Access",
-        "Some LDPlayer controls may need admin permissions.\n\n"
+        "This app requires Administrator permission to run.\n\n"
         "Run as Administrator now?",
     ):
-        return False
+        messagebox.showerror(
+            "Administrator Required",
+            "Administrator permission was not granted. The app will now close.",
+        )
+        raise SystemExit(1)
 
     if getattr(sys, "frozen", False):
         executable = sys.executable
@@ -49,11 +53,11 @@ def _request_admin_and_relaunch() -> bool:
         1,
     )
     if result <= 32:
-        messagebox.showwarning(
-            "Continue Without Admin",
-            "Could not elevate. Continuing without admin rights.",
+        messagebox.showerror(
+            "Administrator Required",
+            "Could not start the app as Administrator. The app will now close.",
         )
-        return False
+        raise SystemExit(1)
 
     return True
 
