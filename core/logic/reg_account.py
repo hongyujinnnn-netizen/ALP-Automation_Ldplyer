@@ -702,19 +702,56 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         return True
 
     def _handle_create_new_step(self, d):
+        self.log("Checking for existing-account prompt")
+        selectors = [
+            {"text": "No, creating new account"},
+            {"textContains": "No, creating new account"},
+            {"description": "No, creating new account"},
+            {"descriptionContains": "No, creating new account"},
+            {"textContains": "creating new account"},
+            {"descriptionContains": "creating new account"},
+            {"textContains": "create new account"},
+            {"descriptionContains": "create new account"}
+        ]
         if self._click_any_selector(
             d,
-            [
-                {"text": "No, creating new account"},
-                {"textContains": "No, creating new account"},
-                {"description": "No, creating new account"},
-                {"descriptionContains": "No, creating new account"},
-            ],
-            timeout=5,
+            selectors,
+            timeout=6,
             required=False,
         ):
+            self.log("Handled existing-account prompt")
             return True
-        self.log("No continue button detected after contact step")
+
+        try:
+            buttons = [
+                btn for btn in list(d(className="android.widget.Button"))
+                if btn.exists and btn.info.get("enabled", True)
+            ]
+            button_labels = []
+            for btn in buttons:
+                info = getattr(btn, "info", {}) or {}
+                label = " ".join(
+                    str(info.get(key, "") or "")
+                    for key in ("text", "contentDescription")
+                ).strip()
+                if label:
+                    button_labels.append(label.lower())
+
+            joined = " | ".join(button_labels)
+            negative_markers = ("already have", "log in", "login", "sign in")
+            if any(marker in joined for marker in negative_markers) and len(buttons) >= 2:
+                rightmost = max(
+                    buttons,
+                    key=lambda btn: (btn.info.get("bounds", {}) or {}).get("right", 0),
+                )
+                rightmost.click()
+                self.log("Clicked right-side button on existing-account prompt")
+                time.sleep(2)
+                return True
+        except Exception:
+            pass
+
+        self.log("Existing-account prompt not shown, continuing")
         return False
 
     def _handle_contact_continue_step(self, d):

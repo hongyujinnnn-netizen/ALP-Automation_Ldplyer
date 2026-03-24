@@ -28,7 +28,7 @@ def build_test_paths(root: Path) -> AppPaths:
         logs_dir=root / "logs",
         settings_file=config_dir / "setting.json",
         schedule_settings_file=config_dir / "setting_schedule.json",
-        accounts_file=config_dir / "accounts.json",
+        accounts_file=config_dir / "created_accounts.json",
         content_queue_file=config_dir / "content_queue.json",
         scheduled_tasks_file=config_dir / "scheduled_tasks.json",
     )
@@ -188,6 +188,7 @@ class TestControllerAndServices(unittest.TestCase):
             account = manager.get_device_account("US - 01")
             self.assertEqual(account["email"], "alice@example.com")
             self.assertEqual(account["instance"], "US - 01")
+            self.assertEqual(account["ld_name"], "US - 01")
 
     def test_account_manager_imports_csv_accounts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -208,6 +209,36 @@ class TestControllerAndServices(unittest.TestCase):
             self.assertEqual(rows[0]["instance"], "US - 02")
             self.assertEqual(rows[0]["status"], "idle")
             self.assertEqual(rows[0]["email"], "bob@example.com")
+
+    def test_account_manager_updates_and_removes_by_uid(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            paths = build_test_paths(Path(tmp_dir))
+            paths.ensure_runtime_dirs()
+            manager = AccountManager(paths)
+
+            created = manager.create_account(
+                {
+                    "ld_name": "US - 03",
+                    "name": "Cara",
+                    "phone": "+15551234567",
+                    "password": "EditMe123!",
+                    "status": "active",
+                }
+            )
+
+            updated = manager.update_account(
+                created["uid"],
+                {
+                    "status": "error",
+                    "notes": "verification required",
+                },
+            )
+
+            self.assertEqual(updated["status"], "error")
+            self.assertEqual(updated["notes"], "verification required")
+
+            manager.remove_account(created["uid"])
+            self.assertEqual(manager.list_accounts(), [])
 
     def test_new_layer_modules_are_importable(self) -> None:
         from app.app import main

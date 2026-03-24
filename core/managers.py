@@ -15,45 +15,149 @@ class AccountManager:
         self.accounts_file = self.paths.accounts_file
         self.accounts = self.load_accounts()
     
-    def load_accounts(self) -> dict:
-        if self.accounts_file.exists():
-            with open(self.accounts_file, 'r', encoding='utf-8') as f:
+    def load_accounts(self) -> list[dict]:
+        if not self.accounts_file.exists():
+            return []
+
+        try:
+            with open(self.accounts_file, "r", encoding="utf-8") as f:
                 raw = json.load(f)
-            return self._normalize_accounts(raw)
+        except (OSError, json.JSONDecodeError):
+            return []
+        return self._normalize_accounts(raw)
+
+    def save_accounts(self) -> None:
+        _atomic_write_json(self.accounts_file, self.accounts)
+
+    def get_all_accounts(self) -> list[dict]:
+        return [dict(account) for account in self.accounts]
+
+    def create_account(self, account_data: dict) -> dict:
+        clean = self._normalize_account_record(account_data)
+        self.accounts.append(clean)
+        self._sort_accounts()
+        self.save_accounts()
+        return dict(clean)
+
+    def update_account(self, uid: str, account_data: dict) -> dict:
+        uid = str(uid or "").strip()
+        if not uid:
+            raise ValueError("uid is required")
+
+        for index, account in enumerate(self.accounts):
+            if str(account.get("uid") or "") != uid:
+                continue
+            merged = dict(account)
+            merged.update(account_data or {})
+            merged["uid"] = uid
+            clean = self._normalize_account_record(merged, existing=account)
+            self.accounts[index] = clean
+            self._sort_accounts()
+            self.save_accounts()
+            return dict(clean)
+        raise ValueError(f"Account not found: {uid}")
+
+    def get_account(self, uid: str) -> dict:
+        uid = str(uid or "").strip()
+        for account in self.accounts:
+            if str(account.get("uid") or "") == uid:
+                return dict(account)
         return {}
-    
-    def assign_account_to_device(self, device_name: str, account_data: dict) -> None:
+
+    def assign_account_to_device(self, device_name: str, account_data: dict) -> dict:
         device_name = str(device_name).strip()
         if not device_name:
             raise ValueError("device_name is required")
 
-        existing = dict(self.accounts.get(device_name, {}))
-        clean = self._normalize_account_record(device_name, account_data)
-        self.accounts[device_name] = {
-            **existing,
-            **clean,
-            'assigned_date': existing.get('assigned_date') or datetime.now().isoformat(),
-            'last_used': datetime.now().isoformat()
-        }
-        self.save_accounts()
-    
+        candidate = self.get_device_account(device_name)
+        payload = dict(account_data or {})
+        payload["ld_name"] = device_name
+        if candidate and candidate.get("uid"):
+            return self.update_account(str(candidate["uid"]), payload)
+        return self.create_account(payload)
+
     def get_device_account(self, device_name: str) -> dict:
-        account = self.accounts.get(device_name, {})
-        if account:
-            account['last_used'] = datetime.now().isoformat()
+        device_name = str(device_name or "").strip()
+        if not device_name:
+            return {}
+
+        matches = [
+            dict(account)
+            for account in self.accounts
+            if str(account.get("ld_name") or account.get("instance") or account.get("device_name") or "").strip() == device_name
+        ]
+        if not matches:
+            return {}
+        matches.sort(
+            key=lambda row: (
+                str(row.get("created_at") or ""),
+                str(row.get("updated_at") or ""),
+                str(row.get("uid") or ""),
+            ),
+            reverse=True,
+        )
+        return matches[0]
+
+    def remove_account(self, identifier: str) -> None:
+        identifier = str(identifier or "").strip()
+        if not identifier:
+            raise ValueError("Account identifier is required")
+
+        original_count = len(self.accounts)
+        self.accounts = [
+            account for account in self.accounts
+            if str(account.get("uid") or "") != identifier
+            and str(account.get("ld_name") or "") != identifier
+        ]
+        if len(self.accounts) != original_count:
             self.save_accounts()
-        return account
-    
-    def remove_account(self, device_name: str) -> None:
-        if device_name in self.accounts:
-            del self.accounts[device_name]
-            self.save_accounts()
-    
-    def save_accounts(self) -> None:
-        _atomic_write_json(self.accounts_file, self.accounts)
-    
-    def get_all_accounts(self) -> dict:
-        return self.accounts
+
+    def export_accounts(self, file_path: str | Path) -> Path:
+        path = Path(file_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        rows = self.list_accounts()
+
+        if path.suffix.lower() == ".csv":
+            fieldnames = [
+                "uid",
+                "name",
+                "phone",
+                "email",
+                "password",
+                "ld_name",
+                "gender",
+                "status",
+                "notes",
+                "created_at",
+                "updated_at",
+            ]
+            with open(path, "w", encoding="utf-8-sig", newline="") as fh:
+                writer = csv.DictWriter(fh, fieldnames=fieldnames)
+                writer.writeheader()
+                for row in rows:
+                    writer.writerow({key: row.get(key, "") for key in fieldnames})
+        else:
+            _atomic_write_json(path, rows)
+        return path
+
+    def get_account_summary(self) -> dict:
+        summary = {
+            "total": len(self.accounts),
+            "active": 0,
+            "idle": 0,
+            "error": 0,
+            "with_phone": 0,
+            "with_email": 0,
+        }
+        for account in self.accounts:
+            status = str(account.get("status") or "").strip().lower()
+            if status in {"active", "idle", "error"}:
+                summary[status] += 1
+            if str(account.get("phone") or "").strip():
+                summary["with_phone"] += 1
+            if str(account.get("email") or "").strip():
+                summary["with_email"] += 1
+        return summary
 
     # Small adapter used by the Account Manager dialog.
     def list_accounts(self) -> list[dict]:
@@ -63,18 +167,20 @@ class AccountManager:
         Each entry contains at least: name, instance and status.
         """
         rows: list[dict] = []
-        for instance, data in self.accounts.items():
-            # Existing data may come from older versions; be defensive.
-            username = data.get("username") or data.get("name") or data.get("email") or instance
-            status = data.get("status") or "active"
-            rows.append(
-                {
-                    "name": str(username),
-                    "instance": str(instance),
-                    "status": str(status),
-                    **data,
-                }
+        for data in self.accounts:
+            account = dict(data)
+            account["instance"] = str(account.get("ld_name") or account.get("instance") or account.get("device_name") or "")
+            account["device_name"] = account["instance"]
+            account["username"] = str(
+                account.get("username")
+                or account.get("name")
+                or account.get("email")
+                or account.get("phone")
+                or account["instance"]
+                or "account"
             )
+            account["status"] = str(account.get("status") or "idle").lower()
+            rows.append(account)
         return rows
 
     def import_accounts(self, file_path: str | Path) -> int:
@@ -92,31 +198,48 @@ class AccountManager:
 
         imported = 0
         for record in records:
-            device_name = str(
-                record.get("device_name")
-                or record.get("instance")
-                or record.get("ld_name")
-                or record.get("emulator")
-                or ""
-            ).strip()
-            if not device_name:
-                continue
-            self.assign_account_to_device(device_name, record)
+            clean = self._normalize_account_record(record)
+            existing_uid = str(clean.get("uid") or "")
+            if existing_uid and any(str(row.get("uid") or "") == existing_uid for row in self.accounts):
+                self.update_account(existing_uid, clean)
+            else:
+                self.accounts.append(clean)
             imported += 1
+        self._sort_accounts()
+        self.save_accounts()
         return imported
 
-    def _normalize_accounts(self, raw) -> dict:
-        if not isinstance(raw, dict):
-            return {}
-        normalized = {}
-        for device_name, account_data in raw.items():
-            key = str(device_name).strip()
-            if not key or not isinstance(account_data, dict):
-                continue
-            normalized[key] = self._normalize_account_record(key, account_data)
+    def _normalize_accounts(self, raw) -> list[dict]:
+        normalized = []
+
+        if isinstance(raw, dict):
+            iterable = []
+            for device_name, account_data in raw.items():
+                if not isinstance(account_data, dict):
+                    continue
+                row = dict(account_data)
+                row.setdefault("ld_name", str(device_name).strip())
+                iterable.append(row)
+        elif isinstance(raw, list):
+            iterable = [row for row in raw if isinstance(row, dict)]
+        else:
+            return []
+
+        for account_data in iterable:
+            normalized.append(self._normalize_account_record(account_data))
+
+        normalized.sort(
+            key=lambda row: (
+                str(row.get("created_at") or ""),
+                str(row.get("updated_at") or ""),
+                str(row.get("uid") or ""),
+            ),
+            reverse=True,
+        )
         return normalized
 
-    def _normalize_account_record(self, device_name: str, account_data: dict) -> dict:
+    def _normalize_account_record(self, account_data: dict, existing: dict | None = None) -> dict:
+        existing = existing or {}
         clean = {}
         for key, value in (account_data or {}).items():
             if value is None:
@@ -124,15 +247,43 @@ class AccountManager:
             text = value.strip() if isinstance(value, str) else value
             clean[str(key)] = text
 
-        email = str(clean.get("email") or "").strip()
-        username = str(clean.get("username") or clean.get("name") or email or device_name).strip()
+        device_name = str(
+            clean.get("ld_name")
+            or clean.get("instance")
+            or clean.get("device_name")
+            or existing.get("ld_name")
+            or existing.get("instance")
+            or existing.get("device_name")
+            or ""
+        ).strip()
+        email = str(clean.get("email") or existing.get("email") or "").strip()
+        phone = str(clean.get("phone") or existing.get("phone") or "").strip()
+        name = str(
+            clean.get("name")
+            or clean.get("username")
+            or existing.get("name")
+            or existing.get("username")
+            or email
+            or phone
+            or device_name
+            or "account"
+        ).strip()
+        created_at = str(clean.get("created_at") or existing.get("created_at") or datetime.now().isoformat(timespec="seconds"))
+        updated_at = str(clean.get("updated_at") or datetime.now().isoformat(timespec="seconds"))
+        clean["uid"] = str(clean.get("uid") or existing.get("uid") or time.time_ns())
         clean["device_name"] = device_name
         clean["instance"] = device_name
-        clean["username"] = username
-        clean["name"] = str(clean.get("name") or username)
+        clean["ld_name"] = device_name
+        clean["username"] = name
+        clean["name"] = name
+        clean["phone"] = phone
         clean["email"] = email
-        clean["password"] = str(clean.get("password") or "")
-        clean["status"] = str(clean.get("status") or "active").lower()
+        clean["password"] = str(clean.get("password") or existing.get("password") or "")
+        clean["gender"] = str(clean.get("gender") or existing.get("gender") or "")
+        clean["status"] = str(clean.get("status") or existing.get("status") or "idle").lower()
+        clean["notes"] = str(clean.get("notes") or existing.get("notes") or "")
+        clean["created_at"] = created_at
+        clean["updated_at"] = updated_at
         return clean
 
     def _load_accounts_from_json(self, path: Path) -> list[dict]:
@@ -158,6 +309,16 @@ class AccountManager:
         with open(path, "r", encoding="utf-8-sig", newline="") as fh:
             reader = csv.DictReader(fh)
             return [dict(row) for row in reader if row]
+
+    def _sort_accounts(self) -> None:
+        self.accounts.sort(
+            key=lambda row: (
+                str(row.get("created_at") or ""),
+                str(row.get("updated_at") or ""),
+                str(row.get("uid") or ""),
+            ),
+            reverse=True,
+        )
 
 # ==================== CONTENT MANAGER ====================
 class ContentManager:

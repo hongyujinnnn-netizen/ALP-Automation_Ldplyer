@@ -36,7 +36,7 @@ def get_app_paths() -> AppPaths:
         logs_dir=project_root / "logs",
         settings_file=config_dir / "setting.json",
         schedule_settings_file=config_dir / "setting_schedule.json",
-        accounts_file=config_dir / "accounts.json",
+        accounts_file=config_dir / "created_accounts.json",
         content_queue_file=config_dir / "content_queue.json",
         scheduled_tasks_file=config_dir / "scheduled_tasks.json",
     )
