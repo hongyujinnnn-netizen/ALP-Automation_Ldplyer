@@ -1,6 +1,7 @@
 import json
 import random
 import string
+import subprocess
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -137,53 +138,7 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             self.log(f"Failed to connect {serial}: {exc}")
             return False
 
-        self.log(f"Opening Facebook: {name}")
-        if not self.open_facebook(d):
-            self.log(f"Failed to open Facebook for registration: {name}")
-            return False
-
-        self.push_runtime_state(name, state="Running", task="Starting registration", progress=45)
-        if not self._start_registration_flow(d, name):
-            self.log(f"Could not open create-account flow on {name}")
-            return False
-
-        self._check_and_skip_email_autofill_dialog(d)
-        self._check_and_allow_contacts_permission(d)
-
-        if not self._fill_name_step(d, name, profile):
-            self.log(f"Failed on name step for {name}")
-            return False
-        
-        time.sleep(3)
-
-        if not self._fill_birthdate_step(d, name, profile):
-            try:
-                self._fill_contact_step(d, name, profile)
-                time.sleep(3)
-                self._fill_birthdate_step(d, name, profile)
-            except Exception:
-                pass
-            self.log(f"Failed on birth date step for {name}")
-            return False
-        
-        time.sleep(4)
-
-        if not self._fill_gender_step(d, name, profile):
-            self.log(f"Failed on gender step for {name}")
-            return False
-
-        time.sleep(4)
-
-        if not self._fill_contact_step(d, name, profile):
-            self.log(f"Failed on contact step for {name}")
-            return False
-        
-        time.sleep(2)
-        self._handle_contact_continue_step(d)
-        time.sleep(4)
-
-        if not self._fill_password_step(d, name, profile):
-            self.log(f"Failed on password step for {name}")
+        if not self._run_registration_steps_with_retry(d, name, profile):
             return False
         
         time.sleep(4)
@@ -226,6 +181,150 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         self.log(f"Generated account password: {profile.password}")
         self.push_runtime_state(name, state="Completed", task="Account form submitted", progress=100)
         return True
+
+    def _run_registration_steps_with_retry(self, d, name, profile, retries=2, retry_delay=3):
+        total_attempts = retries + 1
+        for attempt in range(1, total_attempts + 1):
+            ok, failed_step = self._run_registration_steps_once(d, name, profile)
+            if ok:
+                return True
+
+            if attempt >= total_attempts:
+                self.log(f"Registration failed on {failed_step} step for {name} after {attempt} attempts")
+                return False
+
+            self.log(
+                f"Registration step '{failed_step}' failed for {name}. "
+                f"Retrying after {retry_delay}s ({attempt}/{retries})"
+            )
+            time.sleep(retry_delay)
+            self._reset_registration_apps(d)
+
+        return False
+
+    def _run_registration_steps_once(self, d, name, profile):
+        self.log(f"Opening Facebook: {name}")
+        if not self.open_facebook(d):
+            self.log(f"Failed to open Facebook for registration: {name}")
+            return False, "open_facebook"
+
+        self.push_runtime_state(name, state="Running", task="Starting registration", progress=45)
+        if not self._start_registration_flow(d, name):
+            self.log(f"Could not open create-account flow on {name}")
+            return False, "start_registration_flow"
+
+        self._check_and_skip_email_autofill_dialog(d)
+        self._check_and_allow_contacts_permission(d)
+
+        if not self._fill_name_step(d, name, profile):
+            self.log(f"Failed on name step for {name}")
+            return False, "name"
+
+        time.sleep(3)
+
+        if not self._fill_birthdate_step(d, name, profile):
+            try:
+                self._fill_contact_step(d, name, profile)
+                time.sleep(3)
+                if self._fill_birthdate_step(d, name, profile):
+                    time.sleep(4)
+                else:
+                    self.log(f"Failed on birth date step for {name}")
+                    return False, "birthdate"
+            except Exception:
+                self.log(f"Failed on birth date step for {name}")
+                return False, "birthdate"
+        else:
+            time.sleep(4)
+
+        if not self._fill_gender_step(d, name, profile):
+            self.log(f"Failed on gender step for {name}")
+            return False, "gender"
+
+        time.sleep(4)
+
+        if not self._fill_contact_step(d, name, profile):
+            self.log(f"Failed on contact step for {name}")
+            return False, "contact"
+
+        time.sleep(2)
+        if not self._handle_contact_continue_step(d):
+            self.log(f"Failed on contact continue step for {name}")
+            return False, "contact_continue"
+
+        time.sleep(4)
+
+        if not self._fill_password_step(d, name, profile):
+            self.log(f"Failed on password step for {name}")
+            return False, "password"
+
+        return True, ""
+
+    def _reset_registration_apps(self, d):
+        serial = getattr(d, "serial", None)
+        try:
+            d.app_stop("com.facebook.katana")
+        except Exception:
+            pass
+        try:
+            d.app_stop("com.android.settings")
+        except Exception:
+            pass
+        self._clear_recent_apps(d)
+        if serial:
+            try:
+                subprocess.run(
+                    ["adb", "-s", serial, "shell", "am", "kill-all"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+            except Exception:
+                pass
+        try:
+            d.press("home")
+        except Exception:
+            pass
+
+    def _clear_recent_apps(self, d):
+        serial = getattr(d, "serial", None)
+        try:
+            try:
+                d.press("recent")
+            except Exception:
+                if serial:
+                    subprocess.run(
+                        ["adb", "-s", serial, "shell", "input", "keyevent", "187"],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                    )
+            time.sleep(2)
+
+            clear_selectors = [
+                {"resourceId": "com.android.systemui:id/clear_all"},
+                {"text": "Clear all"},
+                {"text": "CLEAR ALL"},
+                {"text": "Close all"},
+                {"text": "CLOSE ALL"},
+                {"text": "Clear"},
+                {"text": "CLEAR"},
+            ]
+
+            for selector in clear_selectors:
+                try:
+                    obj = d(**selector)
+                    if obj.exists(timeout=1):
+                        obj.click()
+                        self.log("Cleared recent apps")
+                        time.sleep(2)
+                        break
+                except Exception:
+                    continue
+            return True
+        except Exception as exc:
+            self.log(f"Failed to clear recent apps: {exc}")
+            return False
     
     def detect_account_status(self, d):
         """
