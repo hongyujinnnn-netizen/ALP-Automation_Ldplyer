@@ -153,14 +153,11 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         self.log(f"Detected account status for {name}: {account_status}")
 
         d.app_stop("com.facebook.katana")
-        time.sleep(3)
+        time.sleep(2)
         
-        d.app_start("com.facebook.katana", "com.facebook.katana.LoginActivity")
-        time.sleep(10)
+        d.app_start("com.facebook.katana")
+        time.sleep(6)
 
-        d.app_stop("com.facebook.katana")
-        time.sleep(3)
-        
         facebook_uid = self.check_uid_account(d)
 
         time.sleep(3)
@@ -353,7 +350,7 @@ class RegAccountTaskHandler(ScrollTaskHandler):
 
         except Exception as e:
             print(f"[ERROR] detect_account_status: {e}")
-            return "Error"
+            return "Unknown"
 
 
     def check_uid_account(self, d):
@@ -865,6 +862,7 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             str(target_year),
             kind="year",
             numeric_bounds=(1900, 2100),
+            max_attempts=25,
         ):
             self.log(f"Failed to set year picker to {target_year}")
             return False
@@ -935,31 +933,51 @@ class RegAccountTaskHandler(ScrollTaskHandler):
                 return True
 
             direction = self._decide_picker_direction(current_text, target, kind, numeric_bounds=numeric_bounds)
+            step_scale = self._get_picker_step_scale(current_text, target, kind)
 
             if direction == "up":
-                self._swipe_picker_up(d, picker)
+                self._swipe_picker_up(d, picker, step_scale=step_scale)
             elif direction == "down":
-                self._swipe_picker_down(d, picker)
+                self._swipe_picker_down(d, picker, step_scale=step_scale)
             else:
                 if attempt % 2 == 0:
-                    self._swipe_picker_up(d, picker)
+                    self._swipe_picker_up(d, picker, step_scale=step_scale)
                 else:
-                    self._swipe_picker_down(d, picker)
-            time.sleep(0.35)
+                    self._swipe_picker_down(d, picker, step_scale=step_scale)
+            time.sleep(0.18 if kind == "year" else 0.35)
 
         self.log(f"[{kind}] smart picker scrolling failed, trying brute-force recovery")
-        for direction, retries in (("up", 8), ("down", 16)):
+        for direction, retries in (("up", 10), ("down", 15)):
             for _ in range(retries):
                 current = self._get_picker_center_value(picker)
                 if str(current or "").strip() == target:
                     return True
                 if direction == "up":
-                    self._swipe_picker_up(d, picker)
+                    self._swipe_picker_up(d, picker, step_scale=0.85 if kind == "year" else 0.55)
                 else:
-                    self._swipe_picker_down(d, picker)
-                time.sleep(0.25)
+                    self._swipe_picker_down(d, picker, step_scale=0.85 if kind == "year" else 0.55)
+                time.sleep(0.16 if kind == "year" else 0.25)
 
         return str(self._get_picker_center_value(picker) or "").strip() == target
+
+    def _get_picker_step_scale(self, current, target, kind):
+        if kind != "year":
+            return 0.55
+
+        try:
+            current_num = int(str(current or "").strip())
+            target_num = int(str(target or "").strip())
+        except Exception:
+            return 0.75
+
+        gap = abs(target_num - current_num)
+        if gap >= 15:
+            return 0.90
+        if gap >= 8:
+            return 0.78
+        if gap >= 4:
+            return 0.65
+        return 0.50
 
     def _get_picker_center_value(self, picker):
         try:
@@ -1034,30 +1052,38 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         # Default assumption: swipe up moves to a larger value.
         return "up" if target_num > current_num else "down"
 
-    def _swipe_picker_up(self, d, picker):
+    def _swipe_picker_up(self, d, picker, step_scale=0.55):
         bounds = (picker.info.get("bounds", {}) or {})
         left = int(bounds.get("left", 0))
         right = int(bounds.get("right", 0))
         top = int(bounds.get("top", 0))
         bottom = int(bounds.get("bottom", 0))
         cx = (left + right) // 2
-        start_y = bottom - int((bottom - top) * 0.28)
-        end_y = top + int((bottom - top) * 0.28)
+        height = max(1, bottom - top)
+        step_scale = min(0.9, max(0.35, float(step_scale)))
+        center_y = (top + bottom) // 2
+        delta = max(int(height * 0.18), int(height * step_scale * 0.5))
+        start_y = min(bottom - 4, center_y + delta)
+        end_y = max(top + 4, center_y - delta)
 
         try:
             d.swipe(cx, start_y, cx, end_y, 0.18)
         except Exception as exc:
             self.log(f"Picker swipe up failed: {exc}")
 
-    def _swipe_picker_down(self, d, picker):
+    def _swipe_picker_down(self, d, picker, step_scale=0.55):
         bounds = (picker.info.get("bounds", {}) or {})
         left = int(bounds.get("left", 0))
         right = int(bounds.get("right", 0))
         top = int(bounds.get("top", 0))
         bottom = int(bounds.get("bottom", 0))
         cx = (left + right) // 2
-        start_y = top + int((bottom - top) * 0.28)
-        end_y = bottom - int((bottom - top) * 0.28)
+        height = max(1, bottom - top)
+        step_scale = min(0.9, max(0.35, float(step_scale)))
+        center_y = (top + bottom) // 2
+        delta = max(int(height * 0.18), int(height * step_scale * 0.5))
+        start_y = max(top + 4, center_y - delta)
+        end_y = min(bottom - 4, center_y + delta)
 
         try:
             d.swipe(cx, start_y, cx, end_y, 0.18)

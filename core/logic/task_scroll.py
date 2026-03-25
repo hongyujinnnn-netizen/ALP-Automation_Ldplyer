@@ -312,7 +312,7 @@ class ScrollTaskHandler(BaseTaskHandler):
                 
         return False
 
-    def open_facebook(self, d, ready_delay_range=(5, 10)):
+    def open_facebook(self, d, ready_delay_range=(5, 15)):
         try:
             package = "com.facebook.katana"  # Main Facebook package name
             activity = "com.facebook.katana.LoginActivity"

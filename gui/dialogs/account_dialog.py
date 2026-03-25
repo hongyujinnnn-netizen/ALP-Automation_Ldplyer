@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox as MessageBox
 
 import ttkbootstrap as tb
 
@@ -83,9 +83,8 @@ class AccountDialogMixin:
         pill_row.pack(fill="x", pady=(0, 12))
         self._acct_pill_active = self._pill(pill_row, "0 Active", self._ACCOUNT_SUCCESS)
         self._acct_pill_idle = self._pill(pill_row, "0 Idle", self._ACCOUNT_MUTED)
-        self._acct_pill_error = self._pill(pill_row, "0 Error", self._ACCOUNT_DANGER)
         self._acct_pill_novery = self._pill(pill_row, "0 Novery", self._ACCOUNT_WARNING)
-        self._acct_pill_dead = self._pill(pill_row, "0 Dead", self._ACCOUNT_INFO)
+        self._acct_pill_dead = self._pill(pill_row, "0 Dead", self._ACCOUNT_DANGER)
         self._acct_pill_total = self._pill(pill_row, "0 Total", self._ACCOUNT_ACCENT, right=True)
 
         controls = tk.Frame(
@@ -131,7 +130,7 @@ class AccountDialogMixin:
         tb.Combobox(
             controls,
             textvariable=self._acct_status_filter_var,
-            values=("All", "Active", "Idle", "Error", "Novery", "Dead", "Unknown"),
+            values=("All", "Active", "Idle", "Novery", "Dead", "Unknown"),
             state="readonly",
             width=12,
         ).pack(side="left", padx=(10, 0))
@@ -189,9 +188,9 @@ class AccountDialogMixin:
 
         tree.tag_configure("active", foreground=self._ACCOUNT_SUCCESS)
         tree.tag_configure("idle", foreground=self._ACCOUNT_MUTED)
-        tree.tag_configure("error", foreground=self._ACCOUNT_DANGER)
         tree.tag_configure("novery", foreground=self._ACCOUNT_WARNING)
-        tree.tag_configure("dead", foreground=self._ACCOUNT_INFO)
+        tree.tag_configure("dead", foreground=self._ACCOUNT_DANGER)
+        tree.tag_configure("unknown", foreground=self._ACCOUNT_INFO)
         tree.tag_configure("even", background=self._ACCOUNT_CARD)
         tree.tag_configure("odd", background=self._ACCOUNT_ROW_ALT)
         scrollbar = tb.Scrollbar(list_frame, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
@@ -353,9 +352,10 @@ class AccountDialogMixin:
         account = self.account_manager.get_account(uid)
         name = str(account.get("name") or account.get("email") or account.get("phone") or uid)
         instance = str(account.get("instance") or account.get("device_name") or account.get("ld_name") or "")
-        if not tb.Messagebox.yesno(
-            f"Delete account '{name}' from '{instance or 'unassigned'}'?",
+        if not MessageBox.askyesno(
             "Confirm Delete",
+            f"Delete account '{name}' from '{instance or 'unassigned'}'?",
+            parent=self._account_dialog,
         ):
             return
 
@@ -491,7 +491,7 @@ class AccountDialogMixin:
                 widget = tb.Combobox(
                     card,
                     textvariable=vars_map[key],
-                    values=("active", "idle", "error", "Novery", "Dead","Unknown"),
+                    values=("active", "idle", "Novery", "Dead", "Unknown"),
                     state="readonly",
                     width=28,
                 )
@@ -634,6 +634,8 @@ class AccountDialogMixin:
             contact = str(acc.get("phone") or acc.get("email") or "")
             haystack = f"{uid} {name} {gender} {instance} {contact} {acc.get('notes', '')}".lower()
             status = str(acc.get("status") or "idle").lower()
+            if status == "error":
+                status = "unknown"
             if query and query not in haystack:
                 continue
             if status_filter != "all" and status != status_filter:
@@ -665,7 +667,7 @@ class AccountDialogMixin:
         except Exception as exc:
             self.log(f"Failed to load accounts: {exc}", "ERROR")
             accounts = []
-            summary = {"active": 0, "idle": 0, "error": 0, "novery": 0, "dead": 0, "unknown": 0, "total": 0}
+            summary = {"active": 0, "idle": 0, "novery": 0, "dead": 0, "unknown": 0, "total": 0}
 
         visible_index = 0
         selected_uid = None
@@ -675,12 +677,14 @@ class AccountDialogMixin:
             name = str(acc.get("name") or acc.get("username") or acc.get("email") or "account")
             gender = str(acc.get("gender") or "")
             status = str(acc.get("status") or "idle").lower()
+            if status == "error":
+                status = "unknown"
             instance = str(acc.get("instance") or acc.get("device_name") or acc.get("ld_name") or "")
             contact = str(acc.get("phone") or acc.get("email") or "")
             created = str(acc.get("created_at") or "").replace("T", " ")
 
             visible_index += 1
-            tags = [status if status in {"active", "idle", "error", "novery", "dead"} else "idle"]
+            tags = [status if status in {"active", "idle", "novery", "dead", "unknown"} else "idle"]
             tags.append("even" if visible_index % 2 == 0 else "odd")
             tree.insert(
                 "",
@@ -694,7 +698,6 @@ class AccountDialogMixin:
 
         self._acct_pill_active.config(text=f"{summary.get('active', 0)} Active")
         self._acct_pill_idle.config(text=f"{summary.get('idle', 0)} Idle")
-        self._acct_pill_error.config(text=f"{summary.get('error', 0)} Error")
         self._acct_pill_novery.config(text=f"{summary.get('novery', 0)} Novery")
         self._acct_pill_dead.config(text=f"{summary.get('dead', 0)} Dead")
         self._acct_pill_total.config(text=f"{summary.get('total', 0)} Total")

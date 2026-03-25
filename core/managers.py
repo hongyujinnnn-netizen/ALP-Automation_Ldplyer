@@ -148,7 +148,6 @@ class AccountManager:
             "total": len(self.accounts),
             "active": 0,
             "idle": 0,
-            "error": 0,
             "novery": 0,
             "dead": 0,
             "unknown": 0,
@@ -157,7 +156,9 @@ class AccountManager:
         }
         for account in self.accounts:
             status = str(account.get("status") or "").strip().lower()
-            if status in {"active", "idle", "error", "novery", "dead", "unknown"}:
+            if status == "error":
+                status = "unknown"
+            if status in {"active", "idle", "novery", "dead", "unknown"}:
                 summary[status] += 1
             if str(account.get("phone") or "").strip():
                 summary["with_phone"] += 1
