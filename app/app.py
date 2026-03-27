@@ -62,6 +62,22 @@ def _request_admin_and_relaunch() -> bool:
     return True
 
 
+def _hide_windows_console() -> None:
+    """Hide the attached Windows console when launching the GUI app."""
+    if os.name != "nt":
+        return
+
+    try:
+        kernel32 = ctypes.windll.kernel32
+        user32 = ctypes.windll.user32
+        console_hwnd = kernel32.GetConsoleWindow()
+        if console_hwnd:
+            SW_HIDE = 0
+            user32.ShowWindow(console_hwnd, SW_HIDE)
+    except Exception:
+        pass
+
+
 def _relaunch_in_project_venv_if_available() -> None:
     """Relaunch using local .venv Python when started from a global interpreter."""
     if getattr(sys, "frozen", False):
@@ -143,6 +159,7 @@ def _patch_uiautomator2_frozen_resources() -> None:
 
 
 def main() -> None:
+    _hide_windows_console()
     _relaunch_in_project_venv_if_available()
     _patch_uiautomator2_frozen_resources()
 

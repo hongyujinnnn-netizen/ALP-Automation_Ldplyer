@@ -191,7 +191,7 @@ class ControlEmulator:
             return False
 
     def sort_window(self):
-        """Arrange visible LDPlayer windows in a grid without requiring dnconsole."""
+        """Arrange visible LDPlayer windows without changing their current size."""
         if os.name != "nt":
             print("Window arrangement is only supported on Windows")
             return False
@@ -231,6 +231,12 @@ class ControlEmulator:
             user32.GetClassNameW(hwnd, buffer, 256)
             return buffer.value.strip()
 
+        def _window_rect(hwnd):
+            rect = RECT()
+            if user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+                return rect
+            return None
+
         def _is_ld_window(title, class_name):
             title_l = title.lower()
             class_l = class_name.lower()
@@ -268,52 +274,44 @@ class ControlEmulator:
 
         matched.sort(key=lambda item: item[1].lower())
         count = len(matched)
-        total_width = max(200, work_area.right - work_area.left)
-        total_height = max(200, work_area.bottom - work_area.top)
-
-        margin_x = 16
-        margin_y = 16
-        gap_x = 12
-        gap_y = 12
-        preferred_width = 420
-        preferred_height = 760
-        min_width = 320
-        min_height = 520
-
-        usable_width = max(200, total_width - (margin_x * 2))
-        usable_height = max(200, total_height - (margin_y * 2))
-
-        cols = max(1, usable_width // (preferred_width + gap_x))
-        cols = min(cols, count)
-        rows = max(1, math.ceil(count / cols))
-
-        width = preferred_width
-        height = preferred_height
-
-        while rows > 1 and (rows * height) + ((rows - 1) * gap_y) > usable_height and height > min_height:
-            height -= 40
-
-        while cols > 1 and (cols * width) + ((cols - 1) * gap_x) > usable_width and width > min_width:
-            width -= 20
-
-        if (cols * width) + ((cols - 1) * gap_x) > usable_width:
-            width = max(min_width, (usable_width - ((cols - 1) * gap_x)) // cols)
-
-        if (rows * height) + ((rows - 1) * gap_y) > usable_height:
-            height = max(min_height, (usable_height - ((rows - 1) * gap_y)) // rows)
+        margin_x = 12
+        margin_y = 12
+        gap_x = 10
+        gap_y = 10
+        usable_width = max(200, work_area.right - work_area.left - (margin_x * 2))
+        usable_height = max(200, work_area.bottom - work_area.top - (margin_y * 2))
 
         SWP_NOZORDER = 0x0004
         SWP_NOACTIVATE = 0x0010
         SW_RESTORE = 9
 
-        start_x = work_area.left + margin_x
-        start_y = work_area.top + margin_y
+        placements = []
+        x = work_area.left + margin_x
+        y = work_area.top + margin_y
+        row_height = 0
 
-        for index, (hwnd, title) in enumerate(matched):
-            row = index // cols
-            col = index % cols
-            x = start_x + (col * (width + gap_x))
-            y = start_y + (row * (height + gap_y))
+        for hwnd, title in matched:
+            rect = _window_rect(hwnd)
+            if rect:
+                width = max(1, rect.right - rect.left)
+                height = max(1, rect.bottom - rect.top)
+            else:
+                width = min(420, usable_width)
+                height = min(760, usable_height)
+
+            if x > work_area.left + margin_x and x + width > work_area.left + margin_x + usable_width:
+                x = work_area.left + margin_x
+                y += row_height + gap_y
+                row_height = 0
+
+            if y > work_area.top + margin_y and y + height > work_area.top + margin_y + usable_height:
+                y = work_area.top + margin_y
+
+            placements.append((hwnd, title, x, y, width, height))
+            x += width + gap_x
+            row_height = max(row_height, height)
+
+        for hwnd, title, x, y, width, height in placements:
 
             try:
                 user32.ShowWindow(hwnd, SW_RESTORE)

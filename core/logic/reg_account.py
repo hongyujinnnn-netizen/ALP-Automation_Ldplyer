@@ -140,13 +140,6 @@ class RegAccountTaskHandler(ScrollTaskHandler):
 
         if not self._run_registration_steps_with_retry(d, name, profile):
             return False
-        
-        time.sleep(4)
-
-        self._handle_save_step(d)
-        self.tap_i_agree(d)
-
-        self._handle_create_new_step(d)
 
         time.sleep(20)
         account_status = self.detect_account_status(d)
@@ -159,6 +152,9 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         time.sleep(6)
 
         facebook_uid = self.check_uid_account(d)
+        if facebook_uid == "":
+            self.log(f"Failed to create Facebook account {name}")
+            return False
 
         time.sleep(3)
 
@@ -181,8 +177,10 @@ class RegAccountTaskHandler(ScrollTaskHandler):
 
     def _run_registration_steps_with_retry(self, d, name, profile, retries=2, retry_delay=3):
         total_attempts = retries + 1
+        delay_fb = 2
         for attempt in range(1, total_attempts + 1):
-            ok, failed_step = self._run_registration_steps_once(d, name, profile)
+            delay_fb += 2
+            ok, failed_step = self._run_registration_steps_once(d, name, profile, delay_fb)
             if ok:
                 return True
 
@@ -199,12 +197,12 @@ class RegAccountTaskHandler(ScrollTaskHandler):
 
         return False
 
-    def _run_registration_steps_once(self, d, name, profile):
+    def _run_registration_steps_once(self, d, name, profile, delay_fb):
         self.log(f"Opening Facebook: {name}")
         if not self.open_facebook(d):
             self.log(f"Failed to open Facebook for registration: {name}")
             return False, "open_facebook"
-
+        time.sleep(delay_fb)
         self.push_runtime_state(name, state="Running", task="Starting registration", progress=45)
         if not self._start_registration_flow(d, name):
             self.log(f"Could not open create-account flow on {name}")
@@ -254,6 +252,13 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         if not self._fill_password_step(d, name, profile):
             self.log(f"Failed on password step for {name}")
             return False, "password"
+        
+        time.sleep(4)
+
+        self._handle_save_step(d)
+        self.tap_i_agree(d)
+
+        self._handle_create_new_step(d)
 
         return True, ""
 
@@ -356,10 +361,10 @@ class RegAccountTaskHandler(ScrollTaskHandler):
     def check_uid_account(self, d):
         if d is None:
             self.log("Cannot check Facebook UID without a device session")
-            return ""
+            return False
 
         if not self._open_settings_accounts(d):
-            return ""
+            return False
         time.sleep(3)
 
         account_number_uid = self.detect_facebook_account_number(d)
@@ -393,7 +398,6 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         )
 
         for attempt in range(max_scrolls):
-            self.log(f"Searching Accounts in Settings (attempt {attempt + 1}/{max_scrolls})")
 
             # 1) Try exact visible text search first
             if self._click_settings_accounts_row(d, account_patterns):
@@ -677,7 +681,7 @@ class RegAccountTaskHandler(ScrollTaskHandler):
 
         existing_records.append(record)
         _atomic_write_json(account_file, existing_records)
-        self.log(f"Saved created account to {account_file}")
+        self.log(f"Saved created account {profile.last_name} {profile.first_name}")
 
     def _check_and_allow_contacts_permission(self, d):
         try:
@@ -1168,7 +1172,6 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         return self._tap_continue(d)
 
     def _handle_save_step(self, d, timeout=5):
-        self.log("Checking for Save button")
         if self._click_any_selector(
             d,
             [
@@ -1216,7 +1219,6 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         return True
 
     def _handle_create_new_step(self, d):
-        self.log("Checking for existing-account prompt")
         selectors = [
             {"text": "No, creating new account"},
             {"textContains": "No, creating new account"},
