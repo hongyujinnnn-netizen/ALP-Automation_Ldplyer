@@ -174,13 +174,7 @@ class RegAccountTaskHandler(ScrollTaskHandler):
                 self.log(f"Failed to enter confirmation email for {name}")
 
             time.sleep(10)
-        d.app_stop("com.facebook.katana")
-        time.sleep(3)
-        
-        d.app_start("com.facebook.katana")
-        time.sleep(10)
 
-        if verify:
             otp_code = self._wait_for_confirmation_otp(confirmation_email)
             if not otp_code:
                 self.log(f"Failed to retrieve confirmation code for {name}")
@@ -188,7 +182,19 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             if not self.enter_confirmation_code(d, otp_code):
                 self.log(f"Failed to enter confirmation code for {name}")
                 return False
-
+             
+            time.sleep(10)
+            account_status= self.detect_human_confirm_screen(d)
+            if account_status == "Dead":
+                self.log(f"Account {name} was flagged for human verification → DEAD")
+                return False
+                    
+        time.sleep(10)
+        d.app_stop("com.facebook.katana")
+        time.sleep(3)
+        
+        d.app_start("com.facebook.katana")
+        time.sleep(10)
 
         facebook_uid = self.check_uid_account(d)
         if facebook_uid == "":
@@ -485,10 +491,11 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             return False, "name"
 
         time.sleep(3)
-
+        skip_contact = False
         if not self._fill_birthdate_step(d, name, profile):
             try:
                 self._fill_contact_step(d, name, profile)
+                skip_contact = True
                 time.sleep(3)
                 if self._fill_birthdate_step(d, name, profile):
                     time.sleep(4)
@@ -506,10 +513,10 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             return False, "gender"
 
         time.sleep(4)
-
-        if not self._fill_contact_step(d, name, profile):
-            self.log(f"Failed on contact step for {name}")
-            return False, "contact"
+        if not skip_contact:
+            if not self._fill_contact_step(d, name, profile):
+                self.log(f"Failed on contact step for {name}")
+                return False, "contact"
 
         time.sleep(2)
         if not self._handle_contact_continue_step(d):
@@ -1918,3 +1925,55 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             time.sleep(0.5)
 
         return False
+    
+    # Detect if the account has been flagged for human verification
+    def detect_human_confirm_screen(self, d, timeout=12):
+        phrases = (
+            "confirm you're human",
+            "confirm you are human",
+            "confirm it's you",
+            "confirm it is you",
+            "confirm this is you",
+            "verify it's you",
+            "verify it is you",
+            "verify your identity",
+            "security check",
+            "tap and hold",
+        )
+
+        def _normalize(value):
+            return str(value or "").strip().lower().replace("\u2019", "'")
+
+        deadline = time.time() + max(3, timeout)
+        last_error = None
+
+        while time.time() < deadline:
+            for phrase in phrases:
+                for selector in (
+                    {"textContains": phrase},
+                    {"descriptionContains": phrase},
+                ):
+                    try:
+                        if d(**selector).exists:
+                            self.log(f"Human confirmation screen detected: {phrase}")
+                            return "Dead"
+                    except Exception as exc:
+                        last_error = exc
+
+            try:
+                xml_lower = _normalize(d.dump_hierarchy())
+                if any(phrase in xml_lower for phrase in phrases):
+                    self.log("Human confirmation screen detected from UI hierarchy")
+                    return "Dead"
+
+                if "human" in xml_lower and ("confirm" in xml_lower or "verify" in xml_lower):
+                    self.log("Human confirmation keywords detected from UI hierarchy")
+                    return "Dead"
+            except Exception as exc:
+                last_error = exc
+
+            time.sleep(1)
+
+        if last_error:
+            self.log(f"Human confirmation screen check completed without a match: {last_error}")
+        return "Alive"
