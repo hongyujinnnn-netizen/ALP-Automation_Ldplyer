@@ -183,6 +183,7 @@ class DashboardPageMixin:
             ("📜 Scroll Feed", "scroll"),
             ("🆕 Register Account", "reg_account"),
             ("🎬 Watch Reels", "reels"),
+            ("🧪 Test Feature", "test_feature"),
             ("❤️ React Posts", "likes"),
             ("👥 Add Friends", "friends"),
         ]
@@ -230,8 +231,8 @@ class DashboardPageMixin:
 
 
     def _select_task_type(self, value):
-        # "friends" and "likes" are currently UI stubs. Backend supports scroll/reels/reg_account.
-        if value in ("scroll", "reels", "reg_account", "likes", "friends"):
+        # "friends" and "likes" are currently UI stubs. Backend supports scroll/reels/reg_account/test_feature.
+        if value in ("scroll", "reels", "reg_account", "test_feature", "likes", "friends"):
             self.task_type_var.set(value)
         self._sync_analytics_task_buttons(value)
 

@@ -100,6 +100,7 @@ class TopBarMixin:
             "scroll": "Scroll",
             "reg_account": "Register",
             "reels": "Reels",
+            "test_feature": "Test Feature",
             "autoscroll": "Auto Scroll",
             "likes": "Likes",
             "friends": "Add Friends",

@@ -16,6 +16,7 @@ The codebase is not a full clean-slate rewrite. Some new layers are already in p
 - starts, stops, and restarts selected emulators
 - runs automation batches for `scroll` and `reels`
 - manages content queue, account assignments, backups, and schedule settings
+- configures and tests authorized IMAP email OTP retrieval for owned or explicitly authorized mailboxes
 - exposes ADB tools inside the desktop UI
 - shows fleet state, live task status, system metrics, and logs
 
@@ -36,20 +37,25 @@ gui/
 controllers/
   app_controller.py
   emulator_controller.py
+  otp_controller.py
   task_controller.py
 
 services/
   adb_service.py
+  email_service.py
   emulator_service.py
   logging_service.py
+  otp_service.py
   scheduler_service.py
   settings_service.py
   task_service.py
 
 core/
+  email_models.py
   emulator.py
   managers.py
   models.py
+  otp_parser.py
   paths.py
   settings.py
   state_machine.py
@@ -111,10 +117,16 @@ Current startup behavior:
   Settings-focused UI coordination.
 - `controllers/emulator_controller.py`
   Emulator-related UI coordination.
+- `controllers/otp_controller.py`
+  Email OTP settings validation, persistence, and UI-facing test actions.
 - `controllers/task_controller.py`
   Task request creation and runner delegation.
+- `services/email_service.py`
+  IMAP mailbox access, message search, fetch, decode, and cleanup.
 - `services/emulator_service.py`
   Emulator facade used by the UI and orchestration layer.
+- `services/otp_service.py`
+  OTP polling orchestration over mailbox results.
 - `services/adb_service.py`
   Centralized ADB command execution.
 - `services/task_service.py`
@@ -227,6 +239,63 @@ Current log behavior:
 
 - UI log panels still show readable operator logs
 - structured JSON log records are written to `logs/app.jsonl`
+- email OTP actions emit structured events such as `email.connect.started`, `otp.poll.match_found`, and `otp.timeout`
+
+## Email OTP Reader
+
+This project now includes a generic email OTP reader for authorized mailbox access only.
+
+What it does:
+
+- connects to an IMAP inbox using app-password-based login
+- supports Yandex first with `imap.yandex.com:993` over SSL/TLS
+- polls for matching emails using optional unread, sender, and subject filters
+- reads both `text/plain` and `text/html` messages
+- extracts OTP codes through centralized parsing logic in `core/otp_parser.py`
+- returns structured success and error results through the controller and service layers
+
+Configuration fields:
+
+- provider
+- email address
+- app password
+- IMAP server
+- port
+- mailbox
+- unread only
+- sender filter
+- subject filter
+- timeout seconds
+- poll interval seconds
+- mark matched email as seen
+
+How to test connection:
+
+1. Open `Settings`.
+2. Go to `Email OTP`.
+3. Enter the mailbox configuration for an inbox you own or are explicitly authorized to access.
+4. Click `Test Connection`.
+
+How to fetch OTP:
+
+1. Save the email settings.
+2. Use `Test OTP Fetch` to scan the current mailbox once.
+3. Use `Wait For OTP` to poll until a matching email arrives or the timeout expires.
+
+Yandex example setup:
+
+- Provider: `yandex`
+- Email Address: `your_mailbox@yandex.com`
+- App Password: use a Yandex app password, not the primary account password
+- IMAP Server: `imap.yandex.com`
+- Port: `993`
+- Mailbox: `INBOX`
+- Use SSL/TLS: enabled
+
+Safety note:
+
+- this feature is intended for generic OTP retrieval from mailboxes you own or are explicitly authorized to access
+- it is not designed for stealth behavior, abuse workflows, or platform-evasion tactics
 
 ## Testing
 
@@ -235,7 +304,7 @@ Current unit tests cover the extracted non-UI seams and selected core utilities.
 Run:
 
 ```powershell
-python -m unittest tests.test_core_utils tests.test_controller_services
+python -m unittest tests.test_core_utils tests.test_controller_services tests.test_email_otp
 ```
 
 Current test focus:
@@ -245,6 +314,8 @@ Current test focus:
 - ADB service normalization
 - emulator service delegation
 - scheduler decision logic
+- OTP parsing and HTML fallback
+- OTP filter matching and timeout flow
 - new layer importability
 
 ## Known Design Debt

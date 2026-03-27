@@ -6,6 +6,8 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Dict, Any, List
 
+from core.email_models import EmailAccountConfig, OTPRequest
+
 
 class SettingsError(RuntimeError):
     """Raised when loading or saving a settings file fails."""
@@ -25,9 +27,23 @@ class AppSettings:
     task_type: str = "scroll"
     task_template: str = "custom"
     scroll_after_post: bool = True
+    verify_account: bool = True
     reg_contact_mode: str = "random_phone"
     reg_contact_value: str = ""
     reg_phone_prefix: str = "+1"
+    email_provider: str = "yandex"
+    email_address: str = ""
+    email_app_password: str = ""
+    email_imap_server: str = "imap.yandex.com"
+    email_imap_port: int = 993
+    email_mailbox: str = "INBOX"
+    email_use_ssl: bool = True
+    email_unread_only: bool = True
+    email_sender_filter: str = ""
+    email_subject_filter: str = ""
+    email_timeout_seconds: int = 90
+    email_poll_interval_seconds: int = 5
+    email_mark_as_seen: bool = False
     ld_groups: Dict[str, List[str]] = field(default_factory=dict)
     # Two-letter ISO country codes to block when detected as the host's
     # public IP country. If the country is blocked, automation will not start.
@@ -72,6 +88,10 @@ class AppSettings:
             else:
                 blocked_countries = cls.blocked_countries  # type: ignore[attr-defined]
 
+            provider = str(raw.get("email_provider", cls.email_provider)).strip().lower() or "yandex"
+            provider_defaults = EmailAccountConfig(provider=provider).with_provider_defaults()
+            request_defaults = OTPRequest()
+
             return cls(
                 parallel_ld=int(raw.get("parallel_ld", cls.parallel_ld)),
                 boot_delay=int(raw.get("boot_delay", cls.boot_delay)),
@@ -83,9 +103,23 @@ class AppSettings:
                 task_type=str(raw.get("task_type", cls.task_type)),
                 task_template=str(raw.get("task_template", cls.task_template)),
                 scroll_after_post=bool(raw.get("scroll_after_post", cls.scroll_after_post)),
+                verify_account=bool(raw.get("verify_account", cls.verify_account)),
                 reg_contact_mode=str(raw.get("reg_contact_mode", cls.reg_contact_mode)),
                 reg_contact_value=str(raw.get("reg_contact_value", cls.reg_contact_value)),
                 reg_phone_prefix=str(raw.get("reg_phone_prefix", cls.reg_phone_prefix)),
+                email_provider=provider,
+                email_address=str(raw.get("email_address", cls.email_address)),
+                email_app_password=str(raw.get("email_app_password", cls.email_app_password)),
+                email_imap_server=str(raw.get("email_imap_server", provider_defaults.imap_server)),
+                email_imap_port=int(raw.get("email_imap_port", provider_defaults.imap_port)),
+                email_mailbox=str(raw.get("email_mailbox", provider_defaults.mailbox)),
+                email_use_ssl=bool(raw.get("email_use_ssl", provider_defaults.use_ssl)),
+                email_unread_only=bool(raw.get("email_unread_only", request_defaults.unread_only)),
+                email_sender_filter=str(raw.get("email_sender_filter", request_defaults.sender_filter)),
+                email_subject_filter=str(raw.get("email_subject_filter", request_defaults.subject_filter)),
+                email_timeout_seconds=int(raw.get("email_timeout_seconds", request_defaults.timeout_seconds)),
+                email_poll_interval_seconds=int(raw.get("email_poll_interval_seconds", request_defaults.poll_interval_seconds)),
+                email_mark_as_seen=bool(raw.get("email_mark_as_seen", request_defaults.mark_as_seen)),
                 ld_groups=ld_groups,
                 blocked_countries=blocked_countries,
             )

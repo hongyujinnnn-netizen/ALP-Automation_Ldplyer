@@ -47,6 +47,7 @@ class TestControllerAndServices(unittest.TestCase):
                     boot_delay=12,
                     task_type="reels",
                     task_template="content_day",
+                    verify_account=False,
                     ld_groups={"Night Shift": ["US - 01"]},
                 )
             )
@@ -56,6 +57,7 @@ class TestControllerAndServices(unittest.TestCase):
             self.assertEqual(loaded.boot_delay, 12)
             self.assertEqual(loaded.task_type, "reels")
             self.assertEqual(loaded.task_template, "content_day")
+            self.assertFalse(loaded.verify_account)
             self.assertEqual(loaded.ld_groups, {"Night Shift": ["US - 01"]})
 
     def test_app_controller_returns_defaults_when_settings_load_fails(self) -> None:
@@ -153,6 +155,7 @@ class TestControllerAndServices(unittest.TestCase):
             task_duration_seconds=900,
             max_videos=2,
             scroll_after_post=True,
+            verify_account=False,
         )
 
         self.assertIsInstance(request, TaskRunRequest)
@@ -160,6 +163,7 @@ class TestControllerAndServices(unittest.TestCase):
         self.assertEqual(request.task_type, "scroll")
         self.assertEqual(request.task_template, "custom")
         self.assertTrue(request.scroll_after_post)
+        self.assertFalse(request.verify_account)
 
     def test_account_manager_imports_json_accounts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

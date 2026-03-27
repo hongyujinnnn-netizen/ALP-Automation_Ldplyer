@@ -2,6 +2,7 @@ from core.task_base import BaseTaskHandler
 from core.logic.reg_account import RegAccountTaskHandler
 from core.logic.task_reels import ReelsTaskHandler
 from core.logic.task_scroll import EnhancedScrollTaskHandler, ScrollTaskHandler
+from tests.test_feature import TestFeatureTaskHandler
 
 __all__ = [
     "BaseTaskHandler",
@@ -9,4 +10,5 @@ __all__ = [
     "EnhancedScrollTaskHandler",
     "ReelsTaskHandler",
     "RegAccountTaskHandler",
+    "TestFeatureTaskHandler",
 ]

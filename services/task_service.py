@@ -18,6 +18,7 @@ class TaskRunRequest:
     task_duration_seconds: int
     max_videos: int
     scroll_after_post: bool
+    verify_account: bool
 
 
 class TaskService:
@@ -48,6 +49,7 @@ class TaskService:
             request.task_duration_seconds,
             request.max_videos,
             request.scroll_after_post,
+            request.verify_account,
             emulator=emulator,
             state_callback=state_callback,
         )

@@ -21,6 +21,7 @@ class TaskController:
         task_duration_seconds: int,
         max_videos: int,
         scroll_after_post: bool,
+        verify_account: bool,
     ) -> TaskRunRequest:
         return TaskRunRequest(
             selected_ld_names=selected_ld_names,
@@ -33,6 +34,7 @@ class TaskController:
             task_duration_seconds=task_duration_seconds,
             max_videos=max_videos,
             scroll_after_post=scroll_after_post,
+            verify_account=verify_account,
         )
 
     def create_runner(self, **kwargs) -> object:

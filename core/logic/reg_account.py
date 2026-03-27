@@ -9,10 +9,12 @@ from datetime import datetime
 import re
 from typing import Optional
 
+from core.email_models import EmailAccountConfig, OTPRequest
 from core.logic.task_scroll import ScrollTaskHandler
 from core.paths import get_app_paths
-from core.settings import _atomic_write_json
+from core.settings import SettingsError, _atomic_write_json, load_app_settings
 from core.task_base import U2_AVAILABLE, u2
+from services.otp_service import OTPService
 from utils.ip_guard import check_ld_ip_allowed
 
 
@@ -94,6 +96,7 @@ class RegAccountTaskHandler(ScrollTaskHandler):
     def execute(self, name, duration=300, **kwargs):
         if self.check_paused():
             return False
+        verify = kwargs.get("verify", True)
 
         profile = self._build_profile(kwargs)
         serial = self.emulator.name_to_serial.get(name, name)
@@ -142,14 +145,50 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             return False
 
         time.sleep(20)
+
         account_status = self.detect_account_status(d)
         self.log(f"Detected account status for {name}: {account_status}")
 
+        if account_status == "Unknown":
+            verify = False
+            self.log(f"Account status is unknown for {name}, skipping verification steps")
+        confirmation_email = None
+        # ------------------------------------------------------------------------------------
+        # Account Verification Steps
+        # After registration steps, check if we hit verification (OTP) screen or got suspended
+        if verify:
+            time.sleep(2)
+            self.log(f"Verifying account for {profile.first_name} {profile.last_name}")
+            time.sleep(2)
+
+            self._handle_didnt_get_code_step(d)
+            time.sleep(3)
+
+            self._handle_confirm_by_email(d)
+            time.sleep(3)
+            
+            confirmation_email = self._resolve_confirmation_email()
+            if not confirmation_email:
+                self.log(f"No confirmation email available for {name}")
+            elif not self.enter_email(d, confirmation_email):
+                self.log(f"Failed to enter confirmation email for {name}")
+
+            time.sleep(10)
         d.app_stop("com.facebook.katana")
-        time.sleep(2)
+        time.sleep(3)
         
         d.app_start("com.facebook.katana")
-        time.sleep(6)
+        time.sleep(10)
+
+        if verify:
+            otp_code = self._wait_for_confirmation_otp(confirmation_email)
+            if not otp_code:
+                self.log(f"Failed to retrieve confirmation code for {name}")
+                return False
+            if not self.enter_confirmation_code(d, otp_code):
+                self.log(f"Failed to enter confirmation code for {name}")
+                return False
+
 
         facebook_uid = self.check_uid_account(d)
         if facebook_uid == "":
@@ -174,6 +213,236 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         self.log(f"Generated account password: {profile.password}")
         self.push_runtime_state(name, state="Completed", task="Account form submitted", progress=100)
         return True
+    
+    # The following methods are internal helpers for the registration flow, retries, and account verification.
+
+    def enter_email(self, d, email, timeout=5):
+        """
+        Smart handler to find email input field and enter value
+        Works across different layouts (text, hint, class)
+        """
+
+        email_text = str(email or "").strip()
+        if not email_text:
+            self.log("Email input skipped: empty email value")
+            return False
+
+        self.log(f"Entering email: {email_text}")
+
+        deadline = time.time() + max(3, timeout)
+        while time.time() < deadline:
+            if self._set_text_inputs(
+                d,
+                [email_text],
+                hints=("email", "mail", "address"),
+                require_hint_match=False,
+            ):
+                time.sleep(1)
+
+                try:
+                    edit_fields = list(d(className="android.widget.EditText"))
+                except Exception:
+                    edit_fields = []
+
+                typed_ok = False
+                for field in edit_fields:
+                    try:
+                        info = getattr(field, "info", {}) or {}
+                        current_text = str(info.get("text", "") or "").strip()
+                        if current_text == email_text:
+                            typed_ok = True
+                            break
+                    except Exception:
+                        continue
+
+                if not typed_ok:
+                    self.log("Email text was not visible after input, retrying")
+                    time.sleep(0.8)
+                    continue
+                if self._tap_next(d) or self._request_email_code(d):
+                    self.log("Email entered and Next tapped")
+                    return True
+
+                self.log("Email entered but Next button was not available")
+                return False
+
+            time.sleep(0.5)
+
+        self.log("Email input not found")
+        return False
+
+    def enter_confirmation_code(self, d, otp_code, timeout=12):
+        code_text = str(otp_code or "").strip()
+        if not code_text:
+            self.log("OTP input skipped: empty confirmation code")
+            return False
+
+        self.log(f"Entering confirmation code: {'*' * len(code_text)}")
+        deadline = time.time() + max(5, timeout)
+
+        while time.time() < deadline:
+            edit_fields = self._get_edit_text_fields(d, hints=("code", "otp", "confirmation", "security"))
+            if not edit_fields:
+                time.sleep(0.5)
+                continue
+
+            if self._set_confirmation_code_inputs(d, edit_fields, code_text):
+                time.sleep(1)
+                if self._confirm_code_text_visible(edit_fields, code_text):
+                    if self._submit_confirmation_code(d):
+                        self.log("Confirmation code entered and submitted")
+                        return True
+                    self.log("Confirmation code entered but submit button was not available")
+                    return False
+
+                self.log("Confirmation code was not visible after input, retrying")
+            time.sleep(0.5)
+
+        self.log("Confirmation code input not found")
+        return False
+
+    def _tap_next(self, d, timeout=3):
+        selectors = [
+            {"text": "Next"},
+            {"textContains": "Next"},
+            {"descriptionContains": "Next"},
+        ]
+
+        for sel in selectors:
+            btn = d(**sel)
+            if btn.exists(timeout=1):
+                btn.click()
+                return True
+        return False
+    
+    def _request_email_code(self, d, timeout=6):
+        return self._click_any_selector(
+            d,
+            [
+                {"text": "Next"},
+                {"text": "Continue"},
+                {"text": "Send code"},
+                {"text": "Send Code"},
+                {"textContains": "Send code"},
+                {"textContains": "Send Code"},
+                {"textContains": "Resend code"},
+                {"textContains": "Resend Code"},
+                {"textContains": "Continue"},
+                {"textContains": "Next"},
+            ],
+            timeout=timeout,
+            required=False,
+        )
+
+    def _handle_confirm_by_email(self, d, timeout=5):
+        self.log("Checking for 'Confirm by email' option")
+        if self._click_any_selector(
+            d,
+            [
+                {"text": "Confirm by email"},
+                {"textContains": "Confirm by email"},
+                {"description": "Confirm by email"},
+                {"descriptionContains": "Confirm by email"},
+            ],
+            timeout=timeout,
+            required=False,
+        ):
+            self.log("Tapped 'Confirm by email'")
+            time.sleep(5)
+
+            return True
+        self.log("'Confirm by email' option not shown")
+        return False
+
+    def _handle_didnt_get_code_step(self, d, timeout=8):
+        self.log("Checking for 'I didn't get the code' option")
+        variants = (
+            "I didn't get the code",
+            "I didn’t get the code",
+            "didn't get the code",
+            "didn’t get the code",
+            "didnt get the code",
+            "I didn't get a code",
+            "I didn’t get a code",
+        )
+
+        if self._click_any_selector(
+            d,
+            [
+                {"text": "I didn't get the code"},
+                {"text": "I didn’t get the code"},
+                {"textContains": "I didn't get the code"},
+                {"textContains": "I didn’t get the code"},
+                {"textContains": "didn't get the code"},
+                {"textContains": "didn’t get the code"},
+                {"textContains": "didnt get the code"},
+                {"description": "I didn't get the code"},
+                {"description": "I didn’t get the code"},
+                {"descriptionContains": "didn't get the code"},
+                {"descriptionContains": "didn’t get the code"},
+                {"descriptionContains": "didnt get the code"},
+            ],
+            timeout=timeout,
+            required=False,
+        ) or self._click_text_variants(
+            d,
+            variants,
+            timeout=timeout,
+        ):
+            self.log("Tapped 'I didn't get the code'")
+            time.sleep(2)
+            return True
+
+        self.log("'I didn't get the code' option not shown")
+        return False
+    
+    def _click_text_variants(self, d, variants, timeout=5):
+        normalized_variants = [
+            self._normalize_ui_text(variant)
+            for variant in variants
+            if str(variant or "").strip()
+        ]
+        if not normalized_variants:
+            return False
+
+        deadline = time.time() + timeout
+        class_names = (
+            "android.widget.Button",
+            "android.widget.TextView",
+            "android.view.View",
+        )
+
+        while time.time() < deadline:
+            for class_name in class_names:
+                try:
+                    candidates = list(d(className=class_name))
+                except Exception:
+                    candidates = []
+
+                for candidate in candidates:
+                    try:
+                        info = getattr(candidate, "info", {}) or {}
+                        label = " ".join(
+                            str(info.get(key, "") or "")
+                            for key in ("text", "contentDescription", "hint")
+                        )
+                        normalized_label = self._normalize_ui_text(label)
+                        if not normalized_label:
+                            continue
+                        if any(variant in normalized_label for variant in normalized_variants):
+                            if self._click_best_target(d, candidate):
+                                return True
+                    except Exception:
+                        continue
+            time.sleep(0.4)
+
+        return False
+    
+    def _normalize_ui_text(self, value):
+        text = str(value or "")
+        text = text.replace("\u2019", "'").replace("\u2018", "'")
+        text = re.sub(r"\s+", " ", text).strip().lower()
+        return text
 
     def _run_registration_steps_with_retry(self, d, name, profile, retries=2, retry_delay=3):
         total_attempts = retries + 1
@@ -635,6 +904,209 @@ class RegAccountTaskHandler(ScrollTaskHandler):
     def _generate_email(self, first_name, last_name):
         suffix = random.randint(1000, 99999)
         return f"{first_name.lower()}.{last_name.lower()}{suffix}@gmail.com"
+
+    def _resolve_confirmation_email(self):
+        try:
+            settings = load_app_settings(get_app_paths().settings_file)
+        except SettingsError as exc:
+            self.log(f"Failed to load email settings for confirmation email: {exc}")
+            return None
+
+        main_email = str(getattr(settings, "email_address", "") or "").strip()
+        if not main_email:
+            return None
+
+        provider = str(getattr(settings, "email_provider", "") or "").strip().lower()
+        alias_email = self._build_yandex_clone_email(main_email) if self._is_yandex_address(main_email, provider) else main_email
+        self.log(f"Using confirmation email: {alias_email}")
+        return alias_email
+
+    def _wait_for_confirmation_otp(self, confirmation_email=None):
+        config, request = self._load_confirmation_otp_settings()
+        if not config:
+            return None
+
+        mailbox_label = str(confirmation_email or config.email_address or "").strip() or "configured mailbox"
+        self.log(f"Waiting for OTP in {mailbox_label}")
+
+        service = OTPService(
+            ui_log_func=lambda message, level="INFO": self.log(message, level),
+        )
+        result = service.wait_for_otp(config, request)
+        if not result.success or not result.code:
+            self.log(result.error or "No matching OTP email found.", "WARNING")
+            return None
+
+        self.log(f"Fetched confirmation code from email for {mailbox_label}")
+        return str(result.code).strip()
+
+    def _load_confirmation_otp_settings(self):
+        try:
+            settings = load_app_settings(get_app_paths().settings_file)
+        except SettingsError as exc:
+            self.log(f"Failed to load OTP settings: {exc}")
+            return None, None
+
+        config = EmailAccountConfig(
+            provider=settings.email_provider,
+            email_address=settings.email_address,
+            app_password=settings.email_app_password,
+            imap_server=settings.email_imap_server,
+            imap_port=settings.email_imap_port,
+            mailbox=settings.email_mailbox,
+            use_ssl=settings.email_use_ssl,
+        ).with_provider_defaults()
+
+        if not config.email_address or not config.app_password:
+            self.log("Email OTP settings are incomplete. Configure email address and app password first.")
+            return None, None
+
+        request = self._build_confirmation_otp_request(settings)
+        return config, request
+
+    @staticmethod
+    def _build_confirmation_otp_request(settings):
+        sender_filter = str(getattr(settings, "email_sender_filter", "") or "").strip()
+        subject_filter = str(getattr(settings, "email_subject_filter", "") or "").strip()
+        timeout_seconds = max(30, int(getattr(settings, "email_timeout_seconds", 90) or 90))
+        poll_interval_seconds = max(2, int(getattr(settings, "email_poll_interval_seconds", 5) or 5))
+        mark_as_seen = bool(getattr(settings, "email_mark_as_seen", False))
+        return OTPRequest(
+            sender_filter=sender_filter or "facebook",
+            subject_filter=subject_filter,
+            unread_only=True,
+            timeout_seconds=timeout_seconds,
+            poll_interval_seconds=poll_interval_seconds,
+            mark_as_seen=mark_as_seen,
+        )
+
+    @staticmethod
+    def _is_yandex_address(email_address, provider=""):
+        normalized_provider = str(provider or "").strip().lower()
+        if normalized_provider == "yandex":
+            return True
+
+        parts = str(email_address or "").strip().lower().rsplit("@", 1)
+        if len(parts) != 2:
+            return False
+
+        domain = parts[1]
+        return domain in {"yandex.com", "yandex.ru", "ya.ru", "yandex.by", "yandex.kz", "yandex.ua"}
+
+    @staticmethod
+    def _build_yandex_clone_email(main_email):
+        email_text = str(main_email or "").strip()
+        if not email_text or "@" not in email_text:
+            return None
+
+        local_part, domain = email_text.rsplit("@", 1)
+        base_local = local_part.split("+", 1)[0].strip()
+        domain = domain.strip()
+        if not base_local or not domain:
+            return None
+
+        alias_suffix = f"{random.randint(0, 999999):06d}"
+        return f"{base_local}+{alias_suffix}@{domain}"
+
+    def _get_edit_text_fields(self, d, hints=()):
+        try:
+            edit_fields = list(d(className="android.widget.EditText"))
+        except Exception:
+            edit_fields = []
+
+        if not hints or not edit_fields:
+            return edit_fields
+
+        ranked = []
+        fallback = []
+        for field in edit_fields:
+            try:
+                info = getattr(field, "info", {}) or {}
+                label = " ".join(
+                    str(info.get(key, "") or "")
+                    for key in ("text", "hint", "contentDescription", "resourceId")
+                ).lower()
+                rank = sum(1 for hint in hints if hint in label)
+                if rank > 0:
+                    ranked.append((rank, field))
+                else:
+                    fallback.append(field)
+            except Exception:
+                fallback.append(field)
+
+        ranked.sort(key=lambda item: item[0], reverse=True)
+        ordered = [field for _, field in ranked]
+        return ordered or fallback
+
+    def _set_confirmation_code_inputs(self, d, edit_fields, code_text):
+        if not edit_fields:
+            return False
+
+        if len(edit_fields) >= len(code_text) and len(code_text) <= 8:
+            typed_digits = 0
+            for index, digit in enumerate(code_text):
+                if index >= len(edit_fields):
+                    break
+                field = edit_fields[index]
+                if self._set_single_field_text(d, field, digit):
+                    typed_digits += 1
+            if typed_digits == len(code_text):
+                return True
+
+        return self._set_single_field_text(d, edit_fields[0], code_text)
+
+    def _set_single_field_text(self, d, field, value):
+        try:
+            field.click()
+            time.sleep(0.2)
+            try:
+                field.clear_text()
+            except Exception:
+                pass
+            field.set_text(str(value))
+            time.sleep(0.2)
+            return True
+        except Exception:
+            try:
+                d.send_keys(str(value), clear=True)
+                time.sleep(0.2)
+                return True
+            except Exception:
+                return False
+
+    def _confirm_code_text_visible(self, edit_fields, code_text):
+        combined_text = []
+        for field in edit_fields:
+            try:
+                info = getattr(field, "info", {}) or {}
+                current_text = str(info.get("text", "") or "").strip()
+                if current_text:
+                    combined_text.append(current_text)
+            except Exception:
+                continue
+
+        visible_text = "".join(combined_text)
+        return visible_text == code_text or code_text in visible_text
+
+    def _submit_confirmation_code(self, d):
+        return self._click_any_selector(
+            d,
+            [
+                {"text": "Next"},
+                {"text": "Continue"},
+                {"text": "Confirm"},
+                {"text": "Submit"},
+                {"text": "OK"},
+                {"textContains": "Next"},
+                {"textContains": "Continue"},
+                {"textContains": "Confirm"},
+                {"textContains": "Submit"},
+                {"descriptionContains": "Next"},
+                {"descriptionContains": "Continue"},
+            ],
+            timeout=6,
+            required=False,
+        )
 
     def _generate_phone(self, prefix):
         digits = "".join(random.choices(string.digits, k=9))

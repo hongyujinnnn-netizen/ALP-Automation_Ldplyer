@@ -9,7 +9,7 @@ from utils.ip_guard import get_ld_public_ip_info
 class MainWindow:
     def __init__(self, selected_ld_names, running_flag, ld_thread, log_func=print,
                  start_same_time=False, auto_arrange_ld=False, task_type="scroll", task_template="custom", task_handler=None, progress_callback=None,
-                 boot_delay=20, task_duration=900, max_videos=2, scroll_after_post=True, emulator=None, state_callback=None):
+                 boot_delay=20, task_duration=900, max_videos=2, scroll_after_post=True, verify_account=True, emulator=None, state_callback=None):
 
         # Import here to avoid circular imports when we need a fresh controller
         if emulator is None:
@@ -59,6 +59,7 @@ class MainWindow:
         self.boot_delay = boot_delay
         self.max_videos = max_videos
         self.scroll_after_post = scroll_after_post
+        self.verify_account = verify_account
         self._ip_lookup_inflight = set()
 
     def _auto_arrange_windows(self):
@@ -157,6 +158,7 @@ class MainWindow:
                 started_task_at=datetime.now().isoformat(),
                 task_template=self.task_template,
                 scroll_after_post=self.scroll_after_post,
+                verify_account=self.verify_account,
             )
             if self.task_handler is not None:
                 if self.task_type == "reels":
@@ -165,6 +167,12 @@ class MainWindow:
                         self.task_duration,
                         max_videos=self.max_videos,
                         scroll_after_post=self.scroll_after_post,
+                    )
+                elif self.task_type == "reg_account":
+                    success = self.task_handler.execute(
+                        name,
+                        self.task_duration,
+                        verify=self.verify_account,
                     )
                 else:
                     success = self.task_handler.execute(name, self.task_duration)
@@ -206,7 +214,9 @@ class MainWindow:
 
                 # Scroll tasks open Facebook inside the task handler after the
                 # IP guard passes, so skip the legacy pre-open stage here.
-                stages = ["start", "task", "close"]
+                stages = ["start", "task"]
+                if self.task_type != "test_feature":
+                    stages.append("close")
 
                 for stage in stages:
                     if not self.running_flag():

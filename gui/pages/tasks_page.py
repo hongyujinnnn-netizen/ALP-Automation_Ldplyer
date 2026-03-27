@@ -87,6 +87,12 @@ class TasksPageMixin:
             variable=self.auto_arrange_ld,
             bootstyle="primary-round-toggle",
         ).grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky="w")
+        tb.Checkbutton(
+            main_grid,
+            text="Verify Account",
+            variable=self.verify_account,
+            bootstyle="primary-round-toggle",
+        ).grid(row=3, column=2, columnspan=2, padx=10, pady=10, sticky="w")
         tb.Label(
             main_grid,
             text="Tip: Use lower parallel count for stability and lower CPU usage.",
@@ -112,6 +118,7 @@ class TasksPageMixin:
             ("Facebook Active", "scroll"),
             ("Register Account", "reg_account"),
             ("Post Reels", "reels"),
+            ("Test Feature", "test_feature"),
             ("Auto Scroll", "autoscroll"),
             ("Like Posts", "likes")
         ]

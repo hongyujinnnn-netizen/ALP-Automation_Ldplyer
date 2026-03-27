@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from core.emulator import ControlEmulator
+from tests.test_feature import TestFeatureTaskHandler
 from core.logic.task_reels import ReelsTaskHandler
 from core.managers import AccountManager
 from core.paths import get_app_paths
@@ -28,6 +29,7 @@ class TestCoreUtilities(unittest.TestCase):
             task_type="reels",
             task_template="content_day",
             scroll_after_post=False,
+            verify_account=False,
             ld_groups={"Farm A": ["US - 01", "US - 02"]},
         )
         save_app_settings(tmp_path, original)
@@ -39,6 +41,7 @@ class TestCoreUtilities(unittest.TestCase):
         self.assertEqual(loaded.task_type, "reels")
         self.assertEqual(loaded.task_template, "content_day")
         self.assertFalse(loaded.scroll_after_post)
+        self.assertFalse(loaded.verify_account)
         self.assertEqual(loaded.ld_groups, {"Farm A": ["US - 01", "US - 02"]})
 
     def test_rate_limiter_budget_and_wait(self) -> None:
@@ -65,6 +68,51 @@ class TestCoreUtilities(unittest.TestCase):
         # At minimum, platform and memory fields should be present.
         self.assertIn("platform", info)
         self.assertIn("memory_total", info)
+
+    def test_test_feature_starts_ld_and_opens_facebook(self) -> None:
+        emulator = unittest.mock.Mock()
+        emulator.is_ld_running.return_value = False
+        emulator.start_ld.return_value = True
+        emulator.open_facebook.return_value = True
+        emulator.boot_delay = 10
+
+        pause_event = unittest.mock.Mock()
+        pause_event.is_set.return_value = True
+
+        handler = TestFeatureTaskHandler(
+            emulator,
+            lambda message, level="INFO": None,
+            pause_event,
+            lambda: True,
+        )
+
+        result = handler.execute("US - 01")
+
+        self.assertTrue(result)
+        emulator.start_ld.assert_called_once_with("US - 01")
+        emulator.open_facebook.assert_called_once_with("US - 01")
+
+    def test_test_feature_fails_when_facebook_cannot_open(self) -> None:
+        emulator = unittest.mock.Mock()
+        emulator.is_ld_running.return_value = True
+        emulator.open_facebook.return_value = False
+        emulator.boot_delay = 10
+
+        pause_event = unittest.mock.Mock()
+        pause_event.is_set.return_value = True
+
+        handler = TestFeatureTaskHandler(
+            emulator,
+            lambda message, level="INFO": None,
+            pause_event,
+            lambda: True,
+        )
+
+        result = handler.execute("US - 02")
+
+        self.assertFalse(result)
+        emulator.start_ld.assert_not_called()
+        emulator.open_facebook.assert_called_once_with("US - 02")
 
     @patch("core.emulator.subprocess.run")
     def test_control_emulator_run_adb_command(self, mock_run) -> None:

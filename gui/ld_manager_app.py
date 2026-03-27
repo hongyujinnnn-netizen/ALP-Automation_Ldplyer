@@ -25,6 +25,7 @@ from ttkbootstrap.scrolled import ScrolledText as tbScrolledText
 # Import local modules
 from controllers.app_controller import AppController
 from controllers.emulator_controller import EmulatorController
+from controllers.otp_controller import OTPController
 from controllers.task_controller import TaskController
 from core.paths import get_app_paths
 from core.managers import AccountManager, ContentManager, BackupManager, SmartScheduler, TaskTemplates
@@ -122,6 +123,11 @@ class LDManagerApp(
         self.app_logger = AppLogger(self.paths)
         self.settings_service = SettingsService(self.paths)
         self.controller = AppController(self.settings_service, log_func=self.log)
+        self.otp_controller = OTPController(
+            self.settings_service,
+            ui_log_func=self.log,
+            structured_log_func=self.app_logger.log,
+        )
         self.task_service = TaskService()
         self.scheduler_service = SchedulerService()
 
@@ -162,9 +168,23 @@ class LDManagerApp(
         self.use_content_queue = tk.BooleanVar(value=True)
         self.auto_arrange_ld = tk.BooleanVar(value=False)
         self.scroll_after_post = tk.BooleanVar(value=True)
+        self.verify_account = tk.BooleanVar(value=True)
         self.reg_contact_mode = tk.StringVar(value="random_phone")
         self.reg_contact_value = tk.StringVar(value="")
         self.reg_phone_prefix = tk.StringVar(value="+1")
+        self.email_provider = tk.StringVar(value="yandex")
+        self.email_address = tk.StringVar(value="")
+        self.email_app_password = tk.StringVar(value="")
+        self.email_imap_server = tk.StringVar(value="imap.yandex.com")
+        self.email_imap_port = tk.IntVar(value=993)
+        self.email_mailbox = tk.StringVar(value="INBOX")
+        self.email_use_ssl = tk.BooleanVar(value=True)
+        self.email_unread_only = tk.BooleanVar(value=True)
+        self.email_sender_filter = tk.StringVar(value="")
+        self.email_subject_filter = tk.StringVar(value="")
+        self.email_timeout_seconds = tk.IntVar(value=90)
+        self.email_poll_interval_seconds = tk.IntVar(value=5)
+        self.email_mark_as_seen = tk.BooleanVar(value=False)
         # Comma-separated list of blocked ISO country codes for IP guard.
         self.blocked_countries = tk.StringVar(
             value="US,KH,CN,TH,VN,PH,ID,MY,LA,MM"
@@ -823,6 +843,7 @@ class LDManagerApp(
                     "scroll": "Scroll Feed",
                     "reels": "Watch Reels",
                     "reg_account": "Register Account",
+                    "test_feature": "Test Feature",
                 }.get(self.task_type_var.get(), self.task_type_var.get().title())
                 progress_text = f"{random.randint(24, 96)}%"
                 actions_text = "Pause | Stop | More"
@@ -1148,6 +1169,7 @@ class LDManagerApp(
     def load_settings(self):
         """Load general settings from disk."""
         settings = self.controller.load_app_settings()
+        email_config, email_request = self.otp_controller.load_email_settings()
 
         self.parallel_ld.set(settings.parallel_ld)
         self.boot_delay.set(settings.boot_delay)
@@ -1159,9 +1181,23 @@ class LDManagerApp(
         self.task_type_var.set(settings.task_type)
         self.task_template_var.set(settings.task_template)
         self.scroll_after_post.set(settings.scroll_after_post)
+        self.verify_account.set(settings.verify_account)
         self.reg_contact_mode.set(settings.reg_contact_mode)
         self.reg_contact_value.set(settings.reg_contact_value)
         self.reg_phone_prefix.set(settings.reg_phone_prefix)
+        self.email_provider.set(email_config.provider)
+        self.email_address.set(email_config.email_address)
+        self.email_app_password.set(email_config.app_password)
+        self.email_imap_server.set(email_config.imap_server)
+        self.email_imap_port.set(email_config.imap_port)
+        self.email_mailbox.set(email_config.mailbox)
+        self.email_use_ssl.set(email_config.use_ssl)
+        self.email_unread_only.set(email_request.unread_only)
+        self.email_sender_filter.set(email_request.sender_filter)
+        self.email_subject_filter.set(email_request.subject_filter)
+        self.email_timeout_seconds.set(email_request.timeout_seconds)
+        self.email_poll_interval_seconds.set(email_request.poll_interval_seconds)
+        self.email_mark_as_seen.set(email_request.mark_as_seen)
         self._ld_groups = self._normalize_ld_groups(settings.ld_groups)
         self._refresh_group_ui()
         try:
@@ -1185,9 +1221,23 @@ class LDManagerApp(
             task_type=str(self.task_type_var.get()),
             task_template=str(self.task_template_var.get()),
             scroll_after_post=bool(self.scroll_after_post.get()),
+            verify_account=bool(self.verify_account.get()),
             reg_contact_mode=str(self.reg_contact_mode.get()),
             reg_contact_value=str(self.reg_contact_value.get()),
             reg_phone_prefix=str(self.reg_phone_prefix.get()),
+            email_provider=str(self.email_provider.get()),
+            email_address=str(self.email_address.get()),
+            email_app_password=str(self.email_app_password.get()),
+            email_imap_server=str(self.email_imap_server.get()),
+            email_imap_port=int(self.email_imap_port.get()),
+            email_mailbox=str(self.email_mailbox.get()),
+            email_use_ssl=bool(self.email_use_ssl.get()),
+            email_unread_only=bool(self.email_unread_only.get()),
+            email_sender_filter=str(self.email_sender_filter.get()),
+            email_subject_filter=str(self.email_subject_filter.get()),
+            email_timeout_seconds=int(self.email_timeout_seconds.get()),
+            email_poll_interval_seconds=int(self.email_poll_interval_seconds.get()),
+            email_mark_as_seen=bool(self.email_mark_as_seen.get()),
             ld_groups=self._normalize_ld_groups(),
             blocked_countries=[
                 code.strip().upper()
@@ -1601,6 +1651,7 @@ Recent Items:
                     "scroll": "Scroll Feed",
                     "reels": "Watch Reels",
                     "reg_account": "Register Account",
+                    "test_feature": "Test Feature",
                 }.get(self.task_type_var.get(), self.task_type_var.get().title()),
                 "progress": 72,
             })
@@ -1626,6 +1677,7 @@ Recent Items:
                         "scroll": "Scroll Feed",
                         "reels": "Watch Reels",
                         "reg_account": "Register Account",
+                        "test_feature": "Test Feature",
                     }.get(self.task_type_var.get(), self.task_type_var.get().title())
                     actions_text = "Pause | Stop | More"
                 self.ld_table.item(
@@ -1709,10 +1761,20 @@ Recent Items:
             ]
             task_handler.auto_arrange_ld = bool(self.auto_arrange_ld.get())
             task_handler.state_callback = self.update_device_runtime_state
+        elif task_type == "test_feature":
+            from tests.test_feature import TestFeatureTaskHandler
+            task_handler = TestFeatureTaskHandler(
+                self.emulator,
+                self.log,
+                self.pause_event,
+                lambda: self.running_event.is_set(),
+            )
+            task_handler.auto_arrange_ld = bool(self.auto_arrange_ld.get())
+            task_handler.state_callback = self.update_device_runtime_state
         else:
             MessageBox.showwarning(
                 "Task Not Implemented",
-                "This task type is UI-only right now. Please use Scroll Feed, Register Account, or Watch Reels."
+                "This task type is UI-only right now. Please use Scroll Feed, Register Account, Watch Reels, or Test Feature."
             )
             return
 
@@ -1750,6 +1812,7 @@ Recent Items:
                     task_duration_seconds=self.task_duration.get() * 60,
                     max_videos=self.max_videos.get(),
                     scroll_after_post=self.scroll_after_post.get(),
+                    verify_account=self.verify_account.get(),
                 )
                 main_window = self.task_controller.create_runner(
                     request=request,
