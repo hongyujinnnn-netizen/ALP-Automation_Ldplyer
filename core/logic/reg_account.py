@@ -217,6 +217,8 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             facebook_uid=facebook_uid,
             account_status=account_status,
         )
+
+        time.sleep(3)
         self.log(f"Account created successfully for {name} with UID: {facebook_uid}")
         self.log(f"Account status for {name}: {account_status}")
         self.log(f"Create-account flow completed on LD: {name}")
@@ -522,14 +524,8 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             if not self._fill_contact_step(d, name, profile):
                 self.log(f"Failed on contact step for {name}")
                 return False, "contact"
-
-        time.sleep(2)
-        if not self._handle_contact_continue_step(d):
-            self.log(f"Failed on contact continue step for {name}")
-            return False, "contact_continue"
-
+            
         time.sleep(4)
-
         if not self._fill_password_step(d, name, profile):
             self.log(f"Failed on password step for {name}")
             return False, "password"
