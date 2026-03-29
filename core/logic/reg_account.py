@@ -191,10 +191,13 @@ class RegAccountTaskHandler(ScrollTaskHandler):
                     
         time.sleep(10)
         d.app_stop("com.facebook.katana")
-        time.sleep(3)
+        time.sleep(4)
         
         d.app_start("com.facebook.katana")
-        time.sleep(10)
+        time.sleep(7)
+
+        d.app_stop("com.facebook.katana")
+        time.sleep(3)
 
         facebook_uid = self.check_uid_account(d)
         if facebook_uid == "":
@@ -214,6 +217,8 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             facebook_uid=facebook_uid,
             account_status=account_status,
         )
+        self.log(f"Account created successfully for {name} with UID: {facebook_uid}")
+        self.log(f"Account status for {name}: {account_status}")
         self.log(f"Create-account flow completed on LD: {name}")
         self.log(f"Generated account {profile.contact_label}: {profile.contact_value}")
         self.log(f"Generated account password: {profile.password}")
@@ -1928,7 +1933,7 @@ class RegAccountTaskHandler(ScrollTaskHandler):
     
     # Detect if the account has been flagged for human verification
     def detect_human_confirm_screen(self, d, timeout=12):
-        phrases = (
+        dead_phrases = (
             "confirm you're human",
             "confirm you are human",
             "confirm it's you",
@@ -1941,39 +1946,88 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             "tap and hold",
         )
 
+        # phrases from your screenshot
+        active_phrases = (
+            "add a profile picture",
+            "add profile picture",
+            "add a picture",
+            "add picture",
+            "everyone will be able to see your picture",
+            "so your friends know it's you",
+            "skip",
+        )
+
         def _normalize(value):
-            return str(value or "").strip().lower().replace("\u2019", "'")
+            value = str(value or "").strip().lower()
+            value = value.replace("\u2019", "'")   # smart quote -> normal quote
+            value = re.sub(r"\s+", " ", value)     # collapse spaces/newlines
+            return value
+
+        def _exists_by_phrase(phrase):
+            selectors = (
+                {"textContains": phrase},
+                {"descriptionContains": phrase},
+            )
+            for selector in selectors:
+                try:
+                    if d(**selector).exists:
+                        return True
+                except Exception:
+                    pass
+            return False
 
         deadline = time.time() + max(3, timeout)
         last_error = None
 
         while time.time() < deadline:
-            for phrase in phrases:
-                for selector in (
-                    {"textContains": phrase},
-                    {"descriptionContains": phrase},
-                ):
-                    try:
-                        if d(**selector).exists:
-                            self.log(f"Human confirmation screen detected: {phrase}")
-                            return "Dead"
-                    except Exception as exc:
-                        last_error = exc
-
             try:
+                # 1) DEAD check first
+                for phrase in dead_phrases:
+                    if _exists_by_phrase(phrase):
+                        self.log(f"Human confirmation screen detected: {phrase}")
+                        return "Dead"
+
+                # 2) ACTIVE check for screen like screenshot
+                # stronger check: heading + button/skip
+                add_profile_title = (
+                    _exists_by_phrase("add a profile picture") or
+                    _exists_by_phrase("add profile picture")
+                )
+                add_picture_btn = _exists_by_phrase("add picture")
+                skip_btn = _exists_by_phrase("skip")
+
+                if add_profile_title and (add_picture_btn or skip_btn):
+                    self.log("Profile picture screen detected")
+                    return "Active"
+
+                # 3) fallback from XML hierarchy
                 xml_lower = _normalize(d.dump_hierarchy())
-                if any(phrase in xml_lower for phrase in phrases):
+
+                # DEAD from XML
+                if any(_normalize(p) in xml_lower for p in dead_phrases):
                     self.log("Human confirmation screen detected from UI hierarchy")
                     return "Dead"
 
                 if "human" in xml_lower and ("confirm" in xml_lower or "verify" in xml_lower):
                     self.log("Human confirmation keywords detected from UI hierarchy")
                     return "Dead"
+
+                # ACTIVE from XML
+                active_hits = sum(1 for p in active_phrases if _normalize(p) in xml_lower)
+
+                # require at least 2 signals to reduce false match
+                if active_hits >= 2:
+                    self.log("Profile picture screen detected from UI hierarchy")
+                    return "Active"
+
             except Exception as exc:
                 last_error = exc
 
             time.sleep(1)
 
         if last_error:
-            self.log(f"Human confirmation screen check completed without a match: {last_error}")
-        return "Alive"
+            self.log(f"Screen detection fallback to Novery. Last error: {last_error}")
+        else:
+            self.log("Screen not matched: returning Novery")
+
+        return "Novery"
