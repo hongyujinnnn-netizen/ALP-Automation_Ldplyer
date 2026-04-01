@@ -70,34 +70,40 @@ class TasksPageMixin:
         
         tb.Spinbox(main_grid, from_=1, to=50, textvariable=self.max_videos,
                    width=8).grid(row=1, column=3, padx=10, pady=10, sticky="w")
+
+        tb.Label(main_grid, text="Post Pages:", bootstyle="secondary").grid(
+            row=2, column=0, padx=10, pady=10, sticky="w")
+
+        tb.Spinbox(main_grid, from_=1, to=20, textvariable=self.page_per_account,
+                   width=8).grid(row=2, column=1, padx=10, pady=10, sticky="w")
         
-        # Row 2 - Checkboxes
+        # Row 3 - Checkboxes
         tb.Checkbutton(main_grid, text="Start Devices Simultaneously",
                       variable=self.start_same_time,
                       bootstyle="primary-round-toggle").grid(
-            row=2, column=0, columnspan=2, padx=10, pady=10, sticky="w")
+            row=3, column=0, columnspan=2, padx=10, pady=10, sticky="w")
         
         tb.Checkbutton(main_grid, text="Use Content Queue",
                       variable=self.use_content_queue,
                       bootstyle="primary-round-toggle").grid(
-            row=2, column=2, columnspan=2, padx=10, pady=10, sticky="w")
+            row=3, column=2, columnspan=2, padx=10, pady=10, sticky="w")
         tb.Checkbutton(
             main_grid,
             text="Auto Arrange LD",
             variable=self.auto_arrange_ld,
             bootstyle="primary-round-toggle",
-        ).grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky="w")
+        ).grid(row=4, column=0, columnspan=2, padx=10, pady=10, sticky="w")
         tb.Checkbutton(
             main_grid,
             text="Verify Account",
             variable=self.verify_account,
             bootstyle="primary-round-toggle",
-        ).grid(row=3, column=2, columnspan=2, padx=10, pady=10, sticky="w")
+        ).grid(row=4, column=2, columnspan=2, padx=10, pady=10, sticky="w")
         tb.Label(
             main_grid,
             text="Tip: Use lower parallel count for stability and lower CPU usage.",
             style="Subtitle.TLabel"
-        ).grid(row=4, column=0, columnspan=4, padx=10, pady=(4, 0), sticky="w")
+        ).grid(row=5, column=0, columnspan=4, padx=10, pady=(4, 0), sticky="w")
 
 
     def create_advanced_settings(self, parent):

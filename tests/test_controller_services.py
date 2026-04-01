@@ -16,6 +16,7 @@ from services.logging_service import AppLogger
 from services.scheduler_service import SchedulerService
 from services.settings_service import SettingsService
 from services.task_service import TaskRunRequest, TaskService
+from gui.main_window import MainWindow
 
 
 def build_test_paths(root: Path) -> AppPaths:
@@ -35,6 +36,40 @@ def build_test_paths(root: Path) -> AppPaths:
 
 
 class TestControllerAndServices(unittest.TestCase):
+    def test_main_window_waits_for_reels_task_threads_until_they_finish(self) -> None:
+        class FakeThread:
+            def __init__(self, cycles: int) -> None:
+                self.cycles = cycles
+                self.join_calls: list[float | None] = []
+
+            def is_alive(self) -> bool:
+                return self.cycles > 0
+
+            def join(self, timeout=None) -> None:
+                self.join_calls.append(timeout)
+                if self.cycles > 0:
+                    self.cycles -= 1
+
+        emulator = Mock()
+        emulator.name_to_serial = {}
+
+        window = MainWindow(
+            selected_ld_names=[],
+            running_flag=lambda: True,
+            ld_thread=1,
+            log_func=lambda *_args, **_kwargs: None,
+            task_type="reels",
+            emulator=emulator,
+        )
+        window.reels_task_join_poll_seconds = 0.01
+
+        fake = FakeThread(cycles=3)
+
+        window._wait_for_stage_threads([fake], "task")
+
+        self.assertEqual(fake.join_calls, [0.01, 0.01, 0.01])
+        self.assertFalse(fake.is_alive())
+
     def test_settings_service_roundtrip(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             paths = build_test_paths(Path(tmp_dir))
@@ -45,6 +80,7 @@ class TestControllerAndServices(unittest.TestCase):
                 AppSettings(
                     parallel_ld=5,
                     boot_delay=12,
+                    page_per_account=3,
                     task_type="reels",
                     task_template="content_day",
                     verify_account=False,
@@ -55,6 +91,7 @@ class TestControllerAndServices(unittest.TestCase):
 
             self.assertEqual(loaded.parallel_ld, 5)
             self.assertEqual(loaded.boot_delay, 12)
+            self.assertEqual(loaded.page_per_account, 3)
             self.assertEqual(loaded.task_type, "reels")
             self.assertEqual(loaded.task_template, "content_day")
             self.assertFalse(loaded.verify_account)
@@ -154,6 +191,7 @@ class TestControllerAndServices(unittest.TestCase):
             boot_delay=8,
             task_duration_seconds=900,
             max_videos=2,
+            page_per_account=2,
             scroll_after_post=True,
             verify_account=False,
         )
@@ -162,6 +200,7 @@ class TestControllerAndServices(unittest.TestCase):
         self.assertEqual(request.selected_ld_names, ["US - 01"])
         self.assertEqual(request.task_type, "scroll")
         self.assertEqual(request.task_template, "custom")
+        self.assertEqual(request.page_per_account, 2)
         self.assertTrue(request.scroll_after_post)
         self.assertFalse(request.verify_account)
 

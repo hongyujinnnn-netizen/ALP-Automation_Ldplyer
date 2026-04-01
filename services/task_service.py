@@ -17,6 +17,7 @@ class TaskRunRequest:
     boot_delay: int
     task_duration_seconds: int
     max_videos: int
+    page_per_account: int
     scroll_after_post: bool
     verify_account: bool
 
@@ -48,6 +49,7 @@ class TaskService:
             request.boot_delay,
             request.task_duration_seconds,
             request.max_videos,
+            request.page_per_account,
             request.scroll_after_post,
             request.verify_account,
             emulator=emulator,

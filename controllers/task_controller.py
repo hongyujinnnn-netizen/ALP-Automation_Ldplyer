@@ -20,6 +20,7 @@ class TaskController:
         boot_delay: int,
         task_duration_seconds: int,
         max_videos: int,
+        page_per_account: int,
         scroll_after_post: bool,
         verify_account: bool,
     ) -> TaskRunRequest:
@@ -33,6 +34,7 @@ class TaskController:
             boot_delay=boot_delay,
             task_duration_seconds=task_duration_seconds,
             max_videos=max_videos,
+            page_per_account=page_per_account,
             scroll_after_post=scroll_after_post,
             verify_account=verify_account,
         )

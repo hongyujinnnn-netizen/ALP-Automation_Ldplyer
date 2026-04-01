@@ -160,6 +160,7 @@ class LDManagerApp(
         self.boot_delay = tk.IntVar(value=10)
         self.task_duration = tk.IntVar(value=15)  # In minutes
         self.max_videos = tk.IntVar(value=2)
+        self.page_per_account = tk.IntVar(value=2)
         self.schedule_time = tk.StringVar(value="09:00")
         self.schedule_daily = tk.BooleanVar(value=True)
         self.schedule_weekly = tk.BooleanVar(value=False)
@@ -1154,6 +1155,14 @@ class LDManagerApp(
                 break
 
         for task in tasks:
+            if "page_per_account" in task:
+                try:
+                    self.page_per_account.set(max(1, int(task["page_per_account"])))
+                except Exception:
+                    pass
+                break
+
+        for task in tasks:
             if task.get("type") == "reels" and "scroll_after_post" in task:
                 try:
                     self.scroll_after_post.set(bool(task["scroll_after_post"]))
@@ -1175,6 +1184,7 @@ class LDManagerApp(
         self.boot_delay.set(settings.boot_delay)
         self.task_duration.set(settings.task_duration)
         self.max_videos.set(settings.max_videos)
+        self.page_per_account.set(settings.page_per_account)
         self.start_same_time.set(settings.start_same_time)
         self.use_content_queue.set(settings.use_content_queue)
         self.auto_arrange_ld.set(settings.auto_arrange_ld)
@@ -1215,6 +1225,7 @@ class LDManagerApp(
             boot_delay=int(self.boot_delay.get()),
             task_duration=int(self.task_duration.get()),
             max_videos=int(self.max_videos.get()),
+            page_per_account=int(self.page_per_account.get()),
             start_same_time=bool(self.start_same_time.get()),
             use_content_queue=bool(self.use_content_queue.get()),
             auto_arrange_ld=bool(self.auto_arrange_ld.get()),
@@ -1811,6 +1822,7 @@ Recent Items:
                     boot_delay=self.boot_delay.get(),
                     task_duration_seconds=self.task_duration.get() * 60,
                     max_videos=self.max_videos.get(),
+                    page_per_account=self.page_per_account.get(),
                     scroll_after_post=self.scroll_after_post.get(),
                     verify_account=self.verify_account.get(),
                 )

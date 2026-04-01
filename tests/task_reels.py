@@ -4,9 +4,6 @@ import re
 import subprocess
 import time
 
-from unittest import result
-import xml.etree.ElementTree as ET
-
 from core.task_base import BaseTaskHandler, U2_AVAILABLE, u2
 from utils.ip_guard import check_ld_ip_allowed
 
@@ -87,14 +84,23 @@ class ReelsTaskHandler(BaseTaskHandler):
             self.log(f"Failed to clear recent apps: {e}")
             return False
 
-
-    def execute(self, name, duration=60, max_videos=2, scroll_after_post=True, use_content_queue=True, page_per_account=2):
+    def execute(self, name, duration=60, max_videos=2,scroll_after_post=True, use_content_queue=True):
+        """
+        Run Reels task: navigate to Page-1 and attempt to long-press the top video.
+        Skip to next LD if any step fails instead of retrying.
+        
+        Args:
+            name (str): Device identifier
+            duration (int): Task duration in seconds (default: 60)
+            max_videos (int): Maximum number of videos to process (default: 2)
+        """
         if self.check_paused():
             return False
 
+        # Start LD if not running
         if not self.emulator.is_ld_running(name):
             if not self.emulator.start_ld(name):
-                self.log(f"Failed to start LD: {name}")
+                self.log(f"âŒ Failed to start LD: {name}")
                 return False
             self.auto_arrange_ld_windows()
             self.log(f"Waiting for emulator ready: {name}")
@@ -108,7 +114,7 @@ class ReelsTaskHandler(BaseTaskHandler):
 
         serial = self.emulator.name_to_serial.get(name)
         if not serial:
-            self.log(f"No serial for {name}")
+            self.log(f"âŒ No serial for {name}")
             return False
 
         blocked_countries = getattr(self, "blocked_countries", None)
@@ -121,285 +127,181 @@ class ReelsTaskHandler(BaseTaskHandler):
                     pass
                 return False
 
+        # Connect with uiautomator2
         try:
             if not U2_AVAILABLE:
-                self.log("uiautomator2 not available. Cannot run Reels task.")
+                self.log("âŒ uiautomator2 not available. Cannot run Reels task.")
                 return False
             d = u2.connect(serial)
         except Exception as e:
-            self.log(f"Failed to connect {serial}: {e}")
+            self.log(f"âŒ Failed to connect {serial}: {e}")
             return False
 
-        page_ready = 0
-        click_pages = 0
-        f_index = 2
+        setup_ready = False
+        max_setup_attempts = 2
+        for setup_attempt in range(1, max_setup_attempts + 1):
+            try:
+                time.sleep(5)
+                if not self.open_facebook(d):
+                    raise RuntimeError("Can't open Facebook")
+            except Exception:
+                self.log("âŒ Can't open Facebook!")
+                return False         
+
+            if  self._open_file_manager_with_retry(d, attempts=2, delay=2):
+
+                time.sleep(3)
+                if self.navigate_to_pictures(d):
+                    setup_ready = True
+                    break
+                self.log(f"âŒ Failed to navigate to pictures on {name}")
+            else:
+                self.log(f"âŒ Failed to open file manager on {name}")
+
+            if setup_attempt >= max_setup_attempts:
+                break
+
+            self.log(f"Setup failed on {name}. Clearing all apps before retry {setup_attempt + 1}/{max_setup_attempts}")
+            self._clear_recent_apps(d)
+            time.sleep(2)
+
+        if not setup_ready:
+            return False
+
         video_posted = 0
         success_pots = 0
-        videos_per_page = max(0, int(max_videos or 0))
-        total_pages = max(0, int(page_per_account or 0))
-        total_videos_target = videos_per_page * total_pages
-
         self.push_runtime_state(
             name,
             state="Running",
-            task=f"Processed {success_pots}/{total_videos_target} video",
-            progress=78 if total_videos_target > 0 else 0,
+            task=f"Processed {success_pots}/{max_videos} video",
+            progress=78 if max_videos > 0 else 0,
         )
-        # logic switch for reels post, if page_per_account is 1, it will only click the first page, if it's 2, it will click the second page, and so on. This is to avoid the issue of some accounts having multiple pages and the script always clicking the first one which may not be the intended one.
-        while page_ready < total_pages:
-            setup_ready = False
-            max_setup_attempts = 2
+        while video_posted < max_videos:
+            try:
+                # Respect optional rate limiter if present to avoid hammering Facebook/device.
+                limiter = getattr(self, "rate_limiter", None)
+                if limiter is not None and not limiter.can_perform_action("reels_post"):
+                    wait_for = max(0.0, limiter.get_wait_time())
+                    if wait_for > 0:
+                        self.log(f"Reels rate limit reached on {name}; pausing for {wait_for:.1f}s")
+                        time.sleep(min(wait_for, 90.0))
 
-            for setup_attempt in range(1, max_setup_attempts + 1):
-                try:
-                    time.sleep(5)
-                    if not self.open_facebook(d):
-                        raise RuntimeError("Can't open Facebook")
-                except Exception:
-                    self.log("Can't open Facebook!")
-                    return False
+                if not self.hold_on_video(d, hold_time=2):
+                    self.log(f"âŒ Failed to hold on video on {name}")
+                    video_posted += 1
+                    continue
+
+                # Check if context menu appeared
+                menu_present = any(
+                    d(textContains=hint).exists(timeout=0.8)
+                    for hint in ("Share", "Open with", "Delete", "Details", "Open")
+                ) or d(resourceId="android:id/title").exists(timeout=0.8)
+                if not menu_present:
+                    self.log(f"âš ï¸ Long-press did not open expected menu on {name}")
+                    video_posted += 1
+                    continue
+                # Try to click context option (e.g. share to Facebook)
+                if not self.handle_context_menu_after_long_press(d, name):
+                    self.log(f"âš ï¸ Context menu opened but no option clicked on {name}")
+                    video_posted += 1
+                    continue
+
+                # Facebook handling
+                if not self.emulator.is_ld_running(name):
+                    self.log(f"âš ï¸ LD closed after sending to Facebook on {name}")
+                    return True  # still counts as success
 
                 time.sleep(5)
-                if not self.click_facebook_menu(d):
-                    self.log(f"Failed to open Facebook menu on {name}")
-                    self.push_runtime_state(
-                        name,
-                        phase="task",
-                        state="Attention",
-                        task="Facebook menu not found",
-                        progress=0,
-                    )
-                    return False
 
-                time.sleep(4)
-                self.click_profile_dropdown(d)
+                if self.check_and_handle_facebook_permission(d):
+                    return True
 
-                time.sleep(4)
-                try:
-                    page = self.get_name_pages_by_bounds(d, [
-                        "[168,702][336,743]",
-                        "[168,851][328,892]"
-                    ])
-                except Exception as e:
-                    self.log(f"Error occurred while detecting page names on {name}: {e}")
-                    return False
-                self.log(f"Detected page names on {name}: {page}")
-
-                time.sleep(4)
-                if not self.click_on_page(d, page, page_to_click=click_pages):
-                    self.log(f"Failed to click on detected page names on {name}")
-                    self.push_runtime_state(
-                        name,
-                        phase="task",
-                        state="Attention",
-                        task="Could not click detected page",
-                        progress=0,
-                    )
-                    return False
-
-                time.sleep(15)
-                if self._open_file_manager_with_retry(d, attempts=2, delay=2):
-                    time.sleep(3)
-                    if self.navigate_to_pictures(d):
-                        setup_ready = True
-                        time.sleep(5)
-                        if not self.click_folder_post_page(d, index=f_index):
-                            self.log(f"Failed to click folder post page on {name}")
-                            self.push_runtime_state(
-                                name,
-                                phase="task",
-                                state="Attention",
-                                task="Could not click folder post page",
-                                progress=0,
-                            )
-                            return False
-                        break
-                    self.log(f"Failed to navigate to pictures on {name}")
-                else:
-                    self.log(f"Failed to open file manager on {name}")
-
-                if setup_attempt >= max_setup_attempts:
-                    break
-
-                self.log(f"Setup failed on {name}. Clearing all apps before retry {setup_attempt + 1}/{max_setup_attempts}")
-                self._clear_recent_apps(d)
-                time.sleep(2)
-
-            if not setup_ready:
-                return False
-
-            limiter = getattr(self, "rate_limiter", None)
-            if limiter is not None and not limiter.can_perform_action("reels_post"):
-                wait_for = max(0.0, limiter.get_wait_time())
-                if wait_for > 0:
-                    self.log(f"Reels rate limit reached on {name}; pausing for {wait_for:.1f}s")
-                    time.sleep(min(wait_for, 90.0))
-
-            page_video_posted = 0
-
-            while page_video_posted < videos_per_page:
-                try:
-                    if not self.hold_on_video(d, hold_time=2):
-                        self.log(f"Failed to hold on video on {name}")
-                        video_posted += 1
-                        page_video_posted += 1
-                        continue
-
-                    menu_present = any(
-                        d(textContains=hint).exists(timeout=0.8)
-                        for hint in ("Share", "Open with", "Delete", "Details", "Open")
-                    ) or d(resourceId="android:id/title").exists(timeout=0.8)
-                    if not menu_present:
-                        self.log(f"Long-press did not open expected menu on {name}")
-                        video_posted += 1
-                        page_video_posted += 1
-                        continue
-
+                if self.facebook_first_next(d):
                     time.sleep(2)
-                    if not self.handle_context_menu_after_long_press(d, name):
-                        self.log(f"Failed to handle context menu after long-press on {name}")
-                        self.push_runtime_state(
-                            name,
-                            phase="task",
-                            state="Attention",
-                            task="Could not handle context menu after long-press",
-                            progress=0,
-                        )
-                        return False
-
-                    if not self.emulator.is_ld_running(name):
-                        self.log(f"LD closed after sending to Facebook on {name}")
-                        return True
-
+                    # In the ReelsTaskHandler.execute method, modify the cleanup section:
+                time.sleep(10)
+                
+                # Get video data if using content queue
+                video_data = None
+                if use_content_queue and self.content_manager:
+                    video_data = self.content_manager.get_next_video()
+                
+                if self.handle_reels_description(d, video_data):
+                    self.log("â³ Waiting 5s to complete Facebook post...")
                     time.sleep(5)
-                    if self.check_and_handle_facebook_permission(d):
-                        return True
+                    
+                    if scroll_after_post:
+                        if self.emulator.is_ld_running(name):
+                            self.log("Starting Reels scrolling after post...")
+                            self.scroll_facebook_reels(d, duration=20, intensity="medium")
+                        else:
+                            self.log("LD closed before post-scroll, skipping Reels scrolling")
 
-                    if self.facebook_first_next(d):
-                        time.sleep(2)
-                    time.sleep(10)
+                    # Check if the device is still connected before attempting cleanup
+                    if not self.emulator.is_ld_running(name):
+                        self.log("âš ï¸ LD closed during Facebook post, skipping cleanup")
+                        video_posted += 1
+                        continue
 
-                    video_data = None
-                    if use_content_queue and self.content_manager:
-                        video_data = self.content_manager.get_next_video()
-
-                    if self.handle_reels_description(d, video_data):
-                        self.log("Waiting 5s to complete Facebook post...")
+                    try:
                         time.sleep(5)
+                        # Close Facebook
+                        d.app_stop("com.facebook.katana")
+                        time.sleep(2)
 
-                        if scroll_after_post:
-                            if self.emulator.is_ld_running(name):
-                                self.log("Starting Reels scrolling after post...")
-                                self.scroll_facebook_reels(d, duration=20, intensity="medium")
-                            else:
-                                self.log("LD closed before post-scroll, skipping Reels scrolling")
-
+                        # Delete video file - check if device is still connected
                         if not self.emulator.is_ld_running(name):
-                            self.log("LD closed during Facebook post, skipping cleanup")
+                            self.log("âš ï¸ LD closed before video deletion, skipping")
                             video_posted += 1
-                            page_video_posted += 1
                             continue
 
                         try:
-                            time.sleep(5)
-                            d.app_stop("com.facebook.katana")
-                            time.sleep(2)
+                            if self.delete_video(d):
+                                self.log("âœ… Video deleted successfully")
 
-                            if not self.emulator.is_ld_running(name):
-                                self.log("LD closed before video deletion, skipping")
-                                video_posted += 1
-                                page_video_posted += 1
-                                continue
-
-                            try:
-                                if self.delete_video(d):
-                                    self.log("Video deleted successfully")
-                                else:
-                                    if not self.emulator.is_ld_running(name):
-                                        self.log("LD closed before file manager, skipping")
-                                        video_posted += 1
-                                        page_video_posted += 1
-                                        continue
-
-                                    if not self._open_file_manager_with_retry(d, attempts=2, delay=1):
-                                        self.log(f"Failed to open file manager on {name}")
-                                        time.sleep(1)
-                                    if not self.delete_video(d):
-                                        self.log("Failed to delete video, continuing")
-                            except Exception as e:
-                                self.log(f"Error during video deletion: {e}")
+                            else:
+                                if not self.emulator.is_ld_running(name):
+                                    self.log("âš ï¸ LD closed before file manager, skipping")
+                                    video_posted += 1
+                                    continue
+                                    
+                                if not self._open_file_manager_with_retry(d, attempts=2, delay=1):
+                                    self.log(f"âŒ Failed to open file manager on {name}")
+                                    time.sleep(1)
+                                if not self.delete_video(d):   
+                                    self.log("âš ï¸ Failed to delete video, continuing")
                         except Exception as e:
-                            self.log(f"Error during cleanup: {e}")
+                            self.log(f"âŒ Error during video deletion: {e}")
+                            # Continue to next video even if deletion fails
+                    except Exception as e:
+                        self.log(f"âŒ Error during cleanup: {e}")
+                        # Continue to next video even if cleanup fails
 
-                        video_posted += 1
-                        page_video_posted += 1
-                        success_pots += 1
-                        progress_value = min(100, 78 + int((success_pots / total_videos_target) * 22)) if total_videos_target > 0 else 100
-                        self.push_runtime_state(
-                            name,
-                            state="Running" if success_pots < total_videos_target else "Completed",
-                            task=f"Processed {success_pots}/{total_videos_target} video",
-                            progress=progress_value,
-                        )
-                        continue
-
-                    self.log(f"Failed to complete reels description/post flow on {name}")
                     video_posted += 1
-                    page_video_posted += 1
-                except Exception as e:
-                    self.log(f"Exception during task execution on {name}: {e}")
-                    video_posted += 1
-                    page_video_posted += 1
+                    success_pots += 1
+                    progress_value = min(100, 78 + int((success_pots / max_videos) * 22)) if max_videos > 0 else 100
+                    self.push_runtime_state(
+                        name,
+                        state="Running" if success_pots < max_videos else "Completed",
+                        task=f"Processed {success_pots}/{max_videos} video",
+                        progress=progress_value,
+                    )
                     continue
+            except Exception as e:
+                self.log(f"âŒ Exception during task execution on {name}: {e}")
+                video_posted += 1
+                continue
 
-                self.log(f"Finished processing video {video_posted} on {name}")
-
-            page_ready += 1
-            click_pages += 1
-            f_index += 1
-        time.sleep(3)
-        self.end_to_accoutn_profile(d, name)  
 
         self.push_runtime_state(
             name,
             state="Completed" if success_pots > 0 else "Attention",
-            task=f"Processed {success_pots}/{total_videos_target} video",
+            task=f"Processed {success_pots}/{max_videos} video",
             progress=100 if success_pots > 0 else 0,
         )
-        self.log(f"Task completed: Processed {success_pots}/{total_videos_target} videos successfully")
+        self.log(f"ðŸ“Š Task completed: Processed {success_pots}/{max_videos} videos successfully")
         return success_pots > 0
     
-
-    def end_to_accoutn_profile(self, d, name):
-        if not self.open_facebook(d):
-            self.log(f"Failed to open Facebook for final cleanup on {name}")
-
-        time.sleep(6)
-        if not self.click_facebook_menu(d):
-            self.log(f"Failed to open Facebook menu on {name}")
-            self.push_runtime_state(
-                name,
-                phase="task",
-                state="Attention",
-                task="Facebook menu not found",
-                progress=0,
-            )
-            return False
-
-        time.sleep(4)
-        if not self.back_to_account_profile(d):
-            self.log(f"Failed to switch back to profile on {name}")
-            self.push_runtime_state(
-                name,
-                phase="task",
-                state="Attention",
-                task="Could not switch back to profile",
-                progress=0,
-            )
-            return False
-        return True
-    
-    #def handle_facebook_reels_post(self, d, video_data=None):
     def handle_reels_description(self, d, video_data=None):
         """
         Handle the Facebook Reels description and audience selection screen
@@ -1627,6 +1529,37 @@ class ReelsTaskHandler(BaseTaskHandler):
         except Exception as e:
             self.log(f"Error clicking Pictures: {e}")
             return False
+
+    def navigate_to_page(self, d):
+        """Click on Page-1 folder (exact Page-1 / Page 1 only)"""
+        try:
+            time.sleep(2)  # Wait for directory to load
+            # Only match explicit "Page-1" or "Page 1"
+            if d(text="Page-1").exists:
+                d(text="Page-1").click()
+                time.sleep(2)
+                return True
+            if d(text="Page 1").exists:
+                d(text="Page 1").click()
+                time.sleep(2)
+                return True
+
+            # Try a simple scroll and re-check once
+            d.swipe(0.5, 0.7, 0.5, 0.3, 0.5)
+            time.sleep(1)
+            if d(text="Page-1").exists:
+                d(text="Page-1").click()
+                time.sleep(2)
+                return True
+            if d(text="Page 1").exists:
+                d(text="Page 1").click()
+                time.sleep(2)
+                return True
+            
+            return False
+        except Exception as e:
+            self.log(f"Error clicking Page-1: {e}")
+            return False
     
     def check_and_handle_facebook_permission(self, d):
         """Check for Facebook permission dialog and click ALLOW if found"""
@@ -1743,256 +1676,4 @@ class ReelsTaskHandler(BaseTaskHandler):
             self.log(f"Error checking Facebook permission: {e}")
             return False
     
-    def click_facebook_menu(self, d, timeout=10):
-
-        selectors = [
-            # Best case: accessibility description
-            {"descriptionContains": "menu"},
-            {"descriptionContains": "Menu"},
-            {"descriptionContains": "More"},
-
-            # Sometimes Facebook uses resource-id
-            {"resourceIdMatches": ".*menu.*"},
-
-            # Fallback by class (top-left clickable button)
-            {"className": "android.widget.ImageView"},
-            {"className": "android.widget.Button"},
-        ]
-
-        deadline = time.time() + timeout
-
-        while time.time() < deadline:
-            for sel in selectors:
-                try:
-                    obj = d(**sel)
-                    if obj.exists:
-                        bounds = obj.info.get("bounds", {})
-                        x = (bounds.get("left", 0) + bounds.get("right", 0)) // 2
-                        y = (bounds.get("top", 0) + bounds.get("bottom", 0)) // 2
-
-                        # Only click if it's near top-left (hamburger location)
-                        if x < d.window_size()[0] * 0.3 and y < d.window_size()[1] * 0.2:
-                            self.log("Clicking Facebook menu button")
-                            obj.click()
-                            return True
-                except Exception as e:
-                    self.log(f"Error: {e}")
-
-            time.sleep(0.5)
-
-        self.log("Menu button not found")
-        self.log("skipping Facebook menu click")
-        return False
     
-    # Detect presence of page names in the list by looking for common patterns in the text of visible items.
-    def click_profile_dropdown(self, d):
-        x, y = 544, 146
-
-        try:
-            d.click(x, y)
-            return True
-        except Exception as e:
-            print(f"Click failed: {e}")
-            return False
-
-    # Helper methods to parse bounds and determine if a point is inside, used for matching text items to target areas. The main method get_name_pages_by_bounds uses these to find text whose bounds match the given coordinates.
-    @staticmethod
-    def _parse_bounds(bounds_text):
-        m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", str(bounds_text).strip())
-        if not m:
-            return None
-        return tuple(map(int, m.groups()))
-    @staticmethod
-    def _center_of(bounds):
-        x1, y1, x2, y2 = bounds
-        return ((x1 + x2) // 2, (y1 + y2) // 2)
-    @staticmethod
-    def _point_inside(px, py, bounds):
-        x1, y1, x2, y2 = bounds
-        return x1 <= px <= x2 and y1 <= py <= y2
-    # This method tries to find the text of items at specific screen locations by parsing the UI hierarchy and matching bounds. It first looks for any text whose bounds contain the center of the target area, and if not found, it looks for the text with the largest overlapping area. This is a heuristic to detect page names in the Facebook profile dropdown.
-    def get_name_pages_by_bounds(self, d, bounds_list):
-        """
-        bounds_list example:
-        [
-            "[168,702][336,743]",
-            "[168,851][328,892]"
-        ]
-
-        return:
-        ['Demoworld', 'meiileungg']
-        """
-        self.log("Detecting page names...")
-        try:
-            xml = d.dump_hierarchy()
-            root = ET.fromstring(xml)
-        except Exception as e:
-            self.log(f"Failed to dump hierarchy: {e}")
-            return []
-
-        text_nodes = []
-        for node in root.iter("node"):
-            text = (node.attrib.get("text") or "").strip()
-            bounds_text = node.attrib.get("bounds", "")
-            parsed = self._parse_bounds(bounds_text)
-
-            if text and parsed:
-                text_nodes.append({
-                    "text": text,
-                    "bounds": parsed,
-                })
-
-        result = []
-
-        for raw_bounds in bounds_list:
-            target = self._parse_bounds(raw_bounds)
-            if not target:
-                result.append("")
-                continue
-
-            cx, cy = self._center_of(target)
-            found = ""
-
-            for item in text_nodes:
-                if self._point_inside(cx, cy, item["bounds"]):
-                    found = item["text"]
-                    break
-
-            if not found:
-                tx1, ty1, tx2, ty2 = target
-                best_area = 0
-
-                for item in text_nodes:
-                    x1, y1, x2, y2 = item["bounds"]
-                    overlap_w = max(0, min(tx2, x2) - max(tx1, x1))
-                    overlap_h = max(0, min(ty2, y2) - max(ty1, y1))
-                    area = overlap_w * overlap_h
-
-                    if area > best_area:
-                        best_area = area
-                        found = item["text"]
-
-            result.append(found)
-        return result
-
-    # This method tries to click on a page name using an XPath expression that matches the text. It handles both single page names and lists of page names, and it includes a fallback to click based on bounds if the XPath click fails. It also includes logging and retries until a timeout is reached.
-    def click_on_page(self, d, pages, page_to_click, timeout=5):
-        """
-        Click a page name using xpath:
-        //android.view.View[@text="page"]
-
-        Examples:
-        - click_on_page(d, "page1")
-        - click_on_page(d, ["page1", "page2"])  # clicks index 0 by default
-        - click_on_page(d, ["page1", "page2"], page_to_click=1)
-        """
-        if isinstance(pages, (list, tuple)):
-            if not pages:
-                self.log("No page names were provided to click_on_page")
-                return False
-            if page_to_click < 0 or page_to_click >= len(pages):
-                self.log(f"Invalid page_to_click index: {page_to_click}")
-                return False
-            page_name = str(pages[page_to_click]).strip()
-        else:
-            page_name = str(pages).strip()
-
-        if not page_name:
-            self.log("Page name is empty, cannot click")
-            return False
-
-        if '"' in page_name and "'" not in page_name:
-            xpath_expr = f"//android.view.View[@text='{page_name}']"
-        else:
-            safe_page_name = page_name.replace('"', '\\"')
-            xpath_expr = f'//android.view.View[@text="{safe_page_name}"]'
-
-        self.log(f"Trying to click page: {page_name}")
-        deadline = time.time() + timeout
-
-        while time.time() < deadline:
-            try:
-                obj = d.xpath(xpath_expr)
-                if obj.exists:
-                    try:
-                        obj.click()
-                        self.log(f"Clicked page by xpath: {page_name}")
-                        return True
-                    except Exception:
-                        pass
-
-                    try:
-                        info = obj.info
-                        bounds = info.get("bounds", {})
-                        left = bounds.get("left", 0)
-                        top = bounds.get("top", 0)
-                        right = bounds.get("right", 0)
-                        bottom = bounds.get("bottom", 0)
-
-                        if right > left and bottom > top:
-                            cx = (left + right) // 2
-                            cy = (top + bottom) // 2
-                            d.click(cx, cy)
-                            self.log(f"Clicked page by bounds fallback: {page_name}")
-                            return True
-                    except Exception:
-                        pass
-                time.sleep(0.5)
-            except Exception as e:
-                self.log(f"Error while clicking page '{page_name}': {e}")
-                time.sleep(0.5)
-
-        self.log(f"Could not find page to click: {page_name}")
-        return False
-    
-    def click_folder_post_page(self, d, index, timeout=5):
-        xpath_expr = f'(//android.widget.ImageView[@resource-id="com.cyanogenmod.filemanager:id/navigation_view_item_icon"])[{index}]'
-        obj = d.xpath(xpath_expr)
-        if obj.exists:
-            obj.click()
-            return True
-        return False
-
-    def navigate_to_page(self, d):
-        """Click on Page-1 folder (exact Page-1 / Page 1 only)"""
-        try:
-            time.sleep(2)  # Wait for directory to load
-            # Only match explicit "Page-1" or "Page 1"
-            if d(text="Page-1").exists:
-                d(text="Page-1").click()
-                time.sleep(2)
-                return True
-            if d(text="Page 1").exists:
-                d(text="Page 1").click()
-                time.sleep(2)
-                return True
-
-            # Try a simple scroll and re-check once
-            d.swipe(0.5, 0.7, 0.5, 0.3, 0.5)
-            time.sleep(1)
-            if d(text="Page-1").exists:
-                d(text="Page-1").click()
-                time.sleep(2)
-                return True
-            if d(text="Page 1").exists:
-                d(text="Page 1").click()
-                time.sleep(2)
-                return True
-            
-            return False
-        except Exception as e:
-            self.log(f"Error clicking Page-1: {e}")
-            return False
-
-    def back_to_account_profile(self, d):
-        """Tap the account switch/back target using fixed coordinates."""
-        x, y = 440, 147
-
-        try:
-            d.click(x, y)
-            self.log(f"Tapped back to account at ({x}, {y})")
-            return True
-        except Exception as e:
-            self.log(f"Failed to tap back to account: {e}")
-            return False
-

@@ -9,7 +9,7 @@ from utils.ip_guard import get_ld_public_ip_info
 class MainWindow:
     def __init__(self, selected_ld_names, running_flag, ld_thread, log_func=print,
                  start_same_time=False, auto_arrange_ld=False, task_type="scroll", task_template="custom", task_handler=None, progress_callback=None,
-                 boot_delay=20, task_duration=900, max_videos=2, scroll_after_post=True, verify_account=True, emulator=None, state_callback=None):
+                 boot_delay=20, task_duration=900, max_videos=2, page_per_account=2, scroll_after_post=True, verify_account=True, emulator=None, state_callback=None):
 
         # Import here to avoid circular imports when we need a fresh controller
         if emulator is None:
@@ -58,9 +58,11 @@ class MainWindow:
         self.completed_count = 0
         self.boot_delay = boot_delay
         self.max_videos = max_videos
+        self.page_per_account = page_per_account
         self.scroll_after_post = scroll_after_post
         self.verify_account = verify_account
         self._ip_lookup_inflight = set()
+        self.reels_task_join_poll_seconds = 1.0
 
     def _auto_arrange_windows(self):
         if not self.auto_arrange_ld:
@@ -166,6 +168,7 @@ class MainWindow:
                         name,
                         self.task_duration,
                         max_videos=self.max_videos,
+                        page_per_account=self.page_per_account,
                         scroll_after_post=self.scroll_after_post,
                     )
                 elif self.task_type == "reg_account":
@@ -199,6 +202,19 @@ class MainWindow:
             time.sleep(15)  # Fixed close delay
             self.em.quit_ld(name)
             self._push_state(name, phase="close", state="Idle", task="Waiting for next run", progress=0, finished_at=datetime.now().isoformat())
+
+    def _wait_for_stage_threads(self, threads, stage):
+        if stage == "task" and self.task_type == "reels":
+            while any(t.is_alive() for t in threads):
+                if not self.running_flag():
+                    break
+                for t in threads:
+                    if t.is_alive():
+                        t.join(timeout=self.reels_task_join_poll_seconds)
+            return
+
+        for t in threads:
+            t.join(timeout=600 if stage == "task" else None)
 
     def main(self):
         total = len(self.thread_ld)
@@ -241,18 +257,15 @@ class MainWindow:
                             t.start()
                             threads.append(t)
                         
-                        # Wait for all threads to complete before moving to next stage
-                        # Especially important for the task stage to finish before close
-                        for t in threads:
-                            t.join(timeout=600)  # Increased timeout to 10 minutes for reels tasks
+                        # Wait for all stage threads to fully finish before advancing.
+                        self._wait_for_stage_threads(threads, stage)
+
+                        if any(t.is_alive() for t in threads):
+                            self.log(f"Stage {stage.capitalize()} is still running; not advancing to the next stage.")
+                            break
 
                         if stage == "start":
                             self._auto_arrange_windows()
-                            
-                        # For reels task, add extra delay after task stage before closing
-                        if stage == "task" and self.task_type == "reels":
-                            self.log("Waiting for reels tasks to fully complete...")
-                            time.sleep(30)  # Additional buffer time
                             
         finally:
             # Only tear down ADB if this instance owns the emulator lifecycle

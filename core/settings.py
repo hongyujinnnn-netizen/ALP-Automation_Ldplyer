@@ -21,6 +21,7 @@ class AppSettings:
     boot_delay: int = 10
     task_duration: int = 15
     max_videos: int = 2
+    page_per_account: int = 2
     start_same_time: bool = False
     use_content_queue: bool = True
     auto_arrange_ld: bool = False
@@ -97,6 +98,7 @@ class AppSettings:
                 boot_delay=int(raw.get("boot_delay", cls.boot_delay)),
                 task_duration=int(raw.get("task_duration", cls.task_duration)),
                 max_videos=int(raw.get("max_videos", cls.max_videos)),
+                page_per_account=int(raw.get("page_per_account", cls.page_per_account)),
                 start_same_time=bool(raw.get("start_same_time", cls.start_same_time)),
                 use_content_queue=bool(raw.get("use_content_queue", cls.use_content_queue)),
                 auto_arrange_ld=bool(raw.get("auto_arrange_ld", cls.auto_arrange_ld)),

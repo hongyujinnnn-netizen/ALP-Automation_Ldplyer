@@ -26,6 +26,7 @@ class TestCoreUtilities(unittest.TestCase):
             boot_delay=7,
             task_duration=11,
             max_videos=4,
+            page_per_account=3,
             task_type="reels",
             task_template="content_day",
             scroll_after_post=False,
@@ -38,6 +39,7 @@ class TestCoreUtilities(unittest.TestCase):
         self.assertEqual(loaded.boot_delay, 7)
         self.assertEqual(loaded.task_duration, 11)
         self.assertEqual(loaded.max_videos, 4)
+        self.assertEqual(loaded.page_per_account, 3)
         self.assertEqual(loaded.task_type, "reels")
         self.assertEqual(loaded.task_template, "content_day")
         self.assertFalse(loaded.scroll_after_post)
