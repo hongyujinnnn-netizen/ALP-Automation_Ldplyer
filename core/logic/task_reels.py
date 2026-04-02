@@ -357,9 +357,12 @@ class ReelsTaskHandler(BaseTaskHandler):
             page_ready += 1
             click_pages += 1
             f_index += 1
-        time.sleep(3)
-        self.end_to_accoutn_profile(d, name)  
 
+        self.log("Finished processing all pages/videos for this account")    
+        time.sleep(5)
+        self.end_to_accoutn_profile(d, name)  
+        time.sleep(2)
+        
         self.push_runtime_state(
             name,
             state="Completed" if success_pots > 0 else "Attention",
@@ -369,6 +372,7 @@ class ReelsTaskHandler(BaseTaskHandler):
         self.log(f"Task completed: Processed {success_pots}/{total_videos_target} videos successfully")
         return success_pots > 0
     
+
 
     def end_to_accoutn_profile(self, d, name):
         if not self.open_facebook(d):
@@ -498,9 +502,14 @@ class ReelsTaskHandler(BaseTaskHandler):
                     self.log(f" Description added: {caption}")
             except Exception as e:
                 self.log(f"Could not add description: {e}")
-            
+
+            time.sleep(2)
+            # scroll down to make sure the share button is visible
+            d.swipe_ext("up", scale=0.5)
+            time.sleep(1)
+
             # Look for the final share/post button with more flexible detection
-            self.log(" Looking for Share/Post button...")
+            self.log(" Looking for Share...")
             time.sleep(3)
             share_button_found = False
             share_button_texts = [
@@ -619,47 +628,6 @@ class ReelsTaskHandler(BaseTaskHandler):
             l, t, r, btm = b.get("left",0), b.get("top",0), b.get("right",0), b.get("bottom",0)
             return t < h*top_ratio and r > w*(1-right_ratio)
         except Exception:
-            return False
-
-    def _already_in_page(self, d):
-        """
-        Robustly detect if we're currently in Facebook Page mode.
-        Uses multiple detection methods for better reliability.
-        """
-        try:
-            # Method 1: Check for Page-specific text patterns
-            page_text_patterns = [
-                r"(?i)professional\s+dashboard",
-                r"(?i)ad\s+center",
-                r"(?i)meta\s+business",
-                r"(?i)promote",
-                r"(?i)manage",
-                r"(?i)insights",
-                r"(?i)page\s+transparency",
-                r"(?i)page\s+quality",
-                r"(?i)creator\s+studio",
-                r"(?i)business\s+suite",
-                r"(?i)page\s+info",
-                r"(?i)switch\s+to\s+personal"
-            ]
-            #show log to wait
-            self.log("Working...! Switch to Page")
-            # Check both text and description matches with timeout
-            for pattern in page_text_patterns:
-                try:
-                    if (d(textMatches=pattern).exists(timeout=1.0) or 
-                        d(descriptionMatches=pattern).exists(timeout=1.0)):
-                    #log here if it true    
-                        return True
-                except:
-                    continue
-
-            #log here if it fale
-            return False
-
-        except Exception as e:
-            self.log(f"Error detecting Page mode: {e}")
-            # Fallback: assume not in Page mode on error
             return False
 
     def _open_menu_profile_switcher(self, d, wait=6):
@@ -802,74 +770,6 @@ class ReelsTaskHandler(BaseTaskHandler):
 
         self.log("Quick switcher not found")
         return False
-
-    def switch_to_page(self, d, page_name=None, max_wait=8):
-        """
-        Robustly switch from personal profile to a Facebook Page.
-
-        :param d: uiautomator2 device instance
-        :param page_name: Optional page name to target
-        :param max_wait: general wait budget in seconds
-        :return: True on success, False otherwise
-        """
-        try:
-            time.sleep(2)
-            # 1) Open Menu/profile-switcher area
-            if not self._open_menu_profile_switcher(d, wait=max_wait):
-                return False
-            # 0) Already in Page?
-            try:
-                if self._already_in_page(d):
-                    self.log("You already in page!!")
-                    return True
-                else:
-                # Small settle time
-                    self.log("Switch to page!")
-                    if not self._quick_switch_button(d):
-                        self.log("Failed to tap quick switcher in Menu header")
-                        return False
-                    time.sleep(3)
-                    return True
-            except Exception as e:    
-                return False
-
-        except Exception as e:
-            self.log(f"[switch_to_page] Error: {e}")
-            return False
-        
-    def switch_to_profile(self, d, page_name=None, max_wait=8):
-        """
-        Robustly switch from personal profile to a Facebook Page.
-
-        :param d: uiautomator2 device instance
-        :param page_name: Optional page name to target
-        :param max_wait: general wait budget in seconds
-        :return: True on success, False otherwise
-        """
-        try:
-            time.sleep(2)
-            # 1) Open Menu/profile-switcher area
-            if not self._open_menu_profile_switcher(d, wait=max_wait):
-                return False
-            # 0) Already in Page?
-            try:
-                if self._already_in_page(d):
-                    self.log("Switch to Profile!")
-                    if not self._quick_switch_button(d):
-                        self.log("Failed to tap quick switcher in Menu header")
-                        return False
-                    return True
-                else:
-                # Small settle time
-                    self.log("You in profile already")
-                    time.sleep(3)
-                    return True
-            except Exception as e:    
-                return False
-
-        except Exception as e:
-            self.log(f"[switch_to_page] Error: {e}")
-            return False
 
     def open_facebook(self, d, ready_delay_range=(5, 10)):
         try:
