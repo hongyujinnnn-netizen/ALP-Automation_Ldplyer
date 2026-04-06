@@ -88,7 +88,7 @@ class ReelsTaskHandler(BaseTaskHandler):
             return False
 
 
-    def execute(self, name, duration=60, max_videos=2, scroll_after_post=True, use_content_queue=True, page_per_account=2):
+    def execute(self, name, duration=60, max_videos=2, scroll_after_post=True, use_content_queue=True, page_per_account=2, clear_cache=True):
         if self.check_paused():
             return False
 
@@ -130,7 +130,6 @@ class ReelsTaskHandler(BaseTaskHandler):
             self.log(f"Failed to connect {serial}: {e}")
             return False
         
-        clear_cache = True
         page_ready = 0
         click_pages = 0
         f_index = 2
@@ -456,12 +455,62 @@ class ReelsTaskHandler(BaseTaskHandler):
             self.log(f"Clicked {label} on {name}")
             return True
 
-        storage_selectors = [
-            {"textMatches": r"(?i)^storage\s*&\s*cache$"},
-            {"textMatches": r"(?i)^storage usage$"},
-            {"textMatches": r"(?i)^storage$"},
-            {"textContains": "Storage"},
-        ]
+        def _click_storage_row(wait_timeout=1.5):
+            """Tap the actual Storage row by bounds, skipping top summary/header text."""
+            candidates = [
+                {"text": "Storage"},
+                {"text": "STORAGE"},
+                {"textMatches": r"(?i)^storage$"},
+            ]
+
+            for selector in candidates:
+                try:
+                    nodes = d(**selector)
+                    if not nodes.exists(timeout=wait_timeout):
+                        continue
+                except Exception:
+                    continue
+
+                try:
+                    count = nodes.count
+                except Exception:
+                    count = 1
+
+                for index in range(count):
+                    try:
+                        node = nodes[index] if count > 1 else nodes
+                        info = node.info or {}
+                        bounds = info.get("bounds", {})
+                        left = bounds.get("left", 0)
+                        top = bounds.get("top", 0)
+                        right = bounds.get("right", 0)
+                        bottom = bounds.get("bottom", 0)
+                        width = right - left
+                        height = bottom - top
+                    except Exception:
+                        continue
+
+                    if width <= 0 or height <= 0:
+                        continue
+
+                    # Ignore compact header/summary labels such as "Permissions / Storage".
+                    if top < 220 or height < 40:
+                        continue
+
+                    center_x = (left + right) // 2
+                    center_y = (top + bottom) // 2
+
+                    try:
+                        d.click(center_x, center_y)
+                        self.log(
+                            f"Clicked Storage row on {name} at ({center_x}, {center_y})"
+                        )
+                        return True
+                    except Exception:
+                        continue
+
+            return False
+
         clear_cache_selectors = [
             {"textMatches": r"(?i)^clear cache$"},
             {"text": "Clear cache"},
@@ -502,7 +551,7 @@ class ReelsTaskHandler(BaseTaskHandler):
             time.sleep(3)
 
             if not _click_if_found(clear_cache_selectors, wait_timeout=1.0, label="Clear cache"):
-                storage_opened = _click_if_found(storage_selectors, wait_timeout=1.5, label="Storage")
+                storage_opened = _click_storage_row(wait_timeout=1.5)
                 if not storage_opened:
                     for _ in range(2):
                         try:
@@ -510,7 +559,7 @@ class ReelsTaskHandler(BaseTaskHandler):
                             time.sleep(1)
                         except Exception:
                             pass
-                        if _click_if_found(storage_selectors, wait_timeout=1.0, label="Storage"):
+                        if _click_storage_row(wait_timeout=1.0):
                             storage_opened = True
                             break
 

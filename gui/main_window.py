@@ -9,7 +9,7 @@ from utils.ip_guard import get_ld_public_ip_info
 class MainWindow:
     def __init__(self, selected_ld_names, running_flag, ld_thread, log_func=print,
                  start_same_time=False, auto_arrange_ld=False, task_type="scroll", task_template="custom", task_handler=None, progress_callback=None,
-                 boot_delay=20, task_duration=900, max_videos=2, page_per_account=2, scroll_after_post=True, verify_account=True, emulator=None, state_callback=None):
+                 boot_delay=20, task_duration=900, max_videos=2, page_per_account=2, scroll_after_post=True, clear_cache=True, verify_account=True, emulator=None, state_callback=None):
 
         # Import here to avoid circular imports when we need a fresh controller
         if emulator is None:
@@ -60,6 +60,7 @@ class MainWindow:
         self.max_videos = max_videos
         self.page_per_account = page_per_account
         self.scroll_after_post = scroll_after_post
+        self.clear_cache = clear_cache
         self.verify_account = verify_account
         self._ip_lookup_inflight = set()
         self.reels_task_join_poll_seconds = 1.0
@@ -160,6 +161,7 @@ class MainWindow:
                 started_task_at=datetime.now().isoformat(),
                 task_template=self.task_template,
                 scroll_after_post=self.scroll_after_post,
+                clear_cache=self.clear_cache,
                 verify_account=self.verify_account,
             )
             if self.task_handler is not None:
@@ -170,6 +172,7 @@ class MainWindow:
                         max_videos=self.max_videos,
                         page_per_account=self.page_per_account,
                         scroll_after_post=self.scroll_after_post,
+                        clear_cache=self.clear_cache,
                     )
                 elif self.task_type == "reg_account":
                     success = self.task_handler.execute(

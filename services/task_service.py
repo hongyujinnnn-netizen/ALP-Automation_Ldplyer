@@ -19,6 +19,7 @@ class TaskRunRequest:
     max_videos: int
     page_per_account: int
     scroll_after_post: bool
+    clear_cache: bool
     verify_account: bool
 
 
@@ -51,6 +52,7 @@ class TaskService:
             request.max_videos,
             request.page_per_account,
             request.scroll_after_post,
+            request.clear_cache,
             request.verify_account,
             emulator=emulator,
             state_callback=state_callback,

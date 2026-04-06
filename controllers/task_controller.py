@@ -22,6 +22,7 @@ class TaskController:
         max_videos: int,
         page_per_account: int,
         scroll_after_post: bool,
+        clear_cache: bool,
         verify_account: bool,
     ) -> TaskRunRequest:
         return TaskRunRequest(
@@ -36,6 +37,7 @@ class TaskController:
             max_videos=max_videos,
             page_per_account=page_per_account,
             scroll_after_post=scroll_after_post,
+            clear_cache=clear_cache,
             verify_account=verify_account,
         )
 

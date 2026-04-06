@@ -164,6 +164,12 @@ class TasksPageMixin:
             variable=self.scroll_after_post,
             bootstyle="primary-round-toggle",
         ).grid(row=2, column=0, columnspan=2, padx=10, pady=(10, 10), sticky="w")
+        tb.Checkbutton(
+            main_grid,
+            text="Clear Facebook Cache After Task",
+            variable=self.clear_cache,
+            bootstyle="primary-round-toggle",
+        ).grid(row=2, column=2, columnspan=2, padx=10, pady=(10, 10), sticky="w")
         tb.Label(
             main_grid,
             text="Template applies validated defaults to reduce setup mistakes.",

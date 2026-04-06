@@ -170,6 +170,7 @@ class LDManagerApp(
         self.auto_arrange_ld = tk.BooleanVar(value=False)
         self.auto_shutdown_pc = tk.BooleanVar(value=False)
         self.scroll_after_post = tk.BooleanVar(value=True)
+        self.clear_cache = tk.BooleanVar(value=True)
         self.verify_account = tk.BooleanVar(value=True)
         self.reg_contact_mode = tk.StringVar(value="random_phone")
         self.reg_contact_value = tk.StringVar(value="")
@@ -1171,6 +1172,14 @@ class LDManagerApp(
                     pass
                 break
 
+        for task in tasks:
+            if task.get("type") == "reels" and "clear_cache" in task:
+                try:
+                    self.clear_cache.set(bool(task["clear_cache"]))
+                except Exception:
+                    pass
+                break
+
         self.log(
             f" Applied template: {template.get('name', template_key)} - {template.get('description', '')}",
             level="SUCCESS",
@@ -1193,6 +1202,7 @@ class LDManagerApp(
         self.task_type_var.set(settings.task_type)
         self.task_template_var.set(settings.task_template)
         self.scroll_after_post.set(settings.scroll_after_post)
+        self.clear_cache.set(settings.clear_cache)
         self.verify_account.set(settings.verify_account)
         self.reg_contact_mode.set(settings.reg_contact_mode)
         self.reg_contact_value.set(settings.reg_contact_value)
@@ -1235,6 +1245,7 @@ class LDManagerApp(
             task_type=str(self.task_type_var.get()),
             task_template=str(self.task_template_var.get()),
             scroll_after_post=bool(self.scroll_after_post.get()),
+            clear_cache=bool(self.clear_cache.get()),
             verify_account=bool(self.verify_account.get()),
             reg_contact_mode=str(self.reg_contact_mode.get()),
             reg_contact_value=str(self.reg_contact_value.get()),
@@ -1828,6 +1839,7 @@ Recent Items:
                     max_videos=self.max_videos.get(),
                     page_per_account=self.page_per_account.get(),
                     scroll_after_post=self.scroll_after_post.get(),
+                    clear_cache=self.clear_cache.get(),
                     verify_account=self.verify_account.get(),
                 )
                 main_window = self.task_controller.create_runner(

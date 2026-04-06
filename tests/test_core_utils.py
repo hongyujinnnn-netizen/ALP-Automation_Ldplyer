@@ -30,6 +30,7 @@ class TestCoreUtilities(unittest.TestCase):
             task_type="reels",
             task_template="content_day",
             scroll_after_post=False,
+            clear_cache=False,
             verify_account=False,
             ld_groups={"Farm A": ["US - 01", "US - 02"]},
         )
@@ -43,6 +44,7 @@ class TestCoreUtilities(unittest.TestCase):
         self.assertEqual(loaded.task_type, "reels")
         self.assertEqual(loaded.task_template, "content_day")
         self.assertFalse(loaded.scroll_after_post)
+        self.assertFalse(loaded.clear_cache)
         self.assertFalse(loaded.verify_account)
         self.assertEqual(loaded.ld_groups, {"Farm A": ["US - 01", "US - 02"]})
 

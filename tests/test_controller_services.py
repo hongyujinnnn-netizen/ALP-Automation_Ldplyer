@@ -83,6 +83,7 @@ class TestControllerAndServices(unittest.TestCase):
                     page_per_account=3,
                     task_type="reels",
                     task_template="content_day",
+                    clear_cache=False,
                     verify_account=False,
                     ld_groups={"Night Shift": ["US - 01"]},
                 )
@@ -94,6 +95,7 @@ class TestControllerAndServices(unittest.TestCase):
             self.assertEqual(loaded.page_per_account, 3)
             self.assertEqual(loaded.task_type, "reels")
             self.assertEqual(loaded.task_template, "content_day")
+            self.assertFalse(loaded.clear_cache)
             self.assertFalse(loaded.verify_account)
             self.assertEqual(loaded.ld_groups, {"Night Shift": ["US - 01"]})
 
@@ -193,6 +195,7 @@ class TestControllerAndServices(unittest.TestCase):
             max_videos=2,
             page_per_account=2,
             scroll_after_post=True,
+            clear_cache=False,
             verify_account=False,
         )
 
@@ -202,6 +205,7 @@ class TestControllerAndServices(unittest.TestCase):
         self.assertEqual(request.task_template, "custom")
         self.assertEqual(request.page_per_account, 2)
         self.assertTrue(request.scroll_after_post)
+        self.assertFalse(request.clear_cache)
         self.assertFalse(request.verify_account)
 
     def test_account_manager_imports_json_accounts(self) -> None:
