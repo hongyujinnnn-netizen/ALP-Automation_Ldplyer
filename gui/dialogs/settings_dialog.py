@@ -153,6 +153,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         start_same_var = tk.BooleanVar(value=self.start_same_time.get())
         use_queue_var = tk.BooleanVar(value=self.use_content_queue.get())
         auto_arrange_var = tk.BooleanVar(value=self.auto_arrange_ld.get())
+        auto_shutdown_var = tk.BooleanVar(value=self.auto_shutdown_pc.get())
         verify_account_var = tk.BooleanVar(value=self.verify_account.get())
         reg_contact_mode_var = tk.StringVar(value=self.reg_contact_mode.get())
         reg_contact_value_var = tk.StringVar(value=self.reg_contact_value.get())
@@ -187,6 +188,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             start_same_var,
             use_queue_var,
             auto_arrange_var,
+            auto_shutdown_var,
             verify_account_var,
             reg_contact_mode_var,
             reg_contact_value_var,
@@ -218,6 +220,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         start_same_var,
         use_queue_var,
         auto_arrange_var,
+        auto_shutdown_var,
         verify_account_var,
         reg_contact_mode_var,
         reg_contact_value_var,
@@ -295,6 +298,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             start_same_var,
             use_queue_var,
             auto_arrange_var,
+            auto_shutdown_var,
             verify_account_var,
             parallel_var,
             boot_delay_var,
@@ -342,6 +346,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             start_same_var,
             use_queue_var,
             auto_arrange_var,
+            auto_shutdown_var,
             verify_account_var,
             reg_contact_mode_var,
             reg_contact_value_var,
@@ -363,6 +368,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             start_same_var,
             use_queue_var,
             auto_arrange_var,
+            auto_shutdown_var,
             verify_account_var,
             reg_contact_mode_var,
             reg_contact_value_var,
@@ -390,6 +396,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             start_same_var,
             use_queue_var,
             auto_arrange_var,
+            auto_shutdown_var,
             verify_account_var,
             reg_contact_mode_var,
             reg_contact_value_var,
@@ -563,12 +570,13 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         self._info_row(notes, palette, "Safer setup", "Balanced pacing usually gives more stable startup and fewer connection issues.")
         self._info_row(notes, palette, "Best practice", "Change one value at a time, then test the workflow before raising throughput.")
 
-    def _build_behavior_page(self, parent, palette, start_same_var, use_queue_var, auto_arrange_var, verify_account_var, parallel_var, boot_delay_var, task_duration_var, max_videos_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var):
+    def _build_behavior_page(self, parent, palette, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, parallel_var, boot_delay_var, task_duration_var, max_videos_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var):
         self._page_heading(parent, palette, "BEHAVIOR", "Dispatch & Queue Logic", "Configure how sessions start and how content is delivered during execution.")
 
         self._toggle_feature_card(parent, palette, "Start at Same Time", "Launch all selected instances together for faster startup on stronger machines.", start_same_var)
         self._toggle_feature_card(parent, palette, "Use Content Queue", "Enable a safer and more organized content delivery flow during the session.", use_queue_var)
         self._toggle_feature_card(parent, palette, "Auto Arrange LD", "Automatically arrange LD windows after the start stage completes.", auto_arrange_var)
+        self._toggle_feature_card(parent, palette, "Auto Shutdown PC", "Shutdown Windows automatically after the current automation run finishes normally.", auto_shutdown_var)
         self._toggle_feature_card(parent, palette, "Verify Account", "When enabled, registration tasks continue into the account verification flow after signup.", verify_account_var)
 
         # Country / IP guard configuration
@@ -799,7 +807,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             for text in labels:
                 tk.Label(stats, text=text, bg=palette["surface"], fg=palette["text"], font=(self.mono_font, 8), padx=8, pady=4).pack(side="left", padx=(0, 6))
 
-    def _build_summary_page(self, parent, palette, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_sender_filter_var, email_subject_filter_var):
+    def _build_summary_page(self, parent, palette, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_sender_filter_var, email_subject_filter_var):
         self._page_heading(parent, palette, "SUMMARY", "Configuration Review", "Read the current setup before saving changes.")
 
         row = tk.Frame(parent, bg=palette["surface"])
@@ -828,7 +836,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         tk.Label(card, textvariable=variable, bg=palette["surface_alt"], fg=palette["primary"], font=(self.display_font, 22)).pack(anchor="w", pady=(6, 0))
         tk.Label(card, text=unit, bg=palette["surface_alt"], fg=palette["muted"], font=(self.mono_font, 8)).pack(anchor="w")
 
-    def _build_premium_footer(self, parent, palette, dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_app_password_var, email_imap_server_var, email_imap_port_var, email_mailbox_var, email_use_ssl_var, email_unread_only_var, email_sender_filter_var, email_subject_filter_var, email_timeout_var, email_poll_interval_var, email_mark_as_seen_var):
+    def _build_premium_footer(self, parent, palette, dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_app_password_var, email_imap_server_var, email_imap_port_var, email_mailbox_var, email_use_ssl_var, email_unread_only_var, email_sender_filter_var, email_subject_filter_var, email_timeout_var, email_poll_interval_var, email_mark_as_seen_var):
         footer = tk.Frame(parent, bg=palette["surface_alt"], padx=18, pady=14, highlightthickness=1, highlightbackground=palette["border_alt"])
         footer.pack(fill="x")
 
@@ -855,7 +863,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             "Save Settings",
             palette["surface"],
             palette["primary"],
-            lambda: self._save_settings_from_dialog(dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_app_password_var, email_imap_server_var, email_imap_port_var, email_mailbox_var, email_use_ssl_var, email_unread_only_var, email_sender_filter_var, email_subject_filter_var, email_timeout_var, email_poll_interval_var, email_mark_as_seen_var),
+            lambda: self._save_settings_from_dialog(dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_app_password_var, email_imap_server_var, email_imap_port_var, email_mailbox_var, email_use_ssl_var, email_unread_only_var, email_sender_filter_var, email_subject_filter_var, email_timeout_var, email_poll_interval_var, email_mark_as_seen_var),
             filled=True,
         )
 
@@ -877,7 +885,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             command=command,
         ).pack()
 
-    def _bind_summary_refresh(self, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_sender_filter_var, email_subject_filter_var):
+    def _bind_summary_refresh(self, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_sender_filter_var, email_subject_filter_var):
         def refresh(*_):
             profile = self._detect_profile(parallel_var.get(), boot_delay_var.get(), task_duration_var.get(), max_videos_var.get(), bool(start_same_var.get()), bool(use_queue_var.get()))
             self._header_status_var.set(profile)
@@ -887,7 +895,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             )
             if hasattr(self, "_summary_text_var"):
                 self._summary_text_var.set(
-                    f"Profile: {profile}\nParallel launch: {parallel_var.get()} device(s)\nBoot delay: {boot_delay_var.get()} second(s)\nTask duration: {task_duration_var.get()} minute(s)\nMax reels: {max_videos_var.get()} item(s)\nStart same time: {'Enabled' if start_same_var.get() else 'Disabled'}\nUse queue: {'Enabled' if use_queue_var.get() else 'Disabled'}\nAuto arrange LD: {'Enabled' if auto_arrange_var.get() else 'Disabled'}\nVerify account: {'Enabled' if verify_account_var.get() else 'Disabled'}\nReg contact mode: {reg_contact_mode_var.get()}\nReg contact value: {reg_contact_value_var.get() or '-'}\nReg phone prefix: {reg_phone_prefix_var.get() or '-'}\nEmail provider: {email_provider_var.get()}\nEmail address: {email_address_var.get() or '-'}\nEmail filters: from='{email_sender_filter_var.get() or '*'}', subject='{email_subject_filter_var.get() or '*'}'"
+                    f"Profile: {profile}\nParallel launch: {parallel_var.get()} device(s)\nBoot delay: {boot_delay_var.get()} second(s)\nTask duration: {task_duration_var.get()} minute(s)\nMax reels: {max_videos_var.get()} item(s)\nStart same time: {'Enabled' if start_same_var.get() else 'Disabled'}\nUse queue: {'Enabled' if use_queue_var.get() else 'Disabled'}\nAuto arrange LD: {'Enabled' if auto_arrange_var.get() else 'Disabled'}\nAuto shutdown PC: {'Enabled' if auto_shutdown_var.get() else 'Disabled'}\nVerify account: {'Enabled' if verify_account_var.get() else 'Disabled'}\nReg contact mode: {reg_contact_mode_var.get()}\nReg contact value: {reg_contact_value_var.get() or '-'}\nReg phone prefix: {reg_phone_prefix_var.get() or '-'}\nEmail provider: {email_provider_var.get()}\nEmail address: {email_address_var.get() or '-'}\nEmail filters: from='{email_sender_filter_var.get() or '*'}', subject='{email_subject_filter_var.get() or '*'}'"
                 )
             if hasattr(self, "_summary_detail_var"):
                 self._summary_detail_var.set(
@@ -899,7 +907,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             if hasattr(self, "_footer_state_var"):
                 self._footer_state_var.set(f"Current profile: {profile}. Review summary before saving.")
 
-        for var in (parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_sender_filter_var, email_subject_filter_var):
+        for var in (parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_sender_filter_var, email_subject_filter_var):
             var.trace_add("write", refresh)
         refresh()
 
@@ -953,7 +961,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         if hasattr(self, "_footer_state_var"):
             self._footer_state_var.set(f"Applied profile: {profile_name}.")
 
-    def _save_settings_from_dialog(self, dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_app_password_var, email_imap_server_var, email_imap_port_var, email_mailbox_var, email_use_ssl_var, email_unread_only_var, email_sender_filter_var, email_subject_filter_var, email_timeout_var, email_poll_interval_var, email_mark_as_seen_var):
+    def _save_settings_from_dialog(self, dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_app_password_var, email_imap_server_var, email_imap_port_var, email_mailbox_var, email_use_ssl_var, email_unread_only_var, email_sender_filter_var, email_subject_filter_var, email_timeout_var, email_poll_interval_var, email_mark_as_seen_var):
         self.parallel_ld.set(parallel_var.get())
         self.boot_delay.set(boot_delay_var.get())
         self.task_duration.set(task_duration_var.get())
@@ -961,6 +969,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         self.start_same_time.set(start_same_var.get())
         self.use_content_queue.set(use_queue_var.get())
         self.auto_arrange_ld.set(auto_arrange_var.get())
+        self.auto_shutdown_pc.set(auto_shutdown_var.get())
         self.verify_account.set(verify_account_var.get())
         self.reg_contact_mode.set(reg_contact_mode_var.get())
         self.reg_contact_value.set(reg_contact_value_var.get())

@@ -197,6 +197,7 @@ class ControlEmulator:
             return False
 
         user32 = ctypes.windll.user32
+        current_pid = os.getpid()
 
         class RECT(ctypes.Structure):
             _fields_ = [
@@ -237,6 +238,11 @@ class ControlEmulator:
                 return rect
             return None
 
+        def _window_pid(hwnd):
+            pid = ctypes.c_ulong()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            return int(pid.value)
+
         def _is_ld_window(title, class_name):
             title_l = title.lower()
             class_l = class_name.lower()
@@ -251,6 +257,11 @@ class ControlEmulator:
         @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
         def enum_proc(hwnd, _lparam):
             if not user32.IsWindowVisible(hwnd) or user32.IsIconic(hwnd):
+                return True
+
+            # Skip this manager app and any dialogs it owns. We only want
+            # actual LDPlayer emulator windows to move.
+            if _window_pid(hwnd) == current_pid:
                 return True
 
             title = _window_text(hwnd)

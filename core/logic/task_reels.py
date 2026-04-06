@@ -129,7 +129,8 @@ class ReelsTaskHandler(BaseTaskHandler):
         except Exception as e:
             self.log(f"Failed to connect {serial}: {e}")
             return False
-
+        
+        clear_cache = True
         page_ready = 0
         click_pages = 0
         f_index = 2
@@ -196,7 +197,6 @@ class ReelsTaskHandler(BaseTaskHandler):
                         progress=0,
                     )
                     return False
-
                 time.sleep(15)
                 if self._open_file_manager_with_retry(d, attempts=2, delay=2):
                     time.sleep(3)
@@ -361,7 +361,10 @@ class ReelsTaskHandler(BaseTaskHandler):
         self.log("Finished processing all pages/videos for this account")    
         time.sleep(5)
         self.end_to_accoutn_profile(d, name)  
-        time.sleep(2)
+        
+        time.sleep(5)
+        if clear_cache:
+            self.clear_app_cache(d, name)
         
         self.push_runtime_state(
             name,
@@ -402,6 +405,139 @@ class ReelsTaskHandler(BaseTaskHandler):
             )
             return False
         return True
+
+    def clear_app_cache(self, d, name, package_name="com.facebook.katana"):
+        """Open Android app settings and clear Facebook cache without wiping app data."""
+        serial = getattr(d, "serial", None) or self.emulator.name_to_serial.get(name)
+        if not serial:
+            self.log(f"Cannot clear Facebook cache on {name}: missing device serial")
+            return False
+
+        def _first_match(selectors, wait_timeout=1.0):
+            for selector in selectors:
+                try:
+                    obj = d(**selector)
+                    if obj.exists(timeout=wait_timeout):
+                        return obj
+                except Exception:
+                    continue
+            return None
+
+        def _click_if_found(selectors, wait_timeout=1.0, label="control"):
+            obj = _first_match(selectors, wait_timeout=wait_timeout)
+            if not obj:
+                return False
+
+            try:
+                info = obj.info
+            except Exception:
+                info = {}
+
+            if info and not info.get("enabled", True):
+                self.log(f"{label} is disabled on {name}")
+                return True
+
+            try:
+                obj.click()
+            except Exception:
+                try:
+                    bounds = info.get("bounds", {})
+                    left = bounds.get("left", 0)
+                    top = bounds.get("top", 0)
+                    right = bounds.get("right", 0)
+                    bottom = bounds.get("bottom", 0)
+                    if right > left and bottom > top:
+                        d.click((left + right) // 2, (top + bottom) // 2)
+                    else:
+                        return False
+                except Exception:
+                    return False
+
+            self.log(f"Clicked {label} on {name}")
+            return True
+
+        storage_selectors = [
+            {"textMatches": r"(?i)^storage\s*&\s*cache$"},
+            {"textMatches": r"(?i)^storage usage$"},
+            {"textMatches": r"(?i)^storage$"},
+            {"textContains": "Storage"},
+        ]
+        clear_cache_selectors = [
+            {"textMatches": r"(?i)^clear cache$"},
+            {"text": "Clear cache"},
+            {"textContains": "Clear cache"},
+        ]
+
+        try:
+            self.log(f"Clearing Facebook cache on {name}")
+
+            try:
+                d.app_stop(package_name)
+                time.sleep(1)
+            except Exception:
+                pass
+
+            result = subprocess.run(
+                [
+                    "adb",
+                    "-s",
+                    serial,
+                    "shell",
+                    "am",
+                    "start",
+                    "-a",
+                    "android.settings.APPLICATION_DETAILS_SETTINGS",
+                    "-d",
+                    f"package:{package_name}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            if result.returncode != 0:
+                error_output = (result.stderr or result.stdout or "unknown adb error").strip()
+                self.log(f"Failed to open app settings on {name}: {error_output}")
+                return False
+
+            time.sleep(3)
+
+            if not _click_if_found(clear_cache_selectors, wait_timeout=1.0, label="Clear cache"):
+                storage_opened = _click_if_found(storage_selectors, wait_timeout=1.5, label="Storage")
+                if not storage_opened:
+                    for _ in range(2):
+                        try:
+                            d.swipe(0.5, 0.8, 0.5, 0.25, 0.25)
+                            time.sleep(1)
+                        except Exception:
+                            pass
+                        if _click_if_found(storage_selectors, wait_timeout=1.0, label="Storage"):
+                            storage_opened = True
+                            break
+
+                if not storage_opened:
+                    self.log(f"Could not find Storage section while clearing cache on {name}")
+                    return False
+
+                time.sleep(2)
+                if not _click_if_found(clear_cache_selectors, wait_timeout=1.5, label="Clear cache"):
+                    self.log(f"Could not find Clear cache button on {name}")
+                    return False
+
+            time.sleep(2)
+            self.log(f"Facebook cache cleared on {name}")
+            return True
+        except Exception as e:
+            self.log(f"Failed to clear Facebook cache on {name}: {e}")
+            return False
+        finally:
+            try:
+                d.app_stop("com.android.settings")
+            except Exception:
+                pass
+            try:
+                d.press("home")
+            except Exception:
+                pass
     
     #def handle_facebook_reels_post(self, d, video_data=None):
     def handle_reels_description(self, d, video_data=None):
@@ -505,9 +641,11 @@ class ReelsTaskHandler(BaseTaskHandler):
 
             time.sleep(2)
             # scroll down to make sure the share button is visible
-            d.swipe_ext("up", scale=0.5)
+            d.swipe_ext("up", scale=0.7)
             time.sleep(1)
-
+            d.swipe_ext("up", scale=0.7)
+            time.sleep(1)
+            
             # Look for the final share/post button with more flexible detection
             self.log(" Looking for Share...")
             time.sleep(3)
@@ -1645,6 +1783,10 @@ class ReelsTaskHandler(BaseTaskHandler):
     
     def click_facebook_menu(self, d, timeout=10):
 
+        time.sleep(0.4)
+        d.swipe_ext("down", scale=0.75, duration=0.08)
+        time.sleep(0.25)
+
         selectors = [
             # Best case: accessibility description
             {"descriptionContains": "menu"},
@@ -1659,9 +1801,7 @@ class ReelsTaskHandler(BaseTaskHandler):
             {"className": "android.widget.Button"},
         ]
 
-        deadline = time.time() + timeout
-
-        while time.time() < deadline:
+        def try_click_menu_button():
             for sel in selectors:
                 try:
                     obj = d(**sel)
@@ -1677,6 +1817,18 @@ class ReelsTaskHandler(BaseTaskHandler):
                             return True
                 except Exception as e:
                     self.log(f"Error: {e}")
+            return False
+
+        # Use up to 2 quick swipes to reveal the menu button if Facebook is still settling.
+        for attempt in range(2):
+            if try_click_menu_button():
+                return True
+
+        deadline = time.time() + timeout
+
+        while time.time() < deadline:
+            if try_click_menu_button():
+                return True
 
             time.sleep(0.5)
 
@@ -1896,3 +2048,4 @@ class ReelsTaskHandler(BaseTaskHandler):
             self.log(f"Failed to tap back to account: {e}")
             return False
 
+    

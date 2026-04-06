@@ -168,6 +168,7 @@ class LDManagerApp(
         self.start_same_time = tk.BooleanVar(value=False)
         self.use_content_queue = tk.BooleanVar(value=True)
         self.auto_arrange_ld = tk.BooleanVar(value=False)
+        self.auto_shutdown_pc = tk.BooleanVar(value=False)
         self.scroll_after_post = tk.BooleanVar(value=True)
         self.verify_account = tk.BooleanVar(value=True)
         self.reg_contact_mode = tk.StringVar(value="random_phone")
@@ -1188,6 +1189,7 @@ class LDManagerApp(
         self.start_same_time.set(settings.start_same_time)
         self.use_content_queue.set(settings.use_content_queue)
         self.auto_arrange_ld.set(settings.auto_arrange_ld)
+        self.auto_shutdown_pc.set(settings.auto_shutdown_pc)
         self.task_type_var.set(settings.task_type)
         self.task_template_var.set(settings.task_template)
         self.scroll_after_post.set(settings.scroll_after_post)
@@ -1229,6 +1231,7 @@ class LDManagerApp(
             start_same_time=bool(self.start_same_time.get()),
             use_content_queue=bool(self.use_content_queue.get()),
             auto_arrange_ld=bool(self.auto_arrange_ld.get()),
+            auto_shutdown_pc=bool(self.auto_shutdown_pc.get()),
             task_type=str(self.task_type_var.get()),
             task_template=str(self.task_template_var.get()),
             scroll_after_post=bool(self.scroll_after_post.get()),
@@ -1811,6 +1814,7 @@ Recent Items:
 
         # Create automation thread
         def automation_thread():
+            completed_normally = False
             try:
                 request = self.task_controller.build_request(
                     selected_ld_names=selected_ld_names,
@@ -1837,6 +1841,7 @@ Recent Items:
                 )
 
                 main_window.main()
+                completed_normally = self.running_event.is_set()
                 self.performance_monitor.end_task_timer(True)
 
             except Exception as e:
@@ -1845,8 +1850,34 @@ Recent Items:
                 MessageBox.showerror("Error", f"Automation error: {str(e)}")
             finally:
                 self.stop_automation(confirm=False)
+                if completed_normally and self.auto_shutdown_pc.get():
+                    self.root.after(0, self._schedule_pc_shutdown)
 
         threading.Thread(target=automation_thread, daemon=True).start()
+
+    def _schedule_pc_shutdown(self):
+        """Schedule a PC shutdown after automation completes."""
+        if platform.system().lower() != "windows":
+            self.log("Auto shutdown is only supported on Windows.", "WARNING")
+            return
+
+        try:
+            subprocess.Popen(
+                [
+                    "shutdown",
+                    "/s",
+                    "/t",
+                    "30",
+                    "/c",
+                    "ALP Automation completed all selected tasks.",
+                ]
+            )
+            self.log(
+                "Automation completed. PC shutdown scheduled in 30 seconds. Run 'shutdown /a' to cancel.",
+                "WARNING",
+            )
+        except Exception as exc:
+            self.log(f"Failed to schedule PC shutdown: {exc}", "ERROR")
 
     def toggle_pause(self):
         """Toggle pause state"""

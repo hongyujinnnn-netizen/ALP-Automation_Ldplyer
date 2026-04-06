@@ -25,6 +25,7 @@ class AppSettings:
     start_same_time: bool = False
     use_content_queue: bool = True
     auto_arrange_ld: bool = False
+    auto_shutdown_pc: bool = False
     task_type: str = "scroll"
     task_template: str = "custom"
     scroll_after_post: bool = True
@@ -102,6 +103,7 @@ class AppSettings:
                 start_same_time=bool(raw.get("start_same_time", cls.start_same_time)),
                 use_content_queue=bool(raw.get("use_content_queue", cls.use_content_queue)),
                 auto_arrange_ld=bool(raw.get("auto_arrange_ld", cls.auto_arrange_ld)),
+                auto_shutdown_pc=bool(raw.get("auto_shutdown_pc", cls.auto_shutdown_pc)),
                 task_type=str(raw.get("task_type", cls.task_type)),
                 task_template=str(raw.get("task_template", cls.task_template)),
                 scroll_after_post=bool(raw.get("scroll_after_post", cls.scroll_after_post)),

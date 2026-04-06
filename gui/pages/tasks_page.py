@@ -99,11 +99,17 @@ class TasksPageMixin:
             variable=self.verify_account,
             bootstyle="primary-round-toggle",
         ).grid(row=4, column=2, columnspan=2, padx=10, pady=10, sticky="w")
+        tb.Checkbutton(
+            main_grid,
+            text="Auto Shutdown PC After Task Completion",
+            variable=self.auto_shutdown_pc,
+            bootstyle="danger-round-toggle",
+        ).grid(row=5, column=0, columnspan=4, padx=10, pady=10, sticky="w")
         tb.Label(
             main_grid,
             text="Tip: Use lower parallel count for stability and lower CPU usage.",
             style="Subtitle.TLabel"
-        ).grid(row=5, column=0, columnspan=4, padx=10, pady=(4, 0), sticky="w")
+        ).grid(row=6, column=0, columnspan=4, padx=10, pady=(4, 0), sticky="w")
 
 
     def create_advanced_settings(self, parent):
