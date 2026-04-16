@@ -225,6 +225,11 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         self.log(f"Generated account {profile.contact_label}: {profile.contact_value}")
         self.log(f"Generated account password: {profile.password}")
         self.push_runtime_state(name, state="Completed", task="Account form submitted", progress=100)
+
+        time.sleep(5)
+        # Reset Facebook app data after registration to avoid stale sessions.
+        self._clear_app_data(d, "com.facebook.katana", name=name)
+
         return True
     
     # The following methods are internal helpers for the registration flow, retries, and account verification.
@@ -456,6 +461,47 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         text = text.replace("\u2019", "'").replace("\u2018", "'")
         text = re.sub(r"\s+", " ", text).strip().lower()
         return text
+
+    def clear_app_storage(self, d, name, package_name="com.facebook.katana"):
+        """Clear Android app storage for the target package on the active device."""
+        serial = getattr(d, "serial", None) or self.emulator.name_to_serial.get(name, name)
+        if not serial:
+            self.log(f"Cannot clear app storage for {package_name}: missing device serial for {name}")
+            return False
+
+        try:
+            d.app_stop(package_name)
+        except Exception as exc:
+            self.log(f"Failed to stop {package_name} before clearing on {name}: {exc}")
+
+        try:
+            result = subprocess.run(
+                ["adb", "-s", serial, "shell", "pm", "clear", package_name],
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+        except subprocess.TimeoutExpired:
+            self.log(f"Timed out while clearing {package_name} storage on {name}")
+            return False
+        except Exception as exc:
+            self.log(f"Failed to clear {package_name} storage on {name}: {exc}")
+            return False
+
+        stdout = (result.stdout or "").strip()
+        stderr = (result.stderr or "").strip()
+        if result.returncode == 0 and "Success" in stdout:
+            self.log(f"Cleared {package_name} storage on {name}")
+            return True
+
+        details = stderr or stdout or f"exit code {result.returncode}"
+        self.log(f"Could not clear {package_name} storage on {name}: {details}")
+        return False
+
+    def _clear_app_data(self, d, package_name, name=None):
+        """Backward-compatible wrapper for older cleanup call sites."""
+        resolved_name = name or getattr(d, "serial", None) or package_name
+        return self.clear_app_storage(d, resolved_name, package_name=package_name)
 
     def _run_registration_steps_with_retry(self, d, name, profile, retries=2, retry_delay=3):
         total_attempts = retries + 1
