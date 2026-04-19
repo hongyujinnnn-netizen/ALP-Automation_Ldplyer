@@ -9,7 +9,7 @@ from utils.ip_guard import get_ld_public_ip_info
 class MainWindow:
     def __init__(self, selected_ld_names, running_flag, ld_thread, log_func=print,
                  start_same_time=False, auto_arrange_ld=False, task_type="scroll", task_template="custom", task_handler=None, progress_callback=None,
-                 boot_delay=20, task_duration=900, max_videos=2, page_per_account=2, scroll_after_post=True, clear_cache=True, verify_account=True, emulator=None, state_callback=None):
+                 boot_delay=20, task_duration=900, max_videos=2, page_per_account=2, accounts_per_ld=1, scroll_after_post=True, clear_cache=True, verify_account=True, emulator=None, state_callback=None):
 
         # Import here to avoid circular imports when we need a fresh controller
         if emulator is None:
@@ -59,10 +59,13 @@ class MainWindow:
         self.boot_delay = boot_delay
         self.max_videos = max_videos
         self.page_per_account = page_per_account
+        self.accounts_per_ld = max(1, int(accounts_per_ld))
         self.scroll_after_post = scroll_after_post
         self.clear_cache = clear_cache
         self.verify_account = verify_account
         self._ip_lookup_inflight = set()
+        self._closed_ld_names = set()
+        self._close_lock = threading.Lock()
         self.reels_task_join_poll_seconds = 1.0
 
     def _auto_arrange_windows(self):
@@ -118,6 +121,45 @@ class MainWindow:
 
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
+
+    def _close_ld_if_needed(self, name):
+        with self._close_lock:
+            if name in self._closed_ld_names:
+                self._push_state(
+                    name,
+                    phase="close",
+                    state="Idle",
+                    task="Waiting for next run",
+                    progress=0,
+                    finished_at=datetime.now().isoformat(),
+                )
+                return False
+
+        self.log(f"Closing LD: {name}")
+        self._push_state(name, phase="close", state="Closing", task="Shutdown sequence", progress=100)
+        time.sleep(15)  # Fixed close delay
+        closed = False
+        try:
+            closed = bool(self.em.quit_ld(name))
+        except Exception as exc:
+            self.log(f"Failed to close LD {name}: {exc}")
+            closed = False
+
+        if not closed:
+            self._push_state(name, phase="close", state="Attention", task="Shutdown failed", progress=0)
+            return False
+
+        with self._close_lock:
+            self._closed_ld_names.add(name)
+        self._push_state(
+            name,
+            phase="close",
+            state="Idle",
+            task="Waiting for next run",
+            progress=0,
+            finished_at=datetime.now().isoformat(),
+        )
+        return True
 
     def ld_task_stage(self, name, stage):
         if not self.running_flag():
@@ -175,10 +217,33 @@ class MainWindow:
                         clear_cache=self.clear_cache,
                     )
                 elif self.task_type == "reg_account":
-                    success = self.task_handler.execute(
-                        name,
-                        self.task_duration,
-                        verify=self.verify_account,
+                    requested_accounts = max(1, int(self.accounts_per_ld))
+                    completed_accounts = 0
+                    success = True
+
+                    for attempt in range(requested_accounts):
+                        if not self.running_flag() or self.check_paused():
+                            success = False
+                            break
+                        self.log(f"Registering account {attempt + 1}/{requested_accounts} on LD: {name}")
+                        self._push_state(
+                            name,
+                            phase="task",
+                            state="Running",
+                            task=f"Registering {attempt + 1}/{requested_accounts}",
+                            progress=min(95, 72 + int(((attempt + 1) / requested_accounts) * 20)),
+                        )
+                        if not self.task_handler.execute(
+                            name,
+                            self.task_duration,
+                            verify=self.verify_account,
+                        ):
+                            success = False
+                            break
+                        completed_accounts += 1
+
+                    self.log(
+                        f"Registration completed {completed_accounts}/{requested_accounts} account(s) on LD: {name}"
                     )
                 else:
                     success = self.task_handler.execute(name, self.task_duration)
@@ -189,6 +254,16 @@ class MainWindow:
                     task=f"{self.task_type.title()} task",
                     progress=100 if success else 0,
                 )
+
+                if (
+                    self.task_type == "reg_account"
+                    and success
+                    and completed_accounts == requested_accounts
+                ):
+                    # Registration batches should release the emulator immediately
+                    # after the final account succeeds so we do not depend on the
+                    # later close stage to shut the LD instance down.
+                    self._close_ld_if_needed(name)
             
             # Update progress if callback provided
             if self.progress_callback:
@@ -200,11 +275,7 @@ class MainWindow:
             if self.task_type == "reels":
                 # Wait a bit longer to ensure all cleanup is done
                 time.sleep(5)
-            self.log(f"Closing LD: {name}")
-            self._push_state(name, phase="close", state="Closing", task="Shutdown sequence", progress=100)
-            time.sleep(15)  # Fixed close delay
-            self.em.quit_ld(name)
-            self._push_state(name, phase="close", state="Idle", task="Waiting for next run", progress=0, finished_at=datetime.now().isoformat())
+            self._close_ld_if_needed(name)
 
     def _wait_for_stage_threads(self, threads, stage):
         if stage == "task" and self.task_type == "reels":

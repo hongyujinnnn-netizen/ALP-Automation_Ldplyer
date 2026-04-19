@@ -161,6 +161,7 @@ class LDManagerApp(
         self.task_duration = tk.IntVar(value=15)  # In minutes
         self.max_videos = tk.IntVar(value=2)
         self.page_per_account = tk.IntVar(value=2)
+        self.accounts_per_ld = tk.IntVar(value=1)
         self.schedule_time = tk.StringVar(value="09:00")
         self.schedule_daily = tk.BooleanVar(value=True)
         self.schedule_weekly = tk.BooleanVar(value=False)
@@ -211,11 +212,34 @@ class LDManagerApp(
         
         self.setup_enhanced_ui()
         self.load_settings()
+        self.root.after(0, self._maximize_on_startup)
         self.load_schedule_settings()
         self.populate_ld_table()
         self.start_status_refresh()
         self.start_analytics_refresh()
         self.start_system_metrics_refresh()
+
+    def _maximize_on_startup(self):
+        """Open the main window maximized as soon as the UI is ready."""
+        try:
+            if platform.system().lower() == "windows":
+                self.root.state("zoomed")
+                return
+        except Exception:
+            pass
+
+        try:
+            self.root.attributes("-zoomed", True)
+            return
+        except Exception:
+            pass
+
+        try:
+            width = self.root.winfo_screenwidth()
+            height = self.root.winfo_screenheight()
+            self.root.geometry(f"{width}x{height}+0+0")
+        except Exception:
+            pass
 
     def _create_card_section(self, parent, title, subtitle=None, pady=(0, 14), expand=False):
         """Create a lightweight card section with subtle shadow and generous spacing."""
@@ -1165,6 +1189,14 @@ class LDManagerApp(
                 break
 
         for task in tasks:
+            if "accounts_per_ld" in task:
+                try:
+                    self.accounts_per_ld.set(max(1, int(task["accounts_per_ld"])))
+                except Exception:
+                    pass
+                break
+
+        for task in tasks:
             if task.get("type") == "reels" and "scroll_after_post" in task:
                 try:
                     self.scroll_after_post.set(bool(task["scroll_after_post"]))
@@ -1195,6 +1227,7 @@ class LDManagerApp(
         self.task_duration.set(settings.task_duration)
         self.max_videos.set(settings.max_videos)
         self.page_per_account.set(settings.page_per_account)
+        self.accounts_per_ld.set(settings.accounts_per_ld)
         self.start_same_time.set(settings.start_same_time)
         self.use_content_queue.set(settings.use_content_queue)
         self.auto_arrange_ld.set(settings.auto_arrange_ld)
@@ -1238,6 +1271,7 @@ class LDManagerApp(
             task_duration=int(self.task_duration.get()),
             max_videos=int(self.max_videos.get()),
             page_per_account=int(self.page_per_account.get()),
+            accounts_per_ld=int(self.accounts_per_ld.get()),
             start_same_time=bool(self.start_same_time.get()),
             use_content_queue=bool(self.use_content_queue.get()),
             auto_arrange_ld=bool(self.auto_arrange_ld.get()),
@@ -1838,6 +1872,7 @@ Recent Items:
                     task_duration_seconds=self.task_duration.get() * 60,
                     max_videos=self.max_videos.get(),
                     page_per_account=self.page_per_account.get(),
+                    accounts_per_ld=self.accounts_per_ld.get(),
                     scroll_after_post=self.scroll_after_post.get(),
                     clear_cache=self.clear_cache.get(),
                     verify_account=self.verify_account.get(),

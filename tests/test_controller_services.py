@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from controllers.app_controller import AppController
 from controllers.task_controller import TaskController
@@ -16,6 +16,7 @@ from services.logging_service import AppLogger
 from services.scheduler_service import SchedulerService
 from services.settings_service import SettingsService
 from services.task_service import TaskRunRequest, TaskService
+from gui.ld_manager_app import LDManagerApp
 from gui.main_window import MainWindow
 
 
@@ -36,6 +37,18 @@ def build_test_paths(root: Path) -> AppPaths:
 
 
 class TestControllerAndServices(unittest.TestCase):
+    @patch("gui.ld_manager_app.platform.system", return_value="Windows")
+    def test_ld_manager_app_maximizes_window_on_windows_startup(self, _mock_system) -> None:
+        root = Mock()
+        app = LDManagerApp.__new__(LDManagerApp)
+        app.root = root
+
+        app._maximize_on_startup()
+
+        root.state.assert_called_once_with("zoomed")
+        root.attributes.assert_not_called()
+        root.geometry.assert_not_called()
+
     def test_main_window_waits_for_reels_task_threads_until_they_finish(self) -> None:
         class FakeThread:
             def __init__(self, cycles: int) -> None:
@@ -81,6 +94,7 @@ class TestControllerAndServices(unittest.TestCase):
                     parallel_ld=5,
                     boot_delay=12,
                     page_per_account=3,
+                    accounts_per_ld=4,
                     task_type="reels",
                     task_template="content_day",
                     clear_cache=False,
@@ -93,6 +107,7 @@ class TestControllerAndServices(unittest.TestCase):
             self.assertEqual(loaded.parallel_ld, 5)
             self.assertEqual(loaded.boot_delay, 12)
             self.assertEqual(loaded.page_per_account, 3)
+            self.assertEqual(loaded.accounts_per_ld, 4)
             self.assertEqual(loaded.task_type, "reels")
             self.assertEqual(loaded.task_template, "content_day")
             self.assertFalse(loaded.clear_cache)
@@ -194,6 +209,7 @@ class TestControllerAndServices(unittest.TestCase):
             task_duration_seconds=900,
             max_videos=2,
             page_per_account=2,
+            accounts_per_ld=3,
             scroll_after_post=True,
             clear_cache=False,
             verify_account=False,
@@ -204,9 +220,71 @@ class TestControllerAndServices(unittest.TestCase):
         self.assertEqual(request.task_type, "scroll")
         self.assertEqual(request.task_template, "custom")
         self.assertEqual(request.page_per_account, 2)
+        self.assertEqual(request.accounts_per_ld, 3)
         self.assertTrue(request.scroll_after_post)
         self.assertFalse(request.clear_cache)
         self.assertFalse(request.verify_account)
+
+    def test_main_window_loops_reg_account_task_for_accounts_per_ld(self) -> None:
+        emulator = Mock()
+        emulator.name_to_serial = {"US - 01": "127.0.0.1:5555"}
+        emulator.quit_ld.return_value = True
+        handler = Mock()
+        handler.execute.return_value = True
+
+        progress_updates: list[float] = []
+        state_updates: list[tuple[str, dict]] = []
+
+        window = MainWindow(
+            selected_ld_names=["US - 01"],
+            running_flag=lambda: True,
+            ld_thread=1,
+            log_func=lambda *_args, **_kwargs: None,
+            task_type="reg_account",
+            task_handler=handler,
+            progress_callback=progress_updates.append,
+            verify_account=False,
+            accounts_per_ld=3,
+            emulator=emulator,
+            state_callback=lambda name, payload: state_updates.append((name, payload)),
+        )
+
+        with patch("gui.main_window.time.sleep", return_value=None):
+            window.ld_task_stage("US - 01", "task")
+
+        self.assertEqual(handler.execute.call_count, 3)
+        emulator.quit_ld.assert_called_once_with("US - 01")
+        for call in handler.execute.call_args_list:
+            self.assertEqual(call.args[:2], ("US - 01", window.task_duration))
+            self.assertEqual(call.kwargs["verify"], False)
+        self.assertEqual(progress_updates, [100.0])
+        self.assertTrue(any(payload.get("state") == "Completed" for _, payload in state_updates))
+        self.assertEqual(state_updates[-1][1].get("state"), "Idle")
+
+    def test_main_window_close_stage_skips_duplicate_shutdown_for_reg_account(self) -> None:
+        emulator = Mock()
+        emulator.name_to_serial = {"US - 01": "127.0.0.1:5555"}
+        emulator.quit_ld.return_value = True
+        handler = Mock()
+        handler.execute.return_value = True
+
+        window = MainWindow(
+            selected_ld_names=["US - 01"],
+            running_flag=lambda: True,
+            ld_thread=1,
+            log_func=lambda *_args, **_kwargs: None,
+            task_type="reg_account",
+            task_handler=handler,
+            verify_account=False,
+            accounts_per_ld=1,
+            emulator=emulator,
+        )
+
+        with patch("gui.main_window.time.sleep", return_value=None):
+            window.ld_task_stage("US - 01", "task")
+            window.ld_task_stage("US - 01", "close")
+
+        emulator.quit_ld.assert_called_once_with("US - 01")
 
     def test_account_manager_imports_json_accounts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

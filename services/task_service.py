@@ -18,6 +18,7 @@ class TaskRunRequest:
     task_duration_seconds: int
     max_videos: int
     page_per_account: int
+    accounts_per_ld: int
     scroll_after_post: bool
     clear_cache: bool
     verify_account: bool
@@ -51,6 +52,7 @@ class TaskService:
             request.task_duration_seconds,
             request.max_videos,
             request.page_per_account,
+            request.accounts_per_ld,
             request.scroll_after_post,
             request.clear_cache,
             request.verify_account,

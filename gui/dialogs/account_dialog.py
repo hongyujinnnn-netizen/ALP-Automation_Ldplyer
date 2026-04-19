@@ -562,7 +562,7 @@ class AccountDialogMixin:
                 self.log(f"Failed to save account: {exc}", "ERROR")
                 return
 
-            self._refresh_account_tree(select_uid=str(saved.get("facebook_uid") or saved.get("account_id") or ""))
+            self._refresh_account_tree(select_uid=str(saved.get("account_id") or saved.get("facebook_uid") or ""))
             win.destroy()
 
         self._acct_btn(footer, "Cancel", win.destroy, "left")

@@ -76,6 +76,12 @@ class TasksPageMixin:
 
         tb.Spinbox(main_grid, from_=1, to=20, textvariable=self.page_per_account,
                    width=8).grid(row=2, column=1, padx=10, pady=10, sticky="w")
+
+        tb.Label(main_grid, text="Accounts per LD:", bootstyle="secondary").grid(
+            row=2, column=2, padx=10, pady=10, sticky="w")
+
+        tb.Spinbox(main_grid, from_=1, to=20, textvariable=self.accounts_per_ld,
+                   width=8).grid(row=2, column=3, padx=10, pady=10, sticky="w")
         
         # Row 3 - Checkboxes
         tb.Checkbutton(main_grid, text="Start Devices Simultaneously",
@@ -107,7 +113,7 @@ class TasksPageMixin:
         ).grid(row=5, column=0, columnspan=4, padx=10, pady=10, sticky="w")
         tb.Label(
             main_grid,
-            text="Tip: Use lower parallel count for stability and lower CPU usage.",
+            text="Tip: 'Accounts per LD' is used by Register Account tasks and will loop on the same emulator.",
             style="Subtitle.TLabel"
         ).grid(row=6, column=0, columnspan=4, padx=10, pady=(4, 0), sticky="w")
 

@@ -4,6 +4,7 @@
     "task_duration": 11,
     "max_videos": 4,
     "page_per_account": 3,
+    "accounts_per_ld": 2,
     "start_same_time": false,
     "use_content_queue": true,
     "auto_arrange_ld": false,

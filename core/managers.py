@@ -289,8 +289,22 @@ class AccountManager:
             or existing.get("facebook_uid")
             or ""
         ).strip()
+        account_id = str(
+            clean.get("account_id")
+            or existing.get("account_id")
+            or self._build_account_identifier(
+                facebook_uid=facebook_uid,
+                device_name=device_name,
+                created_at=created_at,
+                name=name,
+                phone=phone,
+                email=email,
+                adb_serial=adb_serial,
+            )
+        ).strip()
         clean.pop("uid", None)
         clean.pop("ld_name", None)
+        clean["account_id"] = account_id
         clean["facebook_uid"] = facebook_uid
         clean["ld_adb"] = adb_serial
         clean["device_name"] = device_name
@@ -342,10 +356,11 @@ class AccountManager:
         )
 
     def _get_account_identifier(self, account: dict) -> str:
-        facebook_uid = str((account or {}).get("facebook_uid") or "").strip()
-        if facebook_uid:
-            return facebook_uid
+        explicit_account_id = str((account or {}).get("account_id") or "").strip()
+        if explicit_account_id:
+            return explicit_account_id
 
+        facebook_uid = str((account or {}).get("facebook_uid") or "").strip()
         device_name = str(
             (account or {}).get("device_name")
             or (account or {}).get("instance")
@@ -354,7 +369,42 @@ class AccountManager:
         ).strip()
         created_at = str((account or {}).get("created_at") or "").strip()
         name = str((account or {}).get("name") or (account or {}).get("username") or "").strip()
-        return f"fallback::{device_name}::{created_at}::{name}"
+        phone = str((account or {}).get("phone") or "").strip()
+        email = str((account or {}).get("email") or "").strip()
+        adb_serial = str((account or {}).get("ld_adb") or "").strip()
+        return self._build_account_identifier(
+            facebook_uid=facebook_uid,
+            device_name=device_name,
+            created_at=created_at,
+            name=name,
+            phone=phone,
+            email=email,
+            adb_serial=adb_serial,
+        )
+
+    def _build_account_identifier(
+        self,
+        *,
+        facebook_uid: str = "",
+        device_name: str = "",
+        created_at: str = "",
+        name: str = "",
+        phone: str = "",
+        email: str = "",
+        adb_serial: str = "",
+    ) -> str:
+        parts = [
+            str(facebook_uid or "").strip(),
+            str(device_name or "").strip(),
+            str(created_at or "").strip(),
+            str(name or "").strip(),
+            str(phone or "").strip(),
+            str(email or "").strip(),
+            str(adb_serial or "").strip(),
+        ]
+        if any(parts):
+            return "acct::" + "::".join(parts)
+        return "acct::unknown"
 
     def _with_account_metadata(self, account: dict) -> dict:
         row = dict(account or {})
