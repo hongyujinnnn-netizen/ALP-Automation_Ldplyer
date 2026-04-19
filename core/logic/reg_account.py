@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from datetime import datetime
 
 import re
-from typing import Optional
 
 from core.email_models import EmailAccountConfig, OTPRequest
 from core.logic.task_scroll import ScrollTaskHandler
@@ -72,7 +71,7 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         "Thomas", "Martin", "Walker", "White", "Harris",
 
         "Clark", "Lewis", "Robinson", "Young", "Allen",
-        "King", "Wright", "Scott", "Torres", "Nguyen",
+        "Kong", "Wright", "Scott", "Torres", "Nguyen",
 
         "Hill", "Flores", "Green", "Adams", "Nelson",
         "Baker", "Hall", "Rivera", "Campbell", "Mitchell",
@@ -97,6 +96,7 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         if self.check_paused():
             return False
         verify = kwargs.get("verify", True)
+        before_facebook_ids = []
 
         profile = self._build_profile(kwargs)
         serial = self.emulator.name_to_serial.get(name, name)
@@ -140,6 +140,13 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         except Exception as exc:
             self.log(f"Failed to connect {serial}: {exc}")
             return False
+
+        try:
+            before_facebook_ids = self.get_facebook_account_ids_from_settings(d)
+            self.log(f"Facebook IDs before registration for {name}: {before_facebook_ids}")
+        except Exception as exc:
+            before_facebook_ids = []
+            self.log(f"Failed to capture Facebook IDs before registration for {name}: {exc}")
 
         if not self._run_registration_steps_with_retry(d, name, profile):
             return False
@@ -188,43 +195,51 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             if account_status == "Dead":
                 self.log(f"Account {name} was flagged for human verification → DEAD")
                 return False
-                    
-        time.sleep(10)
-        d.app_stop("com.facebook.katana")
-        time.sleep(4)
+            
+        facebook_uid = ""
+        if account_status == "Unknown":
+            self.log(f"Account status is Unknown for {name}, skipping Facebook UID detection")
+        else:
+            time.sleep(10)
+            d.app_stop("com.facebook.katana")
+            time.sleep(4)
         
-        d.app_start("com.facebook.katana")
-        time.sleep(7)
+            d.app_start("com.facebook.katana")
+            time.sleep(7)
 
-        d.app_stop("com.facebook.katana")
-        time.sleep(3)
+            d.app_stop("com.facebook.katana")
+            time.sleep(3)
 
-        facebook_uid = self.check_uid_account(d)
-        if facebook_uid == "":
-            self.log(f"Failed to create Facebook account {name}")
-            return False
+            facebook_uid = self.check_uid_account(d, before_ids=before_facebook_ids)
+            if facebook_uid == "":
+                self.log(f"UID resolution failed on first attempt for {name}, retrying once")
+                time.sleep(3)
+                facebook_uid = self.check_uid_account(d, before_ids=before_facebook_ids)
+            if facebook_uid == "":
+                self.log(f"Failed to create Facebook account {name}")
+                return False
 
         time.sleep(3)
 
         if not self._submit_signup_step(d, name):
             self.log(f"Failed on final signup step for {name}")
             return False
-
-        self._save_created_account(
-            name,
-            serial,
-            profile,
-            facebook_uid=facebook_uid,
-            account_status=account_status,
-        )
-
-        time.sleep(3)
-        self.log(f"Account created successfully for {name} with UID: {facebook_uid}")
-        self.log(f"Account status for {name}: {account_status}")
-        self.log(f"Create-account flow completed on LD: {name}")
-        self.log(f"Generated account {profile.contact_label}: {profile.contact_value}")
-        self.log(f"Generated account password: {profile.password}")
-        self.push_runtime_state(name, state="Completed", task="Account form submitted", progress=100)
+        
+        if not account_status == "Unknown":
+            self._save_created_account(
+                name,
+                serial,
+                profile,
+                facebook_uid=facebook_uid,
+                account_status=account_status,
+            )
+            time.sleep(3)
+            self.log(f"Account created successfully for {name} with UID: {facebook_uid}")
+            self.log(f"Account status for {name}: {account_status}")
+            self.log(f"Create-account flow completed on LD: {name}")
+            self.log(f"Generated account {profile.contact_label}: {profile.contact_value}")
+            self.log(f"Generated account password: {profile.password}")
+            self.push_runtime_state(name, state="Completed", task="Account form submitted", progress=100)
 
         time.sleep(5)
         # Reset Facebook app data after registration to avoid stale sessions.
@@ -536,9 +551,6 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             self.log(f"Could not open create-account flow on {name}")
             return False, "start_registration_flow"
 
-        self._check_and_skip_email_autofill_dialog(d)
-        self._check_and_allow_contacts_permission(d)
-
         if not self._fill_name_step(d, name, profile):
             self.log(f"Failed on name step for {name}")
             return False, "name"
@@ -548,6 +560,7 @@ class RegAccountTaskHandler(ScrollTaskHandler):
         if not self._fill_birthdate_step(d, name, profile):
             try:
                 self._fill_contact_step(d, name, profile)
+                self._check_Continue_creating_account(d)
                 skip_contact = True
                 time.sleep(3)
                 if self._fill_birthdate_step(d, name, profile):
@@ -567,9 +580,10 @@ class RegAccountTaskHandler(ScrollTaskHandler):
 
         time.sleep(4)
         if not skip_contact:
-            if not self._fill_contact_step(d, name, profile):
-                self.log(f"Failed on contact step for {name}")
-                return False, "contact"
+            if self._fill_contact_step(d, name, profile):
+                self._check_Continue_creating_account(d)
+            else:
+                self.log(f"Failed on contact step for {name}")  
             
         time.sleep(4)
         if not self._fill_password_step(d, name, profile):
@@ -681,20 +695,22 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             return "Unknown"
 
 
-    def check_uid_account(self, d):
+    def check_uid_account(self, d, before_ids=None):
         if d is None:
             self.log("Cannot check Facebook UID without a device session")
-            return False
+            return ""
 
-        if not self._open_settings_accounts(d):
-            return False
-        time.sleep(3)
+        before_ids = list(before_ids or [])
+        self.log(f"Facebook IDs before registration snapshot: {before_ids}")
 
-        account_number_uid = self.detect_facebook_account_number(d)
+        after_ids = self.get_facebook_account_ids_from_settings(d)
+        self.log(f"Facebook IDs after registration snapshot: {after_ids}")
+
+        account_number_uid = self.resolve_new_facebook_uid(before_ids, after_ids)
         if account_number_uid:
-            self.log(f"Detected Facebook account number: {account_number_uid}")
+            self.log(f"Resolved Facebook UID: {account_number_uid}")
             return account_number_uid
-        
+
         self.log("Facebook account number not found in Settings > Accounts")
         return ""
     
@@ -861,47 +877,192 @@ class RegAccountTaskHandler(ScrollTaskHandler):
 
         return False
 
-    def detect_facebook_account_number(self, d) -> Optional[str]:
-        """
-        Try to detect the numeric Facebook account on the Accounts screen.
-        """
-        for _ in range(5):
+    def _collect_text_view_items(self, d):
+        items = []
+        try:
+            text_views = list(d(className="android.widget.TextView"))
+        except Exception as exc:
+            self.log(f"Failed to collect TextView items: {exc}")
+            return items
+
+        for node in text_views:
             try:
-                text_views = list(d(className="android.widget.TextView"))
-            except Exception:
-                text_views = []
+                info = getattr(node, "info", {}) or {}
+                text = str(info.get("text") or "").strip()
+                bounds = info.get("bounds", {}) or {}
+                left = int(bounds.get("left", 0) or 0)
+                top = int(bounds.get("top", 0) or 0)
+                right = int(bounds.get("right", 0) or 0)
+                bottom = int(bounds.get("bottom", 0) or 0)
 
-            for i, node in enumerate(text_views):
-                try:
-                    text = (node.info.get("text") or "").strip()
-                    if not text:
-                        continue
-
-                    if re.fullmatch(r"\d{10,20}", text):
-                        return text
-
-                    if "facebook" in text.lower():
-                        for j in range(max(0, i - 3), min(len(text_views), i + 4)):
-                            near_text = (text_views[j].info.get("text") or "").strip()
-                            if re.fullmatch(r"\d{10,20}", near_text):
-                                return near_text
-                except Exception:
+                if not text or right <= left or bottom <= top:
                     continue
 
+                items.append(
+                    {
+                        "text": text,
+                        "bounds": bounds,
+                        "left": left,
+                        "top": top,
+                        "right": right,
+                        "bottom": bottom,
+                        "center_x": (left + right) // 2,
+                        "center_y": (top + bottom) // 2,
+                    }
+                )
+            except Exception:
+                continue
+
+        items.sort(key=lambda item: (item["top"], item["left"], item["text"]))
+        return items
+
+    def detect_facebook_account_numbers(self, d, max_scrolls=5):
+        facebook_ids = []
+        seen_ids = set()
+        seen_screens = set()
+        numeric_pattern = re.compile(r"\d{10,20}")
+
+        for scroll_index in range(max(1, int(max_scrolls or 1))):
+            items = self._collect_text_view_items(d)
+            if not items:
+                self.log(f"No TextView items found while scanning Facebook accounts (page {scroll_index + 1})")
+            else:
+                screen_signature = tuple((item["text"], item["top"], item["left"]) for item in items)
+                if screen_signature in seen_screens:
+                    self.log(f"Accounts screen content repeated on page {scroll_index + 1}, stopping scan")
+                    break
+                seen_screens.add(screen_signature)
+
+            numeric_items = [
+                item for item in items
+                if numeric_pattern.fullmatch(item["text"])
+            ]
+            facebook_items = [
+                item for item in items
+                if item["text"].strip().lower() == "facebook"
+            ]
+
+            self.log(
+                f"Scanning Accounts page {scroll_index + 1}: "
+                f"{len(facebook_items)} Facebook rows, {len(numeric_items)} numeric rows"
+            )
+
+            for facebook_item in facebook_items:
+                candidates = []
+                for numeric_item in numeric_items:
+                    if numeric_item["center_y"] > facebook_item["center_y"]:
+                        continue
+
+                    vertical_gap = max(0, facebook_item["top"] - numeric_item["bottom"])
+                    horizontal_gap = abs(numeric_item["center_x"] - facebook_item["center_x"])
+                    same_column = (
+                        min(numeric_item["right"], facebook_item["right"])
+                        - max(numeric_item["left"], facebook_item["left"])
+                    ) > 0
+                    candidates.append(
+                        (
+                            0 if same_column else 1,
+                            vertical_gap,
+                            horizontal_gap,
+                            -numeric_item["center_y"],
+                            numeric_item,
+                        )
+                    )
+
+                if not candidates:
+                    self.log(
+                        "Found a Facebook row but no numeric text above it on the current page"
+                    )
+                    continue
+
+                best_match = min(candidates)[-1]
+                facebook_id = best_match["text"]
+                if facebook_id not in seen_ids:
+                    seen_ids.add(facebook_id)
+                    facebook_ids.append(facebook_id)
+                    self.log(
+                        f"Matched Facebook row at y={facebook_item['center_y']} "
+                        f"to numeric ID {facebook_id}"
+                    )
+
+            if scroll_index >= max_scrolls - 1:
+                break
+
+            moved = False
             try:
                 scrollable = d(scrollable=True)
                 if scrollable.exists:
-                    scrollable.scroll.vert.forward(steps=25)
-                else:
+                    moved = bool(scrollable.scroll.vert.forward(steps=25))
+                if not moved:
                     d.swipe(360, 1180, 360, 420, 0.2)
+                    moved = True
             except Exception:
                 try:
                     d.swipe(360, 1180, 360, 420, 0.2)
+                    moved = True
                 except Exception:
-                    pass
+                    moved = False
+
+            if not moved:
+                self.log("Could not scroll further while scanning Facebook accounts")
+                break
+
             time.sleep(1)
 
-        return None
+        self.log(f"Collected Facebook account IDs from visible Settings pages: {facebook_ids}")
+        return facebook_ids
+
+    def get_facebook_account_ids_from_settings(self, d):
+        if d is None:
+            self.log("Cannot collect Facebook account IDs without a device session")
+            return []
+
+        if not self._open_settings_accounts(d):
+            self.log("Failed to open Settings > Accounts for Facebook ID collection")
+            return []
+
+        time.sleep(3)
+        facebook_ids = self.detect_facebook_account_numbers(d)
+        self.log(f"Facebook IDs collected from Settings > Accounts: {facebook_ids}")
+        return facebook_ids
+
+    def resolve_new_facebook_uid(self, before_ids, after_ids) -> str:
+        before_ids = [str(item).strip() for item in (before_ids or []) if str(item).strip()]
+        after_ids = [str(item).strip() for item in (after_ids or []) if str(item).strip()]
+
+        before_seen = set()
+        normalized_before = []
+        for item in before_ids:
+            if item not in before_seen:
+                before_seen.add(item)
+                normalized_before.append(item)
+
+        after_seen = set()
+        normalized_after = []
+        for item in after_ids:
+            if item not in after_seen:
+                after_seen.add(item)
+                normalized_after.append(item)
+
+        new_ids = [item for item in normalized_after if item not in before_seen]
+
+        self.log(f"Resolving Facebook UID from before={normalized_before} after={normalized_after}")
+        self.log(f"New Facebook IDs after comparison: {new_ids}")
+
+        if len(new_ids) == 1:
+            self.log("Exactly one new Facebook ID detected")
+            return new_ids[0]
+
+        if len(new_ids) > 1:
+            self.log("Multiple new Facebook IDs detected, using the last/newest visible ID")
+            return new_ids[-1]
+
+        if normalized_after:
+            self.log("No unique new Facebook ID found, falling back to the last visible Facebook ID")
+            return normalized_after[-1]
+
+        self.log("No Facebook IDs available after registration")
+        return ""
 
     def _build_profile(self, kwargs):
         first_name = str(kwargs.get("first_name") or random.choice(self.FIRST_NAMES))
@@ -1688,8 +1849,8 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             ],
             timeout=6,
             required=False,
-        )  
-
+        )
+          
     def _fill_password_step(self, d, name, profile):
         self.log("Entering password")
         if not self._set_text_inputs(d, [profile.password], hints=("password",), require_hint_match=True):
@@ -2073,3 +2234,20 @@ class RegAccountTaskHandler(ScrollTaskHandler):
             self.log("Screen not matched: returning Novery")
 
         return "Novery"
+
+    def _check_Continue_creating_account(self, d):
+        if self._click_any_selector(
+            d,
+            [
+                {"text": "Continue creating account"},
+                {"textContains": "Continue creating account"},
+                {"description": "Continue creating account"},
+                {"descriptionContains": "Continue creating account"},
+            ],
+            timeout=5,
+            required=False,
+        ):
+            self.log("Tapped 'Continue creating account' before entering contact")
+            time.sleep(2)
+        else:
+            self.log("'Continue creating account' not shown, continuing to contact entry")
