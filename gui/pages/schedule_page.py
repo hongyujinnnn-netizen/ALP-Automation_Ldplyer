@@ -1,5 +1,6 @@
 import tkinter as tk
 import ttkbootstrap as tb
+from gui.components.state_views import StateView
 from gui.components.status import StatusPill
 from gui.gradient_progress import GradientProgressBar
 
@@ -112,6 +113,20 @@ class SchedulePageMixin:
             bootstyle="secondary"
         )
         self.next_run_label.pack(pady=5)
+
+        self.schedule_state_view = StateView(
+            schedule_frame,
+            kind="empty",
+            title="Schedule is disabled",
+            message="Enable scheduling when you want automation to run without manual start.",
+            actions=[
+                {"text": "Enable", "command": self.start_schedule, "bootstyle": "outline-success"},
+            ],
+            palette=self.palette,
+            display_font=self.display_font,
+            mono_font=self.mono_font,
+        )
+        self.schedule_state_view.pack(fill="x", padx=10, pady=(0, 10))
         
         # Update visibility
         self.on_schedule_type_change()

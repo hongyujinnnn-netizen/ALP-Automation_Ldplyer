@@ -6,7 +6,13 @@ from gui.components.status import StatusPill
 
 class SidebarMixin:
     def create_sidebar(self, parent):
-        sidebar_shell = tb.Frame(parent, style="Shadow.TFrame", width=236, padding=(0, 0, 1, 0))
+        spacing = getattr(getattr(self, "appearance", None), "spacing", {}) or {}
+        sidebar_shell = tb.Frame(
+            parent,
+            style="Shadow.TFrame",
+            width=int(spacing.get("sidebar_width", 236)),
+            padding=(0, 0, 1, 0),
+        )
         sidebar_shell.pack(side="left", fill="y")
         sidebar_shell.pack_propagate(False)
 
@@ -34,7 +40,7 @@ class SidebarMixin:
         current_section = None
 
         def _make_nav_row(parent_widget, key, text, badge_text, command):
-            row = tk.Frame(parent_widget, bg=self.palette["surface"], height=34)
+            row = tk.Frame(parent_widget, bg=self.palette["surface"], height=max(30, int(spacing.get("tree_row_height", 28)) + 6))
             row.pack(fill="x", pady=1)
             row.pack_propagate(False)
 
@@ -110,6 +116,7 @@ class SidebarMixin:
         self._set_sidebar_nav_active(key)
 
     def _set_sidebar_nav_active(self, active_key):
+        self._active_sidebar_key = active_key
         for key, parts in getattr(self, "_nav_rows", {}).items():
             if key == active_key:
                 parts["row"].config(bg=self.palette["surface_alt"])

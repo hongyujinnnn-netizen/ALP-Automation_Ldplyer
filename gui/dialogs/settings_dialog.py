@@ -3,6 +3,16 @@ import tkinter as tk
 from tkinter import filedialog
 import ttkbootstrap as tb
 
+from gui.appearance import (
+    ACCENT_COLORS,
+    DEFAULT_APPEARANCE_SETTINGS,
+    THEME_PRESETS,
+    UI_DENSITIES,
+    UI_SCALES,
+    label_for,
+    resolve_appearance,
+)
+from gui.components.status import StatusPill
 from gui.dialogs.email_settings_dialog import EmailSettingsDialogMixin
 
 
@@ -172,6 +182,12 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         email_timeout_var = tk.IntVar(value=self.email_timeout_seconds.get())
         email_poll_interval_var = tk.IntVar(value=self.email_poll_interval_seconds.get())
         email_mark_as_seen_var = tk.BooleanVar(value=self.email_mark_as_seen.get())
+        appearance_vars = {
+            "theme_preset": tk.StringVar(value=self.theme_preset.get()),
+            "accent_color": tk.StringVar(value=self.accent_color.get()),
+            "ui_density": tk.StringVar(value=self.ui_density.get()),
+            "ui_scale": tk.StringVar(value=self.ui_scale.get()),
+        }
         # Reuse the main app variable for blocked countries so changes are live.
         blocked_countries_var = getattr(self, "blocked_countries", tk.StringVar(value=""))
 
@@ -208,6 +224,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             email_timeout_var,
             email_poll_interval_var,
             email_mark_as_seen_var,
+            appearance_vars,
         )
 
     def _build_settings_shell(
@@ -241,6 +258,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         email_timeout_var,
         email_poll_interval_var,
         email_mark_as_seen_var,
+        appearance_vars,
     ):
         wrapper = tk.Frame(parent, bg=palette["border_alt"], padx=1, pady=1)
         wrapper.pack(fill="both", expand=True)
@@ -282,11 +300,16 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             auto_arrange_var,
         )
 
-        for key in ("general", "behavior", "email", "profiles", "summary"):
+        for key in ("general", "appearance", "behavior", "email", "profiles", "summary"):
             page, body = self._create_scrollable_settings_page(content, palette)
             self._settings_pages[key] = page
             self._settings_pages[f"{key}_body"] = body
 
+        self._build_appearance_page(
+            self._settings_pages["appearance_body"],
+            palette,
+            appearance_vars,
+        )
         self._build_general_page(
             self._settings_pages["general_body"],
             palette,
@@ -339,6 +362,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             email_timeout_var,
             email_poll_interval_var,
             email_mark_as_seen_var,
+            appearance_vars,
         )
         self._build_summary_page(
             self._settings_pages["summary_body"],
@@ -425,10 +449,11 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         badge_wrap = tk.Frame(left, bg=palette["surface"])
         badge_wrap.pack(anchor="w")
 
-        icon = tk.Frame(badge_wrap, bg="#0B1B2B", width=68, height=68, highlightthickness=1, highlightbackground=palette["border_alt"])
+        tip_bg = palette.get("tip_bg", palette["surface_alt"])
+        icon = tk.Frame(badge_wrap, bg=tip_bg, width=68, height=68, highlightthickness=1, highlightbackground=palette["border_alt"])
         icon.pack(side="left")
         icon.pack_propagate(False)
-        tk.Label(icon, text="CTRL", bg="#0B1B2B", fg=palette["primary"], font=(self.display_font, 12)).pack(expand=True)
+        tk.Label(icon, text="CTRL", bg=tip_bg, fg=palette["primary"], font=(self.display_font, 12)).pack(expand=True)
 
         title_wrap = tk.Frame(badge_wrap, bg=palette["surface"], padx=14)
         title_wrap.pack(side="left", fill="x", expand=True)
@@ -476,6 +501,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         ).pack(anchor="w", pady=(8, 18))
 
         menu_items = [
+            ("appearance", "*", "Appearance", "Theme, accent, spacing, and scale"),
             ("general", "⚙", "General", "Core launch and session values"),
             ("behavior", "⇄", "Behavior", "Queue and dispatch options"),
             ("email", "@", "Email OTP", "Authorized IMAP inbox reader"),
@@ -508,13 +534,14 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
 
             self._settings_nav_buttons[key] = (outer, accent, btn)
 
-        tip = tk.Frame(inner, bg="#0B1B2B", padx=12, pady=12, highlightthickness=1, highlightbackground=palette["border_alt"])
+        tip_bg = palette.get("tip_bg", palette["surface_alt"])
+        tip = tk.Frame(inner, bg=tip_bg, padx=12, pady=12, highlightthickness=1, highlightbackground=palette["border_alt"])
         tip.pack(fill="x", side="bottom", pady=(18, 0))
-        tk.Label(tip, text="RECOMMENDATION", bg="#0B1B2B", fg=palette["primary"], font=(self.mono_font, 8)).pack(anchor="w")
+        tk.Label(tip, text="RECOMMENDATION", bg=tip_bg, fg=palette["primary"], font=(self.mono_font, 8)).pack(anchor="w")
         tk.Label(
             tip,
             text="Use Balanced profile first, then adjust only one or two values.",
-            bg="#0B1B2B",
+            bg=tip_bg,
             fg=palette["text"],
             wraplength=210,
             justify="left",
@@ -529,6 +556,8 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         tk.Label(wrap, text=subtitle, bg=palette["surface"], fg=palette["muted"], font=(self.mono_font, 9)).pack(anchor="w", pady=(4, 0))
 
     def _premium_card(self, parent, palette, title, subtitle=None, padding=16):
+        if padding == 16:
+            padding = int(getattr(getattr(self, "appearance", None), "spacing", {}).get("card_padding", padding))
         outer = tk.Frame(parent, bg=palette["border"], padx=1, pady=1)
         card = tk.Frame(outer, bg=palette["surface_alt"], padx=padding, pady=padding)
         card.pack(fill="both", expand=True)
@@ -557,6 +586,242 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         plus.pack(side="right")
 
         return outer
+
+    def _build_appearance_page(self, parent, palette, appearance_vars):
+        self._page_heading(
+            parent,
+            palette,
+            "APPEARANCE",
+            "Product Look & Feel",
+            "Choose a focused visual preset, accent, spacing density, and readable scale.",
+        )
+
+        preview_state = {"refresh": None}
+
+        self._appearance_choice_group(
+            parent,
+            palette,
+            "Theme",
+            "A curated app shell preset mapped to ttkbootstrap.",
+            appearance_vars["theme_preset"],
+            THEME_PRESETS,
+            lambda: preview_state["refresh"]() if preview_state["refresh"] else None,
+        )
+        self._appearance_choice_group(
+            parent,
+            palette,
+            "Accent Color",
+            "Controls primary buttons, active navigation, highlights, and status emphasis.",
+            appearance_vars["accent_color"],
+            ACCENT_COLORS,
+            lambda: preview_state["refresh"]() if preview_state["refresh"] else None,
+            swatches=True,
+        )
+        self._appearance_choice_group(
+            parent,
+            palette,
+            "Layout Density",
+            "Adjusts shared padding, card rhythm, navigation spacing, and table row height.",
+            appearance_vars["ui_density"],
+            UI_DENSITIES,
+            lambda: preview_state["refresh"]() if preview_state["refresh"] else None,
+        )
+        self._appearance_choice_group(
+            parent,
+            palette,
+            "Typography Scale",
+            "Adjusts shared font sizes used by headings, controls, tables, and badges.",
+            appearance_vars["ui_scale"],
+            UI_SCALES,
+            lambda: preview_state["refresh"]() if preview_state["refresh"] else None,
+        )
+
+        preview_outer, preview = self._premium_card(
+            parent,
+            palette,
+            "Preview",
+            "A miniature sample of the active appearance selection.",
+        )
+        preview_outer.pack(fill="x", pady=(6, 12))
+
+        sample = tk.Frame(preview, bg=palette["surface"], padx=14, pady=14, highlightthickness=1, highlightbackground=palette["border"])
+        sample.pack(fill="x")
+        title = tk.Label(sample, text="Automation Control", bg=palette["surface"], fg=palette["text"], font=(self.display_font, 13))
+        title.pack(anchor="w")
+        subtitle = tk.Label(
+            sample,
+            text="Fleet status, primary action, secondary action, and a status badge.",
+            bg=palette["surface"],
+            fg=palette["muted"],
+            font=(self.mono_font, 9),
+        )
+        subtitle.pack(anchor="w", pady=(3, 10))
+        actions = tk.Frame(sample, bg=palette["surface"])
+        actions.pack(fill="x")
+        primary = tk.Button(actions, text="Start Automation", relief="flat", padx=12, pady=7, cursor="hand2")
+        primary.pack(side="left", padx=(0, 8))
+        secondary = tk.Button(actions, text="Review Queue", relief="flat", padx=12, pady=7, cursor="hand2")
+        secondary.pack(side="left", padx=(0, 8))
+        pill = StatusPill(actions, "Active", palette=palette, text="READY", font=(self.display_font, 9), padx=8, pady=3)
+        pill.pack(side="left")
+        meta = tk.Label(sample, text="", bg=palette["surface"], fg=palette["muted"], font=(self.mono_font, 8))
+        meta.pack(anchor="w", pady=(12, 0))
+
+        controls = tk.Frame(parent, bg=palette["surface"])
+        controls.pack(fill="x", pady=(0, 12))
+        tk.Button(
+            controls,
+            text="Apply Appearance Now",
+            relief="flat",
+            bg=palette["primary"],
+            fg=palette["primary_fg"],
+            activebackground=palette["primary_active"],
+            activeforeground=palette["primary_fg"],
+            font=(self.mono_font, 9, "bold"),
+            padx=14,
+            pady=7,
+            cursor="hand2",
+            command=lambda: self._apply_appearance_from_dialog(appearance_vars, save=False),
+        ).pack(side="left")
+        tk.Button(
+            controls,
+            text="Reset Appearance",
+            relief="flat",
+            bg=palette["surface_alt"],
+            fg=palette["warning"],
+            activebackground=palette["border_alt"],
+            activeforeground=palette["warning"],
+            font=(self.mono_font, 9),
+            padx=14,
+            pady=7,
+            cursor="hand2",
+            command=lambda: self._reset_appearance_vars(appearance_vars),
+        ).pack(side="left", padx=(8, 0))
+
+        outer, notes = self._premium_card(parent, palette, "Apply Flow", "How appearance changes behave.")
+        outer.pack(fill="x")
+        self._info_row(notes, palette, "Preview", "Changing a control updates the miniature preview immediately.")
+        self._info_row(notes, palette, "Apply now", "Updates the active window colors and ttk styles without closing settings.")
+        self._info_row(notes, palette, "Save", "Save & Apply persists appearance and automation settings to disk.")
+
+        def refresh_preview(*_):
+            resolved = resolve_appearance(
+                theme_preset=appearance_vars["theme_preset"].get(),
+                accent_color=appearance_vars["accent_color"].get(),
+                ui_density=appearance_vars["ui_density"].get(),
+                ui_scale=appearance_vars["ui_scale"].get(),
+            )
+            p = resolved.palette
+            body_size = resolved.font_sizes["body"]
+            meta_size = resolved.font_sizes["meta"]
+            card_size = resolved.font_sizes["card_title"]
+            button_pad = resolved.spacing["button_pad"]
+            sample.configure(bg=p["surface"], padx=resolved.spacing["card_padding"], pady=resolved.spacing["card_padding"], highlightbackground=p["border"])
+            actions.configure(bg=p["surface"])
+            title.configure(bg=p["surface"], fg=p["text"], font=(self.display_font, card_size + 2))
+            subtitle.configure(bg=p["surface"], fg=p["muted"], font=(self.mono_font, meta_size))
+            primary.configure(
+                bg=p["primary"],
+                fg=p["primary_fg"],
+                activebackground=p["primary_active"],
+                activeforeground=p["primary_fg"],
+                font=(self.display_font, body_size),
+                padx=button_pad[0],
+                pady=button_pad[1],
+            )
+            secondary.configure(
+                bg=p["surface_alt"],
+                fg=p["text"],
+                activebackground=p["border_alt"],
+                activeforeground=p["text"],
+                font=(self.display_font, body_size),
+                padx=button_pad[0],
+                pady=button_pad[1],
+            )
+            pill.update_palette(p)
+            pill.label.configure(font=(self.display_font, meta_size))
+            meta.configure(
+                text=(
+                    f"{label_for(THEME_PRESETS, resolved.theme_preset)} theme | "
+                    f"{label_for(ACCENT_COLORS, resolved.accent_color)} accent | "
+                    f"{label_for(UI_DENSITIES, resolved.ui_density)} density | "
+                    f"{label_for(UI_SCALES, resolved.ui_scale)} scale"
+                ),
+                bg=p["surface"],
+                fg=p["muted"],
+                font=(self.mono_font, max(7, meta_size - 1)),
+            )
+
+        preview_state["refresh"] = refresh_preview
+        for var in appearance_vars.values():
+            var.trace_add("write", refresh_preview)
+        refresh_preview()
+
+    def _appearance_choice_group(self, parent, palette, title, description, variable, options, refresh, swatches=False):
+        outer, card = self._premium_card(parent, palette, title, description)
+        outer.pack(fill="x", pady=(0, 12))
+        row = tk.Frame(card, bg=palette["surface_alt"])
+        row.pack(fill="x", pady=(2, 0))
+        buttons = {}
+
+        def select(value):
+            variable.set(value)
+            refresh()
+
+        def redraw(*_):
+            current = variable.get()
+            for value, button in buttons.items():
+                option_color = options[value].get("color", palette["primary"])
+                selected = value == current
+                button.configure(
+                    bg=option_color if selected and swatches else palette["primary"] if selected else palette["surface"],
+                    fg=palette["primary_fg"] if selected else palette["text"],
+                    activebackground=palette["primary_active"] if selected else palette["border_alt"],
+                    activeforeground=palette["primary_fg"] if selected else palette["text"],
+                    highlightbackground=option_color if swatches else palette["border_alt"],
+                    highlightcolor=option_color if swatches else palette["border_alt"],
+                )
+
+        for value, meta in options.items():
+            label = str(meta.get("label", value.title()))
+            if swatches:
+                label = f"  {label}"
+            button = tk.Button(
+                row,
+                text=label,
+                relief="flat",
+                bd=0,
+                highlightthickness=1,
+                font=(self.mono_font, 9),
+                padx=12,
+                pady=7,
+                cursor="hand2",
+                command=lambda item=value: select(item),
+            )
+            button.pack(side="left", padx=(0, 8), pady=(4, 0))
+            buttons[value] = button
+
+        variable.trace_add("write", redraw)
+        redraw()
+
+    def _apply_appearance_from_dialog(self, appearance_vars, save=False):
+        self.theme_preset.set(appearance_vars["theme_preset"].get())
+        self.accent_color.set(appearance_vars["accent_color"].get())
+        self.ui_density.set(appearance_vars["ui_density"].get())
+        self.ui_scale.set(appearance_vars["ui_scale"].get())
+        if hasattr(self, "apply_appearance_settings"):
+            self.apply_appearance_settings()
+        if save and hasattr(self, "save_settings"):
+            self.save_settings()
+        if hasattr(self, "_footer_state_var"):
+            self._footer_state_var.set("Appearance applied. Save & Apply persists the full settings set.")
+
+    def _reset_appearance_vars(self, appearance_vars):
+        for key, value in DEFAULT_APPEARANCE_SETTINGS.items():
+            if key in appearance_vars:
+                appearance_vars[key].set(value)
+        if hasattr(self, "_footer_state_var"):
+            self._footer_state_var.set("Appearance reset to defaults. Save & Apply to persist.")
 
     def _build_general_page(self, parent, palette, parallel_var, boot_delay_var, task_duration_var, max_videos_var, accounts_per_ld_var):
         self._page_heading(parent, palette, "GENERAL", "Launch & Session Controls", "Tune your main runtime values with cleaner, more readable controls.")
@@ -735,11 +1000,12 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
 
         def redraw(*_):
             enabled = bool(variable.get())
+            active_bg = palette.get("nav_active_bg", palette["surface_alt"])
             state_var.set("ENABLED" if enabled else "DISABLED")
-            card.config(bg="#112132" if enabled else palette["surface_alt"])
-            left.config(bg="#112132" if enabled else palette["surface_alt"])
-            right.config(bg="#112132" if enabled else palette["surface_alt"])
-            state.config(bg="#112132" if enabled else palette["surface_alt"], fg=palette["primary"] if enabled else palette["muted"])
+            card.config(bg=active_bg if enabled else palette["surface_alt"])
+            left.config(bg=active_bg if enabled else palette["surface_alt"])
+            right.config(bg=active_bg if enabled else palette["surface_alt"])
+            state.config(bg=active_bg if enabled else palette["surface_alt"], fg=palette["primary"] if enabled else palette["muted"])
             switch_shell.config(bg=palette["primary"] if enabled else palette["surface"])
             knob.place(x=36 if enabled else 4, y=3)
 
@@ -848,7 +1114,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         tk.Label(card, textvariable=variable, bg=palette["surface_alt"], fg=palette["primary"], font=(self.display_font, 22)).pack(anchor="w", pady=(6, 0))
         tk.Label(card, text=unit, bg=palette["surface_alt"], fg=palette["muted"], font=(self.mono_font, 8)).pack(anchor="w")
 
-    def _build_premium_footer(self, parent, palette, dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, accounts_per_ld_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_app_password_var, email_imap_server_var, email_imap_port_var, email_mailbox_var, email_use_ssl_var, email_unread_only_var, email_sender_filter_var, email_subject_filter_var, email_timeout_var, email_poll_interval_var, email_mark_as_seen_var):
+    def _build_premium_footer(self, parent, palette, dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, accounts_per_ld_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_app_password_var, email_imap_server_var, email_imap_port_var, email_mailbox_var, email_use_ssl_var, email_unread_only_var, email_sender_filter_var, email_subject_filter_var, email_timeout_var, email_poll_interval_var, email_mark_as_seen_var, appearance_vars):
         footer = tk.Frame(parent, bg=palette["surface_alt"], padx=18, pady=14, highlightthickness=1, highlightbackground=palette["border_alt"])
         footer.pack(fill="x")
 
@@ -872,10 +1138,10 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         self._footer_button(
             right,
             palette,
-            "Save Settings",
+            "Save & Apply",
             palette["surface"],
             palette["primary"],
-            lambda: self._save_settings_from_dialog(dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, accounts_per_ld_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_app_password_var, email_imap_server_var, email_imap_port_var, email_mailbox_var, email_use_ssl_var, email_unread_only_var, email_sender_filter_var, email_subject_filter_var, email_timeout_var, email_poll_interval_var, email_mark_as_seen_var),
+            lambda: self._save_settings_from_dialog(dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, accounts_per_ld_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_app_password_var, email_imap_server_var, email_imap_port_var, email_mailbox_var, email_use_ssl_var, email_unread_only_var, email_sender_filter_var, email_subject_filter_var, email_timeout_var, email_poll_interval_var, email_mark_as_seen_var, appearance_vars),
             filled=True,
         )
 
@@ -1016,17 +1282,18 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         for name, widgets in getattr(self, "_settings_nav_buttons", {}).items():
             outer, accent, btn = widgets
             active = name == key
+            active_bg = self.palette.get("nav_active_bg", self.palette["surface_alt"])
             outer.config(bg=self.palette["border_alt"] if active else self.palette["surface_alt"])
             accent.config(bg=self.palette["primary"] if active else self.palette["surface_alt"])
-            btn.config(bg="#112132" if active else self.palette["surface_alt"])
+            btn.config(bg=active_bg if active else self.palette["surface_alt"])
             for child in btn.winfo_children():
                 try:
-                    child.config(bg="#112132" if active else self.palette["surface_alt"])
+                    child.config(bg=active_bg if active else self.palette["surface_alt"])
                 except Exception:
                     pass
                 for sub in getattr(child, "winfo_children", lambda: [])():
                     try:
-                        sub.config(bg="#112132" if active else self.palette["surface_alt"])
+                        sub.config(bg=active_bg if active else self.palette["surface_alt"])
                     except Exception:
                         pass
 
@@ -1041,7 +1308,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         if hasattr(self, "_footer_state_var"):
             self._footer_state_var.set(f"Applied profile: {profile_name}.")
 
-    def _save_settings_from_dialog(self, dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, accounts_per_ld_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_app_password_var, email_imap_server_var, email_imap_port_var, email_mailbox_var, email_use_ssl_var, email_unread_only_var, email_sender_filter_var, email_subject_filter_var, email_timeout_var, email_poll_interval_var, email_mark_as_seen_var):
+    def _save_settings_from_dialog(self, dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, accounts_per_ld_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_app_password_var, email_imap_server_var, email_imap_port_var, email_mailbox_var, email_use_ssl_var, email_unread_only_var, email_sender_filter_var, email_subject_filter_var, email_timeout_var, email_poll_interval_var, email_mark_as_seen_var, appearance_vars):
         self.parallel_ld.set(parallel_var.get())
         self.boot_delay.set(boot_delay_var.get())
         self.task_duration.set(task_duration_var.get())
@@ -1068,6 +1335,12 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         self.email_timeout_seconds.set(email_timeout_var.get())
         self.email_poll_interval_seconds.set(email_poll_interval_var.get())
         self.email_mark_as_seen.set(email_mark_as_seen_var.get())
+        self.theme_preset.set(appearance_vars["theme_preset"].get())
+        self.accent_color.set(appearance_vars["accent_color"].get())
+        self.ui_density.set(appearance_vars["ui_density"].get())
+        self.ui_scale.set(appearance_vars["ui_scale"].get())
+        if hasattr(self, "apply_appearance_settings"):
+            self.apply_appearance_settings()
         if hasattr(self, "save_settings"):
             try:
                 self.save_settings()

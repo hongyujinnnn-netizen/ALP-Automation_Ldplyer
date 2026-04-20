@@ -2,10 +2,11 @@
 from tkinter import ttk
 import time
 
-from gui.components.status import configure_status_tree_tags, status_tag
+from gui.components.status import DEFAULT_PALETTE, configure_status_tree_tags, status_tag
 
 class CheckboxTreeview(ttk.Treeview):
     def __init__(self, master=None, **kwargs):
+        self.palette = kwargs.pop("palette", DEFAULT_PALETTE)
         # Use ttkbootstrap Treeview
         super().__init__(master, **kwargs)
         self.checkboxes = {}
@@ -16,13 +17,11 @@ class CheckboxTreeview(ttk.Treeview):
         # Configure tags; keep checked rows uncolored so only the checkmark indicates selection.
         self.tag_configure("checked", background="", foreground="")
         self.tag_configure("unchecked", background="", foreground="")
-        configure_status_tree_tags(self)
-        self.tag_configure("selected", background="#00E5FF", foreground="#0A0C10")
-        self.tag_configure("hover", background="#1E2330")
+        self.apply_palette(self.palette)
         
         # Custom checkbox tags
-        self.tag_configure("checkbox_checked", background="#10B981", foreground="white")
-        self.tag_configure("checkbox_unchecked", background="#64748B", foreground="white")
+        self.tag_configure("checkbox_checked", background=self.palette["success"], foreground="white")
+        self.tag_configure("checkbox_unchecked", background=self.palette["muted"], foreground="white")
         
         # Bind events
         self.bind("<Button-1>", self._on_click)
@@ -33,7 +32,12 @@ class CheckboxTreeview(ttk.Treeview):
         self.bind("<Leave>", self._on_leave)
         
         # Right-click context menu
-        self.context_menu = tk.Menu(self, tearoff=0, bg="#343a40", fg="white")
+        self.context_menu = tk.Menu(
+            self,
+            tearoff=0,
+            bg=self.palette.get("context_bg", "#343A40"),
+            fg=self.palette.get("context_fg", "white"),
+        )
         self.context_menu.add_command(label="Select", command=self._context_select)
         self.context_menu.add_command(label="Deselect", command=self._context_deselect)
         self.context_menu.add_separator()
@@ -43,6 +47,23 @@ class CheckboxTreeview(ttk.Treeview):
         
         self.context_item = None
         self.hover_item = None
+
+    def apply_palette(self, palette):
+        self.palette = palette or DEFAULT_PALETTE
+        configure_status_tree_tags(self, self.palette)
+        self.tag_configure(
+            "selected",
+            background=self.palette.get("selected_bg", self.palette["primary"]),
+            foreground=self.palette.get("selected_fg", "#0A0C10"),
+        )
+        self.tag_configure("hover", background=self.palette.get("hover_bg", self.palette["surface_alt"]))
+        self.tag_configure("checkbox_checked", background=self.palette["success"], foreground="white")
+        self.tag_configure("checkbox_unchecked", background=self.palette["muted"], foreground="white")
+        if hasattr(self, "context_menu"):
+            self.context_menu.configure(
+                bg=self.palette.get("context_bg", "#343A40"),
+                fg=self.palette.get("context_fg", "white"),
+            )
 
     def _on_click(self, event):
         """Handle single click for selection"""

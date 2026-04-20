@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import ttkbootstrap as tb
 
 from gui.components.cards import AlertCard, FeedCard, MetricCard
+from gui.components.state_views import StateView
 from gui.components.status import (
     StatusPill,
     event_level_status,
@@ -631,9 +632,18 @@ class DashboardPageMixin:
         }.get(level, self.palette["muted"])
 
     def _build_empty_state(self, parent, title, detail, accent):
-        severity = "success" if accent == self.palette["success"] else "neutral"
-        card = AlertCard(parent, severity, title, detail, palette=self.palette)
-        card.pack(fill="x", pady=4)
+        kind = "success" if accent == self.palette["success"] else "empty"
+        view = StateView(
+            parent,
+            kind=kind,
+            title=title,
+            message=detail,
+            palette=self.palette,
+            display_font=self.display_font,
+            mono_font=self.mono_font,
+            padding=(14, 14),
+        )
+        view.pack(fill="x", pady=4)
 
     def _clear_frame(self, frame):
         for child in frame.winfo_children():

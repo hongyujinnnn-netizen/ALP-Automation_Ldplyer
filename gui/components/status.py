@@ -14,6 +14,13 @@ DEFAULT_PALETTE = {
     "danger": "#EF4444",
     "border": "#1A2030",
     "border_alt": "#222B3A",
+    "primary_bg": "#0A1A20",
+    "secondary_bg": "#160F22",
+    "success_bg": "#081C14",
+    "warning_bg": "#111827",
+    "danger_bg": "#1F1720",
+    "muted_bg": "#0E1118",
+    "tree_odd": "#0C1016",
 }
 
 
@@ -157,8 +164,14 @@ def status_color(status, palette=None):
     return palette.get(spec.color_role, palette["muted"])
 
 
-def status_background(status):
-    return get_status_spec(status).bg
+def status_background(status, palette=None):
+    palette = palette or DEFAULT_PALETTE
+    spec = get_status_spec(status)
+    if spec.color_role == "primary":
+        return palette.get("primary_bg", spec.bg)
+    if spec.color_role == "secondary":
+        return palette.get("secondary_bg", spec.bg)
+    return palette.get(f"{spec.color_role}_bg", spec.bg)
 
 
 def status_filter_values():
@@ -174,12 +187,12 @@ def configure_status_tree_tags(tree, palette=None, *, include_zebra=False):
         if tag in configured:
             continue
         configured.add(tag)
-        background = "" if tag in {"inactive", "idle"} else spec.bg
+        background = "" if tag in {"inactive", "idle"} else status_background(spec.key, palette)
         foreground = status_color(spec.key, palette)
         tree.tag_configure(tag, background=background, foreground=foreground)
 
     if include_zebra:
-        tree.tag_configure("odd_row", background="#0C1016")
+        tree.tag_configure("odd_row", background=palette.get("tree_odd", "#0C1016"))
         tree.tag_configure("even_row", background=palette["surface"])
 
 
@@ -212,6 +225,8 @@ class StatusPill(tk.Frame):
         self._font = font
         self._padx = padx
         self._pady = pady
+        self._status = status
+        self._text = text
         super().__init__(parent, highlightthickness=0, bd=0, **kwargs)
 
         self.inner = tk.Frame(self, highlightthickness=0, bd=0)
@@ -227,14 +242,20 @@ class StatusPill(tk.Frame):
         self.set_status(status, text=text)
 
     def set_status(self, status, text=None):
+        self._status = status
+        self._text = text
         spec = get_status_spec(status)
         fg = status_color(status, self.palette)
-        bg = spec.bg
+        bg = status_background(status, self.palette)
         border = fg
         label_text = text if text is not None else spec.label
         self.configure(bg=border)
         self.inner.configure(bg=bg)
         self.label.configure(text=label_text, bg=bg, fg=fg)
+
+    def update_palette(self, palette):
+        self.palette = palette or DEFAULT_PALETTE
+        self.set_status(self._status, text=self._text)
 
     def config(self, cnf=None, **kwargs):
         text = kwargs.pop("text", None)

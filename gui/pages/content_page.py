@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox as MessageBox
 import ttkbootstrap as tb
 from gui.components.cards import DetailCard
+from gui.components.state_views import StateView
 
 class ContentPageMixin:
     def create_content_tab(self):
@@ -56,6 +57,21 @@ class ContentPageMixin:
         left = left_card.body
         right = right_card.body
 
+        self.content_list_state_view = StateView(
+            left,
+            kind="loading",
+            title="Loading content queue...",
+            message="Reading queued media and usage state.",
+            actions=[
+                {"text": "Refresh", "command": self.update_content_display, "bootstyle": "outline-info"},
+                {"text": "Load Folder", "command": self.load_video_folder, "bootstyle": "outline-secondary"},
+            ],
+            palette=self.palette,
+            display_font=self.display_font,
+            mono_font=self.mono_font,
+        )
+        self.content_list_state_view.pack(fill="x", padx=5, pady=(0, 8))
+
         self.content_listbox = tk.Listbox(
             left,
             font=(self.mono_font, 10),
@@ -88,6 +104,16 @@ class ContentPageMixin:
             padx=8,
             pady=8,
         )
+        self.content_preview_state_view = StateView(
+            right,
+            kind="empty",
+            title="Select content to preview",
+            message="Choose a queued video to inspect caption and file metadata.",
+            palette=self.palette,
+            display_font=self.display_font,
+            mono_font=self.mono_font,
+        )
+        self.content_preview_state_view.pack(fill="x", pady=(0, 8))
         self.content_preview_text.pack(fill="both", expand=True)
         self.content_preview_text.insert("1.0", "Select an item to view details.")
         self.content_preview_text.config(state="disabled")
@@ -174,11 +200,51 @@ class ContentPageMixin:
 
     def update_content_display(self):
         """Update content listbox display"""
+        if hasattr(self, "content_list_state_view"):
+            self.content_list_state_view.set(
+                kind="loading",
+                title="Loading content queue...",
+                message="Reading queued media and usage state.",
+                actions=[],
+            )
+            self.content_list_state_view.pack(fill="x", padx=5, pady=(0, 8))
+            try:
+                self.root.update_idletasks()
+            except Exception:
+                pass
         self.content_listbox.delete(0, tk.END)
         self._content_display_items = []
-        
-        # Get content from manager
-        content_items = self.content_manager.get_queue_items()
+
+        try:
+            content_items = self.content_manager.get_queue_items()
+        except Exception as exc:
+            self.content_list_state_view.set(
+                kind="error",
+                title="Could not read content queue",
+                message=str(exc) or "The content queue could not be loaded from disk.",
+                actions=[
+                    {"text": "Retry", "command": self.update_content_display, "bootstyle": "outline-danger"},
+                    {"text": "Load Folder", "command": self.load_video_folder, "bootstyle": "outline-secondary"},
+                ],
+            )
+            self.update_content_stats(error=exc)
+            self._set_content_preview_empty("Content preview unavailable", "Fix the queue load error, then select an item to preview.")
+            self.log(f"Failed to load content queue: {exc}", "ERROR", category="Content")
+            return
+
+        if not content_items and hasattr(self, "content_list_state_view"):
+            self.content_list_state_view.set(
+                kind="empty",
+                title="Content queue is empty",
+                message="Add a video or load a folder to prepare queue-backed automation tasks.",
+                actions=[
+                    {"text": "Add Video", "command": self.add_video, "bootstyle": "outline-info"},
+                    {"text": "Load Folder", "command": self.load_video_folder, "bootstyle": "outline-secondary"},
+                ],
+            )
+            self.content_list_state_view.pack(fill="x", padx=5, pady=(0, 8))
+        elif hasattr(self, "content_list_state_view"):
+            self.content_list_state_view.pack_forget()
         
         for item in content_items:
             filename = os.path.basename(item['path'])
@@ -198,6 +264,8 @@ class ContentPageMixin:
             self.content_listbox.selection_clear(0, tk.END)
             self.content_listbox.selection_set(0)
             self._on_content_selected()
+        else:
+            self._set_content_preview_empty()
 
 
     def _on_content_selected(self, _event=None):
@@ -207,7 +275,8 @@ class ContentPageMixin:
 
         selected = self.content_listbox.curselection()
         if not selected:
-            preview = "Select an item to view details."
+            self._set_content_preview_empty()
+            return
         else:
             idx = selected[0]
             item = self._content_display_items[idx] if idx < len(self._content_display_items) else {}
@@ -222,11 +291,31 @@ class ContentPageMixin:
         self.content_preview_text.delete("1.0", "end")
         self.content_preview_text.insert("1.0", preview)
         self.content_preview_text.config(state="disabled")
+        if hasattr(self, "content_preview_state_view"):
+            self.content_preview_state_view.pack_forget()
+
+    def _set_content_preview_empty(self, title="Select content to preview", message="Choose a queued video to inspect caption and file metadata."):
+        if hasattr(self, "content_preview_state_view"):
+            self.content_preview_state_view.set(kind="empty", title=title, message=message, actions=[])
+            self.content_preview_state_view.pack(fill="x", pady=(0, 8))
+        if hasattr(self, "content_preview_text"):
+            self.content_preview_text.config(state="normal")
+            self.content_preview_text.delete("1.0", "end")
+            self.content_preview_text.insert("1.0", message)
+            self.content_preview_text.config(state="disabled")
 
 
-    def update_content_stats(self):
+    def update_content_stats(self, error=None):
         """Update content queue statistics"""
-        stats = self.content_manager.get_queue_stats()
+        if error is not None:
+            self.content_stats_label.config(text="Queue: unavailable")
+            return
+        try:
+            stats = self.content_manager.get_queue_stats()
+        except Exception as exc:
+            self.content_stats_label.config(text="Queue: unavailable")
+            self.log(f"Failed to read content stats: {exc}", "ERROR", category="Content")
+            return
         self.content_stats_label.config(
             text=f"Queue: {stats['total']} total, {stats['available']} available, {stats['used']} used"
         )

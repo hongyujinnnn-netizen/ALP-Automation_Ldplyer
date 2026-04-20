@@ -49,10 +49,12 @@ from gui.components.status import (
     status_table_text,
     status_tag,
 )
+from gui.components.state_views import StateView
 from gui.components.command_palette import Command, CommandPalette
 from gui.mixins import ToolsMixin
 from gui.gradient_progress import GradientProgressBar
 from gui.styles import configure_styles
+from gui.appearance import resolve_appearance
 from gui.sidebar import SidebarMixin
 from gui.topbar import TopBarMixin
 from gui.status_bar import StatusBarMixin
@@ -91,24 +93,18 @@ class LDManagerApp(
         self.root.title("LDPlayer Automation Manager")
         self.root.geometry("1540x940")
         self.root.minsize(1280, 780)
+
+        self.paths = get_app_paths()
+        self.paths.ensure_runtime_dirs()
+        self.settings_service = SettingsService(self.paths)
+        try:
+            startup_settings = self.settings_service.load_app_settings()
+        except Exception:
+            startup_settings = AppSettings()
         
-        # Apply a fixed dark theme to mirror the dashboard mockup style.
-        self.style = tb.Style(theme="darkly")
-        self.palette = {
-            "app_bg": "#080B10",
-            "surface": "#0E1118",
-            "surface_alt": "#141820",
-            "surface_alt_2": "#1A1F2C",
-            "text": "#E2E8F0",
-            "muted": "#64748B",
-            "primary": "#00E5FF",
-            "secondary": "#7C3AED",
-            "success": "#10B981",
-            "warning": "#F59E0B",
-            "danger": "#EF4444",
-            "border": "#1A2030",
-            "border_alt": "#222B3A",
-        }
+        self.appearance = resolve_appearance(startup_settings)
+        self.palette = self.appearance.palette
+        self.style = tb.Style(theme=self.appearance.ttk_theme)
         families = set(tkfont.families())
         self.mono_font = "Cascadia Mono" if "Cascadia Mono" in families else "Consolas"
         self.display_font = "Segoe UI Semibold"
@@ -124,6 +120,8 @@ class LDManagerApp(
         self._main_thread_id = threading.get_ident()
         self._ld_checked_names = set()
         self._command_palette = None
+        self._fleet_load_state = "loading"
+        self._fleet_error_message = ""
         self.ld_search_var = tk.StringVar()
         self.ld_sort_var = tk.StringVar(value="Status")
         self.ld_status_filter_var = tk.StringVar(value="All")
@@ -132,11 +130,8 @@ class LDManagerApp(
         self._ld_groups = {}
         
         # Configure custom styles
-        configure_styles(self.root, self.style, self.palette, self.display_font, self.mono_font)
-        self.paths = get_app_paths()
-        self.paths.ensure_runtime_dirs()
+        configure_styles(self.root, self.style, self.palette, self.display_font, self.mono_font, self.appearance)
         self.app_logger = AppLogger(self.paths)
-        self.settings_service = SettingsService(self.paths)
         self.controller = AppController(self.settings_service, log_func=self.log)
         self.otp_controller = OTPController(
             self.settings_service,
@@ -204,6 +199,10 @@ class LDManagerApp(
         self.email_timeout_seconds = tk.IntVar(value=90)
         self.email_poll_interval_seconds = tk.IntVar(value=5)
         self.email_mark_as_seen = tk.BooleanVar(value=False)
+        self.theme_preset = tk.StringVar(value=self.appearance.theme_preset)
+        self.accent_color = tk.StringVar(value=self.appearance.accent_color)
+        self.ui_density = tk.StringVar(value=self.appearance.ui_density)
+        self.ui_scale = tk.StringVar(value=self.appearance.ui_scale)
         # Comma-separated list of blocked ISO country codes for IP guard.
         self.blocked_countries = tk.StringVar(
             value="US,KH,CN,TH,VN,PH,ID,MY,LA,MM"
@@ -274,7 +273,11 @@ class LDManagerApp(
 
         self.create_sidebar(shell)
 
-        main_container = tb.Frame(shell, style="CardInner.TFrame", padding=(16, 14, 16, 8))
+        main_container = tb.Frame(
+            shell,
+            style="CardInner.TFrame",
+            padding=self.appearance.spacing.get("content_pad", (16, 14, 16, 8)),
+        )
         main_container.pack(side="left", fill="both", expand=True)
 
         self.create_top_bar(main_container)
@@ -285,6 +288,203 @@ class LDManagerApp(
         
         # Status bar
         self.create_status_bar()
+
+    def apply_appearance_settings(self):
+        """Resolve, persist in memory, and apply the current appearance variables."""
+        old_palette = dict(getattr(self, "palette", {}) or {})
+        self.appearance = resolve_appearance(
+            theme_preset=self.theme_preset.get(),
+            accent_color=self.accent_color.get(),
+            ui_density=self.ui_density.get(),
+            ui_scale=self.ui_scale.get(),
+        )
+        self.palette = self.appearance.palette
+
+        try:
+            self.style.theme_use(self.appearance.ttk_theme)
+        except Exception:
+            self.style = tb.Style(theme=self.appearance.ttk_theme)
+
+        configure_styles(self.root, self.style, self.palette, self.display_font, self.mono_font, self.appearance)
+        self._refresh_appearance_on_existing_widgets(old_palette, self.palette)
+        self._refresh_tree_appearance()
+        self._refresh_log_appearance()
+        if hasattr(self, "_set_sidebar_nav_active"):
+            try:
+                self._set_sidebar_nav_active(getattr(self, "_active_sidebar_key", "analytics"))
+            except Exception:
+                pass
+
+    def _refresh_appearance_on_existing_widgets(self, old_palette, new_palette):
+        color_map = self._appearance_color_map(old_palette, new_palette)
+
+        def walk(widget):
+            self._refresh_widget_appearance(widget, color_map, new_palette)
+            for child in getattr(widget, "winfo_children", lambda: [])():
+                walk(child)
+
+        walk(self.root)
+
+    def _appearance_color_map(self, old_palette, new_palette):
+        color_map = {}
+        for key, old_value in old_palette.items():
+            new_value = new_palette.get(key)
+            if old_value and new_value:
+                color_map[str(old_value).lower()] = new_value
+
+        legacy_roles = {
+            "#00c4d9": "primary",
+            "#00e5ff": "primary",
+            "#040608": "primary_fg",
+            "#1a2530": "surface_alt_2",
+            "#64748b": "muted",
+            "#6b7b90": "muted",
+            "#112132": "nav_active_bg",
+            "#0b1b2b": "tip_bg",
+            "#071820": "primary_bg",
+            "#00485a": "primary_border",
+            "#10082a": "secondary_bg",
+            "#3a1878": "secondary_border",
+            "#0c1016": "tree_odd",
+            "#1e2330": "hover_bg",
+            "#343a40": "context_bg",
+            "#ffffff": "context_fg",
+        }
+        for legacy, role in legacy_roles.items():
+            color_map[legacy] = new_palette.get(role, new_palette.get("surface", legacy))
+        return color_map
+
+    def _refresh_widget_appearance(self, widget, color_map, palette):
+        if hasattr(widget, "update_palette") and callable(widget.update_palette):
+            try:
+                widget.update_palette(palette)
+            except Exception:
+                pass
+        elif hasattr(widget, "apply_palette") and callable(widget.apply_palette):
+            try:
+                widget.apply_palette(palette)
+            except Exception:
+                pass
+        elif hasattr(widget, "palette"):
+            try:
+                widget.palette = palette
+            except Exception:
+                pass
+
+        if isinstance(widget, GradientProgressBar):
+            try:
+                widget.configure(bg=palette["surface_alt"])
+                widget.configure_colors(palette["primary"], palette["secondary"])
+            except Exception:
+                pass
+
+        for option in (
+            "background",
+            "foreground",
+            "activebackground",
+            "activeforeground",
+            "insertbackground",
+            "highlightbackground",
+            "highlightcolor",
+            "selectbackground",
+            "selectforeground",
+            "troughcolor",
+        ):
+            try:
+                current = str(widget.cget(option)).lower()
+            except Exception:
+                continue
+            replacement = color_map.get(current)
+            if replacement:
+                try:
+                    widget.configure(**{option: replacement})
+                except Exception:
+                    pass
+
+        self._refresh_widget_font(widget)
+
+    def _refresh_widget_font(self, widget):
+        try:
+            current_font = widget.cget("font")
+        except Exception:
+            return
+        if not current_font:
+            return
+        try:
+            actual = tkfont.Font(font=current_font).actual()
+        except Exception:
+            return
+        current_size = abs(int(actual.get("size", 10) or 10))
+        old_size = getattr(widget, "_appearance_base_font_size", None)
+        if old_size is None:
+            old_size = current_size
+            try:
+                widget._appearance_base_font_size = old_size
+            except Exception:
+                pass
+        if int(old_size) <= 8:
+            role = "small"
+        elif int(old_size) <= 9:
+            role = "meta"
+        elif int(old_size) <= 10:
+            role = "body"
+        elif int(old_size) <= 12:
+            role = "card_title"
+        elif int(old_size) <= 15:
+            role = "top_title"
+        elif int(old_size) <= 17:
+            role = "section"
+        elif int(old_size) <= 19:
+            role = "title"
+        else:
+            role = "hero"
+        new_size = self.appearance.font_sizes.get(role, int(old_size))
+        family = actual.get("family", self.display_font)
+        parts = [family, new_size]
+        if actual.get("weight") == "bold":
+            parts.append("bold")
+        if actual.get("slant") == "italic":
+            parts.append("italic")
+        try:
+            widget.configure(font=tuple(parts))
+        except Exception:
+            pass
+
+    def _refresh_tree_appearance(self):
+        for attr in ("ld_table", "devices_tree", "account_tree"):
+            tree = getattr(self, attr, None)
+            if tree is None:
+                continue
+            try:
+                if hasattr(tree, "apply_palette"):
+                    tree.apply_palette(self.palette)
+                else:
+                    configure_status_tree_tags(tree, self.palette, include_zebra=True)
+            except Exception:
+                pass
+
+    def _refresh_log_appearance(self):
+        logs_text = getattr(self, "logs_text", None)
+        if logs_text is None:
+            return
+        try:
+            logs_text.configure(
+                bg=self.palette["surface"],
+                fg=self.palette["text"],
+                insertbackground=self.palette["text"],
+                selectbackground=self.palette["surface_alt"],
+                selectforeground=self.palette["text"],
+                highlightbackground=self.palette["border"],
+            )
+            logs_text.tag_configure("INFO", foreground=self.palette["primary"])
+            logs_text.tag_configure("SUCCESS", foreground=self.palette["success"])
+            logs_text.tag_configure("WARNING", foreground=self.palette["warning"])
+            logs_text.tag_configure("ERROR", foreground=self.palette["danger"])
+            logs_text.tag_configure("CATEGORY", foreground=self.palette["muted"])
+            logs_text.tag_configure("MESSAGE", foreground=self.palette["text"])
+            logs_text.tag_configure("EMPTY", foreground=self.palette["muted"])
+        except Exception:
+            pass
 
 
     def _bind_command_palette_shortcut(self):
@@ -693,7 +893,23 @@ class LDManagerApp(
     def create_enhanced_treeview(self, parent):
         """Create enhanced Treeview with better styling"""
         # Create frame for treeview and scrollbar
+        self.ld_table_state_view = StateView(
+            parent,
+            kind="loading",
+            title="Scanning emulator fleet...",
+            message="Looking for LDPlayer instances and current ADB state.",
+            actions=[
+                {"text": "Refresh", "command": self.refresh_emulator_list, "bootstyle": "outline-info"},
+                {"text": "Tools", "command": self.show_tools_center, "bootstyle": "outline-secondary"},
+            ],
+            palette=self.palette,
+            display_font=self.display_font,
+            mono_font=self.mono_font,
+        )
+        self.ld_table_state_view.pack(fill="x", pady=(0, 10))
+
         tree_frame = tb.Frame(parent)
+        self.ld_table_frame = tree_frame
         tree_frame.pack(fill="both", expand=True)
         
         # Define columns
@@ -706,6 +922,7 @@ class LDManagerApp(
             show="tree headings",
             selectmode="none",
             height=15,
+            palette=self.palette,
             style="Custom.Treeview"
         )
 
@@ -1105,6 +1322,7 @@ class LDManagerApp(
 
         checked_names = self._get_checked_names()
         rows = self._filtered_snapshot_rows()
+        self._sync_fleet_state_view(rows)
         render_signature = (tuple(rows), tuple(sorted(checked_names)))
         if render_signature == self._last_table_signature:
             self.update_selection_info()
@@ -1148,6 +1366,65 @@ class LDManagerApp(
         self._last_table_signature = render_signature
         self._update_fleet_summary(rows)
         self.update_selection_info()
+
+    def _sync_fleet_state_view(self, rows=None):
+        if not hasattr(self, "ld_table_state_view"):
+            return
+        rows = rows if rows is not None else self._filtered_snapshot_rows()
+        state = getattr(self, "_fleet_load_state", "ready")
+        error_message = getattr(self, "_fleet_error_message", "")
+
+        if state == "loading":
+            self.ld_table_state_view.set(
+                kind="loading",
+                title="Scanning emulator fleet...",
+                message="Looking for LDPlayer instances and current ADB state.",
+                actions=[
+                    {"text": "Tools", "command": self.show_tools_center, "bootstyle": "outline-secondary"},
+                ],
+            )
+            self.ld_table_state_view.pack(fill="x", pady=(0, 10))
+            return
+
+        if state == "error":
+            self.ld_table_state_view.set(
+                kind="error",
+                title="Failed to refresh emulator list",
+                message=error_message or "The emulator service could not return the current LDPlayer fleet.",
+                actions=[
+                    {"text": "Retry", "command": self.refresh_emulator_list, "bootstyle": "outline-danger"},
+                    {"text": "Tools", "command": self.show_tools_center, "bootstyle": "outline-secondary"},
+                ],
+            )
+            self.ld_table_state_view.pack(fill="x", pady=(0, 10))
+            return
+
+        if not self._ld_snapshot:
+            self.ld_table_state_view.set(
+                kind="empty",
+                title="No LDPlayer instances found",
+                message="Create or start LDPlayer instances, then refresh the fleet list.",
+                actions=[
+                    {"text": "Refresh", "command": self.refresh_emulator_list, "bootstyle": "outline-info"},
+                    {"text": "Tools", "command": self.show_tools_center, "bootstyle": "outline-secondary"},
+                ],
+            )
+            self.ld_table_state_view.pack(fill="x", pady=(0, 10))
+            return
+
+        if not rows:
+            self.ld_table_state_view.set(
+                kind="empty",
+                title="No devices match the current filters",
+                message="Clear search, status, account, or group filters to see the full fleet.",
+                actions=[
+                    {"text": "Clear Filters", "command": self.clear_ld_filters, "bootstyle": "outline-secondary"},
+                ],
+            )
+            self.ld_table_state_view.pack(fill="x", pady=(0, 10))
+            return
+
+        self.ld_table_state_view.pack_forget()
 
     def _sync_emulator_table(self, snapshot, status_cache=None, account_cache=None, force=False):
         changed = force or snapshot != self._ld_snapshot
@@ -1502,6 +1779,10 @@ class LDManagerApp(
         self.email_timeout_seconds.set(email_request.timeout_seconds)
         self.email_poll_interval_seconds.set(email_request.poll_interval_seconds)
         self.email_mark_as_seen.set(email_request.mark_as_seen)
+        self.theme_preset.set(settings.theme_preset)
+        self.accent_color.set(settings.accent_color)
+        self.ui_density.set(settings.ui_density)
+        self.ui_scale.set(settings.ui_scale)
         self._ld_groups = self._normalize_ld_groups(settings.ld_groups)
         self._refresh_group_ui()
         try:
@@ -1546,6 +1827,10 @@ class LDManagerApp(
             email_timeout_seconds=int(self.email_timeout_seconds.get()),
             email_poll_interval_seconds=int(self.email_poll_interval_seconds.get()),
             email_mark_as_seen=bool(self.email_mark_as_seen.get()),
+            theme_preset=str(self.theme_preset.get()),
+            accent_color=str(self.accent_color.get()),
+            ui_density=str(self.ui_density.get()),
+            ui_scale=str(self.ui_scale.get()),
             ld_groups=self._normalize_ld_groups(),
             blocked_countries=[
                 code.strip().upper()
@@ -1558,7 +1843,21 @@ class LDManagerApp(
 
     def load_schedule_settings(self):
         """Load scheduling settings from the configured schedule settings file."""
-        schedule = self.controller.load_schedule_settings()
+        try:
+            schedule = self.controller.load_schedule_settings()
+        except Exception as exc:
+            if hasattr(self, "schedule_state_view"):
+                self.schedule_state_view.set(
+                    kind="error",
+                    title="Could not load schedule settings",
+                    message=str(exc) or "The schedule configuration could not be read.",
+                    actions=[
+                        {"text": "Retry", "command": self.load_schedule_settings, "bootstyle": "outline-danger"},
+                        {"text": "Settings", "command": self.show_settings_dialog, "bootstyle": "outline-secondary"},
+                    ],
+                )
+            self.log(f"Failed to load schedule settings: {exc}", "ERROR", category="Schedule")
+            return
 
         self.schedule_time.set(schedule.schedule_time)
         self.schedule_daily.set(schedule.schedule_daily)
@@ -1567,6 +1866,16 @@ class LDManagerApp(
 
         for day_name, day_var in self.schedule_days.items():
             day_var.set(schedule.schedule_days.get(day_name, False))
+
+        if hasattr(self, "schedule_state_view") and not self.schedule_running:
+            self.schedule_state_view.set(
+                kind="empty",
+                title="Schedule is disabled",
+                message="Enable scheduling when you want automation to run without manual start.",
+                actions=[
+                    {"text": "Enable", "command": self.start_schedule, "bootstyle": "outline-success"},
+                ],
+            )
 
     def save_schedule_settings(self):
         """Save scheduling settings to the configured schedule settings file."""
@@ -1908,20 +2217,41 @@ Recent Items:
 
     def refresh_emulator_list(self):
         """Refresh the emulator list from LDPlayer"""
+        self._fleet_load_state = "loading"
+        self._fleet_error_message = ""
+        self._sync_fleet_state_view([])
+        try:
+            self.root.update_idletasks()
+        except Exception:
+            pass
         try:
             self.emulator = EmulatorService()
             self.populate_ld_table()
+            self._fleet_load_state = "ready"
+            self._fleet_error_message = ""
+            self._sync_fleet_state_view()
             self.log("Emulator list refreshed", "SUCCESS")
         except Exception as e:
+            self._fleet_load_state = "error"
+            self._fleet_error_message = str(e)
+            self._sync_fleet_state_view([])
             self.log(f" Error refreshing emulator list: {e}", "ERROR")
 
     def populate_ld_table(self):
         """Populate LD table with current emulators"""
-        self.emulator._build_serial_mapping()
-        snapshot = dict(self.emulator.name_to_serial)
-        status_cache = {name: self._ld_status_cache.get(name, "Inactive") for name in snapshot}
-        account_cache = {name: self._ld_account_cache.get(name, "No account") for name in snapshot}
-        self._sync_emulator_table(snapshot, status_cache, account_cache, force=True)
+        try:
+            self.emulator._build_serial_mapping()
+            snapshot = dict(self.emulator.name_to_serial)
+            status_cache = {name: self._ld_status_cache.get(name, "Inactive") for name in snapshot}
+            account_cache = {name: self._ld_account_cache.get(name, "No account") for name in snapshot}
+            self._fleet_load_state = "ready"
+            self._fleet_error_message = ""
+            self._sync_emulator_table(snapshot, status_cache, account_cache, force=True)
+        except Exception as exc:
+            self._fleet_load_state = "error"
+            self._fleet_error_message = str(exc)
+            self._sync_fleet_state_view([])
+            raise
 
     def select_all(self):
         """Select all items in the table"""
@@ -2277,6 +2607,15 @@ Recent Items:
         self.schedule_enable_btn.config(text="Disable Schedule", bootstyle="warning")
         if hasattr(self, "schedule_state_pill"):
             self.schedule_state_pill.set_status("Enabled", text="Schedule: Enabled")
+        if hasattr(self, "schedule_state_view"):
+            self.schedule_state_view.set(
+                kind="success",
+                title="Schedule is enabled",
+                message="The scheduler is monitoring the configured run window.",
+                actions=[
+                    {"text": "Disable", "command": self.stop_schedule, "bootstyle": "outline-warning"},
+                ],
+            )
         self.log("Scheduling enabled", "SUCCESS")
         if hasattr(self, "_refresh_dashboard"):
             self._refresh_dashboard()
@@ -2295,6 +2634,15 @@ Recent Items:
         self.schedule_enable_btn.config(text="Enable Schedule", bootstyle="success")
         if hasattr(self, "schedule_state_pill"):
             self.schedule_state_pill.set_status("Disabled", text="Schedule: Disabled")
+        if hasattr(self, "schedule_state_view"):
+            self.schedule_state_view.set(
+                kind="empty",
+                title="Schedule is disabled",
+                message="Enable scheduling when you want automation to run without manual start.",
+                actions=[
+                    {"text": "Enable", "command": self.start_schedule, "bootstyle": "outline-success"},
+                ],
+            )
         self.log("Scheduling disabled", "INFO")
         if hasattr(self, "_refresh_dashboard"):
             self._refresh_dashboard()

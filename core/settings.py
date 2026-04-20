@@ -13,6 +13,11 @@ class SettingsError(RuntimeError):
     """Raised when loading or saving a settings file fails."""
 
 
+def _choice(raw: Any, default: str, allowed: set[str]) -> str:
+    value = str(raw or "").strip().lower()
+    return value if value in allowed else default
+
+
 @dataclass(slots=True)
 class AppSettings:
     """Persisted UI preferences for the LDManager application."""
@@ -48,6 +53,10 @@ class AppSettings:
     email_timeout_seconds: int = 90
     email_poll_interval_seconds: int = 5
     email_mark_as_seen: bool = False
+    theme_preset: str = "dark"
+    accent_color: str = "cyan"
+    ui_density: str = "comfortable"
+    ui_scale: str = "normal"
     ld_groups: Dict[str, List[str]] = field(default_factory=dict)
     # Two-letter ISO country codes to block when detected as the host's
     # public IP country. If the country is blocked, automation will not start.
@@ -69,6 +78,7 @@ class AppSettings:
     @classmethod
     def from_dict(cls, raw: Dict) -> "AppSettings":
         try:
+            defaults = cls()
             raw_groups = raw.get("ld_groups") or {}
             ld_groups: Dict[str, List[str]] = {}
             if isinstance(raw_groups, dict):
@@ -90,34 +100,34 @@ class AppSettings:
             elif isinstance(raw_blocked, str):
                 blocked_countries = [part.strip().upper() for part in raw_blocked.split(",") if part.strip()]
             else:
-                blocked_countries = cls.blocked_countries  # type: ignore[attr-defined]
+                blocked_countries = defaults.blocked_countries
 
-            provider = str(raw.get("email_provider", cls.email_provider)).strip().lower() or "yandex"
+            provider = str(raw.get("email_provider", defaults.email_provider)).strip().lower() or "yandex"
             provider_defaults = EmailAccountConfig(provider=provider).with_provider_defaults()
             request_defaults = OTPRequest()
 
             return cls(
-                parallel_ld=int(raw.get("parallel_ld", cls.parallel_ld)),
-                boot_delay=int(raw.get("boot_delay", cls.boot_delay)),
-                task_duration=int(raw.get("task_duration", cls.task_duration)),
-                max_videos=int(raw.get("max_videos", cls.max_videos)),
-                page_per_account=int(raw.get("page_per_account", cls.page_per_account)),
-                accounts_per_ld=int(raw.get("accounts_per_ld", cls.accounts_per_ld)),
-                start_same_time=bool(raw.get("start_same_time", cls.start_same_time)),
-                use_content_queue=bool(raw.get("use_content_queue", cls.use_content_queue)),
-                auto_arrange_ld=bool(raw.get("auto_arrange_ld", cls.auto_arrange_ld)),
-                auto_shutdown_pc=bool(raw.get("auto_shutdown_pc", cls.auto_shutdown_pc)),
-                task_type=str(raw.get("task_type", cls.task_type)),
-                task_template=str(raw.get("task_template", cls.task_template)),
-                scroll_after_post=bool(raw.get("scroll_after_post", cls.scroll_after_post)),
-                clear_cache=bool(raw.get("clear_cache", cls.clear_cache)),
-                verify_account=bool(raw.get("verify_account", cls.verify_account)),
-                reg_contact_mode=str(raw.get("reg_contact_mode", cls.reg_contact_mode)),
-                reg_contact_value=str(raw.get("reg_contact_value", cls.reg_contact_value)),
-                reg_phone_prefix=str(raw.get("reg_phone_prefix", cls.reg_phone_prefix)),
+                parallel_ld=int(raw.get("parallel_ld", defaults.parallel_ld)),
+                boot_delay=int(raw.get("boot_delay", defaults.boot_delay)),
+                task_duration=int(raw.get("task_duration", defaults.task_duration)),
+                max_videos=int(raw.get("max_videos", defaults.max_videos)),
+                page_per_account=int(raw.get("page_per_account", defaults.page_per_account)),
+                accounts_per_ld=int(raw.get("accounts_per_ld", defaults.accounts_per_ld)),
+                start_same_time=bool(raw.get("start_same_time", defaults.start_same_time)),
+                use_content_queue=bool(raw.get("use_content_queue", defaults.use_content_queue)),
+                auto_arrange_ld=bool(raw.get("auto_arrange_ld", defaults.auto_arrange_ld)),
+                auto_shutdown_pc=bool(raw.get("auto_shutdown_pc", defaults.auto_shutdown_pc)),
+                task_type=str(raw.get("task_type", defaults.task_type)),
+                task_template=str(raw.get("task_template", defaults.task_template)),
+                scroll_after_post=bool(raw.get("scroll_after_post", defaults.scroll_after_post)),
+                clear_cache=bool(raw.get("clear_cache", defaults.clear_cache)),
+                verify_account=bool(raw.get("verify_account", defaults.verify_account)),
+                reg_contact_mode=str(raw.get("reg_contact_mode", defaults.reg_contact_mode)),
+                reg_contact_value=str(raw.get("reg_contact_value", defaults.reg_contact_value)),
+                reg_phone_prefix=str(raw.get("reg_phone_prefix", defaults.reg_phone_prefix)),
                 email_provider=provider,
-                email_address=str(raw.get("email_address", cls.email_address)),
-                email_app_password=str(raw.get("email_app_password", cls.email_app_password)),
+                email_address=str(raw.get("email_address", defaults.email_address)),
+                email_app_password=str(raw.get("email_app_password", defaults.email_app_password)),
                 email_imap_server=str(raw.get("email_imap_server", provider_defaults.imap_server)),
                 email_imap_port=int(raw.get("email_imap_port", provider_defaults.imap_port)),
                 email_mailbox=str(raw.get("email_mailbox", provider_defaults.mailbox)),
@@ -128,6 +138,10 @@ class AppSettings:
                 email_timeout_seconds=int(raw.get("email_timeout_seconds", request_defaults.timeout_seconds)),
                 email_poll_interval_seconds=int(raw.get("email_poll_interval_seconds", request_defaults.poll_interval_seconds)),
                 email_mark_as_seen=bool(raw.get("email_mark_as_seen", request_defaults.mark_as_seen)),
+                theme_preset=_choice(raw.get("theme_preset", defaults.theme_preset), defaults.theme_preset, {"dark", "light"}),
+                accent_color=_choice(raw.get("accent_color", defaults.accent_color), defaults.accent_color, {"cyan", "blue", "purple", "green"}),
+                ui_density=_choice(raw.get("ui_density", defaults.ui_density), defaults.ui_density, {"compact", "comfortable", "spacious"}),
+                ui_scale=_choice(raw.get("ui_scale", defaults.ui_scale), defaults.ui_scale, {"small", "normal", "large"}),
                 ld_groups=ld_groups,
                 blocked_countries=blocked_countries,
             )

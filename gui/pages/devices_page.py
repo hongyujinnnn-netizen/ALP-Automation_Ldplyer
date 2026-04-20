@@ -2,6 +2,7 @@ import tkinter as tk
 import ttkbootstrap as tb
 
 from gui.components.cards import MetricCard
+from gui.components.state_views import StateView
 from gui.components.status import StatusPill, configure_status_tree_tags, status_label, status_table_text, status_tag
 from gui.gradient_progress import GradientProgressBar
 
@@ -68,6 +69,20 @@ class DevicesPageMixin:
         )
 
         columns = ("device", "state", "task", "timer", "target", "queue", "account")
+        self.devices_table_state_view = StateView(
+            card,
+            kind="empty",
+            title="No runtime devices yet",
+            message="Refresh the emulator fleet or start automation to populate device runtime state.",
+            actions=[
+                {"text": "Refresh", "command": self.refresh_emulator_list, "bootstyle": "outline-info"},
+            ],
+            palette=self.palette,
+            display_font=self.display_font,
+            mono_font=self.mono_font,
+        )
+        self.devices_table_state_view.pack(fill="x", pady=(0, 10))
+
         tree = tb.Treeview(card, columns=columns, show="headings", height=14, style="Custom.Treeview")
         self.devices_tree = tree
 
@@ -237,6 +252,19 @@ class DevicesPageMixin:
         rows = self._device_page_rows()
         for item in self.devices_tree.get_children():
             self.devices_tree.delete(item)
+        if hasattr(self, "devices_table_state_view"):
+            if rows:
+                self.devices_table_state_view.pack_forget()
+            else:
+                self.devices_table_state_view.set(
+                    kind="empty",
+                    title="No runtime devices yet",
+                    message="Refresh the emulator fleet or start automation to populate device runtime state.",
+                    actions=[
+                        {"text": "Refresh", "command": self.refresh_emulator_list, "bootstyle": "outline-info"},
+                    ],
+                )
+                self.devices_table_state_view.pack(fill="x", pady=(0, 10))
         selected_count = waiting_count = running_count = completed_count = 0
         for row in rows:
             state_lower = row["state"].lower()

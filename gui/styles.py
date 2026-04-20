@@ -1,13 +1,21 @@
 import ttkbootstrap as tb
 
 
-def configure_styles(root, style, palette, display_font, mono_font):
+def configure_styles(root, style, palette, display_font, mono_font, appearance=None):
     """Configure custom ttkbootstrap styles."""
     root.configure(bg=palette["app_bg"])
+    spacing = getattr(appearance, "spacing", {}) or {}
+    font_sizes = getattr(appearance, "font_sizes", {}) or {}
+
+    def f(name, default):
+        return int(font_sizes.get(name, default))
+
+    def s(name, default):
+        return spacing.get(name, default)
 
     style.configure(
         ".",
-        font=(display_font, 10),
+        font=(display_font, f("body", 10)),
         background=palette["surface"],
         foreground=palette["text"],
     )
@@ -19,37 +27,37 @@ def configure_styles(root, style, palette, display_font, mono_font):
     )
     style.configure(
         "TLabelframe.Label",
-        font=(display_font, 13),
+        font=(display_font, f("card_title", 13)),
         foreground=palette["text"],
         background=palette["surface"]
     )
-    style.configure("TEntry", padding=(8, 8))
-    style.configure("TCombobox", padding=(8, 8))
+    style.configure("TEntry", padding=s("input_pad", (8, 8)))
+    style.configure("TCombobox", padding=s("input_pad", (8, 8)))
     style.configure("Card.TFrame", background=palette["surface"], borderwidth=0, relief="flat")
     style.configure("CardInner.TFrame", background=palette["surface"], borderwidth=0, relief="flat")
     style.configure("Shadow.TFrame", background=palette["border"])
     style.configure("Sidebar.TFrame", background=palette["surface"])
     style.configure("Topbar.TFrame", background=palette["surface"])
-    style.configure("SidebarTitle.TLabel", font=(display_font, 14), foreground=palette["text"], background=palette["surface"])
-    style.configure("SidebarSub.TLabel", font=(mono_font, 9), foreground=palette["primary"], background=palette["surface"])
-    style.configure("TopTitle.TLabel", font=(display_font, 15), foreground=palette["text"], background=palette["surface"])
-    style.configure("TopSub.TLabel", font=(mono_font, 9), foreground=palette["muted"], background=palette["surface"])
-    style.configure("Nav.TButton", font=(display_font, 10), anchor="w", padding=(10, 8))
+    style.configure("SidebarTitle.TLabel", font=(display_font, f("sidebar_title", 14)), foreground=palette["text"], background=palette["surface"])
+    style.configure("SidebarSub.TLabel", font=(mono_font, f("meta", 9)), foreground=palette["primary"], background=palette["surface"])
+    style.configure("TopTitle.TLabel", font=(display_font, f("top_title", 15)), foreground=palette["text"], background=palette["surface"])
+    style.configure("TopSub.TLabel", font=(mono_font, f("meta", 9)), foreground=palette["muted"], background=palette["surface"])
+    style.configure("Nav.TButton", font=(display_font, f("button", 10)), anchor="w", padding=s("nav_pad", (10, 8)))
     style.map(
         "Nav.TButton",
         background=[("active", palette["surface_alt"])],
         foreground=[("active", palette["text"])]
     )
-    style.configure("NavActive.TButton", font=(display_font, 10), anchor="w", padding=(10, 8))
-    style.configure("SidebarSection.TLabel", font=(display_font, 9), foreground="#64748B", background=palette["surface"])
-    style.configure("MetricLabel.TLabel", font=(display_font, 8), foreground="#6B7B90", background=palette["surface"])
-    style.configure("MetricValue.TLabel", font=(mono_font, 28), foreground=palette["text"], background=palette["surface"])
-    style.configure("MetricSub.TLabel", font=(mono_font, 9), foreground=palette["muted"], background=palette["surface"])
+    style.configure("NavActive.TButton", font=(display_font, f("button", 10)), anchor="w", padding=s("nav_pad", (10, 8)))
+    style.configure("SidebarSection.TLabel", font=(display_font, f("meta", 9)), foreground=palette["muted"], background=palette["surface"])
+    style.configure("MetricLabel.TLabel", font=(display_font, f("small", 8)), foreground=palette["muted"], background=palette["surface"])
+    style.configure("MetricValue.TLabel", font=(mono_font, f("metric", 28)), foreground=palette["text"], background=palette["surface"])
+    style.configure("MetricSub.TLabel", font=(mono_font, f("meta", 9)), foreground=palette["muted"], background=palette["surface"])
 
     style.configure(
         "TNotebook.Tab",
-        padding=(16, 11),
-        font=(display_font, 10)
+        padding=s("notebook_tab_pad", (16, 11)),
+        font=(display_font, f("body", 10))
     )
     style.map(
         "TNotebook.Tab",
@@ -64,8 +72,8 @@ def configure_styles(root, style, palette, display_font, mono_font):
     # Configure Treeview row height
     style.configure(
         "Custom.Treeview",
-        rowheight=28,
-        font=(mono_font, 9),
+        rowheight=int(s("tree_row_height", 28)),
+        font=(mono_font, f("meta", 9)),
         background=palette["surface"],
         fieldbackground=palette["surface"],
         foreground=palette["text"],
@@ -74,8 +82,8 @@ def configure_styles(root, style, palette, display_font, mono_font):
     
     style.configure(
         "Custom.Treeview.Heading",
-        font=(display_font, 10),
-        padding=(8, 7),
+        font=(display_font, f("body", 10)),
+        padding=s("tree_heading_pad", (8, 7)),
         relief="flat",
         foreground=palette["muted"],
         background=palette["surface_alt"]
@@ -83,52 +91,52 @@ def configure_styles(root, style, palette, display_font, mono_font):
     
     # Configure button styles
     for button_style in ("success.TButton", "danger.TButton", "warning.TButton", "info.TButton"):
-        style.configure(button_style, font=(display_font, 10), padding=(10, 7))
+        style.configure(button_style, font=(display_font, f("button", 10)), padding=s("button_pad", (10, 7)))
     
     # Configure label styles
     style.configure(
         "Title.TLabel",
-        font=(display_font, 18),
+        font=(display_font, f("title", 18)),
         foreground=palette["text"]
     )
     
     style.configure(
         "Subtitle.TLabel",
-        font=(mono_font, 10),
+        font=(mono_font, f("subtitle", 10)),
         foreground=palette["muted"]
     )
     style.configure(
         "SectionTitle.TLabel",
-        font=(display_font, 16),
+        font=(display_font, f("section", 16)),
         foreground=palette["text"]
     )
     style.configure(
         "CardItemTitle.TLabel",
-        font=(display_font, 11),
+        font=(display_font, f("card_title", 11)),
         foreground=palette["text"],
         background=palette["surface"],
     )
     style.configure(
         "HeroTitle.TLabel",
-        font=(display_font, 21),
+        font=(display_font, f("hero", 21)),
         foreground=palette["text"]
     )
     style.configure(
         "HeroSub.TLabel",
-        font=(mono_font, 10),
+        font=(mono_font, f("subtitle", 10)),
         foreground=palette["muted"]
     )
     style.configure(
         "Chip.TLabel",
-        font=(display_font, 9),
+        font=(display_font, f("meta", 9)),
         foreground=palette["text"]
     )
     style.configure(
         "StatusPill.TLabel",
-        font=(display_font, 9),
+        font=(display_font, f("meta", 9)),
         foreground=palette["text"],
         background=palette["surface_alt"],
-        padding=(8, 3),
+        padding=s("status_pad", (8, 3)),
     )
 
     # Custom scrollbars
@@ -154,20 +162,20 @@ def configure_styles(root, style, palette, display_font, mono_font):
     # Button hierarchy
     style.configure(
         "Primary.TButton",
-        font=(display_font, 10),
-        padding=(14, 8),
-        background="#00C4D9",
-        foreground="#040608",
+        font=(display_font, f("button", 10)),
+        padding=s("primary_button_pad", (14, 8)),
+        background=palette["primary"],
+        foreground=palette["primary_fg"],
     )
     style.map(
         "Primary.TButton",
-        background=[("active", "#00E5FF"), ("disabled", "#1A2530")],
+        background=[("active", palette["primary_active"]), ("disabled", palette["surface_alt_2"])],
     )
 
     style.configure(
         "Ctrl.TButton",
-        font=(display_font, 10),
-        padding=(10, 7),
+        font=(display_font, f("button", 10)),
+        padding=s("button_pad", (10, 7)),
         background=palette["surface_alt"],
         foreground=palette["text"],
         bordercolor=palette["border_alt"],
@@ -177,8 +185,8 @@ def configure_styles(root, style, palette, display_font, mono_font):
 
     style.configure(
         "Ghost.TButton",
-        font=("Segoe UI", 10),
-        padding=(8, 6),
+        font=(display_font, f("button", 10)),
+        padding=s("button_pad", (8, 6)),
         background=palette["surface"],
         foreground=palette["muted"],
     )

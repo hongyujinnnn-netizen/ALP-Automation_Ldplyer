@@ -9,7 +9,11 @@ from gui.gradient_progress import GradientProgressBar
 class StatusBarMixin:
     def create_status_bar(self):
         """Compact status bar with uptime and live progress."""
-        bar = tk.Frame(self.root, bg=self.palette["surface"], height=26)
+        spacing = getattr(getattr(self, "appearance", None), "spacing", {}) or {}
+        font_sizes = getattr(getattr(self, "appearance", None), "font_sizes", {}) or {}
+        status_pad = spacing.get("status_pad", (7, 1))
+        meta_font = int(font_sizes.get("meta", 9))
+        bar = tk.Frame(self.root, bg=self.palette["surface"], height=int(spacing.get("status_bar_height", 26)))
         bar.pack(side="bottom", fill="x")
         bar.pack_propagate(False)
         tk.Frame(bar, bg=self.palette["border"], height=1).pack(side="top", fill="x")
@@ -25,9 +29,9 @@ class StatusBarMixin:
         self.footer_selected_label = tk.Label(
             left,
             text="Selected: 0/0",
-            font=(self.mono_font, 9),
-            padx=7,
-            pady=1,
+            font=(self.mono_font, meta_font),
+            padx=status_pad[0],
+            pady=max(1, status_pad[1] - 1),
         )
         self.footer_selected_label.pack(side="left", padx=(0, 14))
 
@@ -36,9 +40,9 @@ class StatusBarMixin:
             "Idle",
             palette=self.palette,
             text="System: Idle",
-            font=(self.mono_font, 9),
-            padx=7,
-            pady=1,
+            font=(self.mono_font, meta_font),
+            padx=status_pad[0],
+            pady=max(1, status_pad[1] - 1),
         )
         self.status_sys_pill.pack(side="left", padx=(0, 14))
         self.status_sys_lbl = self.status_sys_pill
@@ -50,9 +54,9 @@ class StatusBarMixin:
             "Inactive",
             palette=self.palette,
             text="ADB: — devices",
-            font=(self.mono_font, 9),
-            padx=7,
-            pady=1,
+            font=(self.mono_font, meta_font),
+            padx=status_pad[0],
+            pady=max(1, status_pad[1] - 1),
         )
         self.status_adb_lbl.pack(side="left", padx=(0, 14))
 
@@ -61,9 +65,9 @@ class StatusBarMixin:
             "Idle",
             palette=self.palette,
             text="Tasks: 0 active",
-            font=(self.mono_font, 9),
-            padx=7,
-            pady=1,
+            font=(self.mono_font, meta_font),
+            padx=status_pad[0],
+            pady=max(1, status_pad[1] - 1),
         )
         self.status_task_lbl.pack(side="left", padx=(0, 14))
 
@@ -72,7 +76,7 @@ class StatusBarMixin:
             text="CPU: 0%",
             bg=self.palette["surface"],
             fg=self.palette["muted"],
-            font=(self.mono_font, 9),
+            font=(self.mono_font, meta_font),
         )
         self.footer_cpu_label.pack(side="left", padx=(0, 10))
         self.footer_mem_label = tk.Label(
@@ -80,7 +84,7 @@ class StatusBarMixin:
             text="Mem: 0%",
             bg=self.palette["surface"],
             fg=self.palette["muted"],
-            font=(self.mono_font, 9),
+            font=(self.mono_font, meta_font),
         )
         self.footer_mem_label.pack(side="left", padx=(0, 10))
 
@@ -89,7 +93,7 @@ class StatusBarMixin:
             text="Uptime: 00:00:00",
             bg=self.palette["surface"],
             fg=self.palette["muted"],
-            font=(self.mono_font, 9),
+            font=(self.mono_font, meta_font),
         )
         self.status_uptime.pack(side="right", padx=(10, 0))
 
@@ -98,7 +102,7 @@ class StatusBarMixin:
             text="0%",
             bg=self.palette["surface"],
             fg=self.palette["muted"],
-            font=(self.mono_font, 9),
+            font=(self.mono_font, meta_font),
             width=5,
         )
         self.footer_progress_label.pack(side="right", padx=(0, 6))

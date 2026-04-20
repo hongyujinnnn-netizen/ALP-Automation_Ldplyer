@@ -3,6 +3,8 @@ from tkinter import filedialog, messagebox as MessageBox
 
 import ttkbootstrap as tb
 
+from gui.components.state_views import StateView
+
 
 class LogsPageMixin:
     LOG_LEVELS = ("All", "INFO", "SUCCESS", "WARNING", "ERROR", "DEBUG", "Warnings & Errors")
@@ -96,6 +98,17 @@ class LogsPageMixin:
 
         logs_container = tb.Frame(logs_card)
         logs_container.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+        self.logs_state_view = StateView(
+            logs_container,
+            kind="loading",
+            title="Loading log records...",
+            message="Preparing the in-memory log viewer.",
+            palette=self.palette,
+            display_font=self.display_font,
+            mono_font=self.mono_font,
+        )
+        self.logs_state_view.pack(fill="x", pady=(0, 8))
 
         self.logs_text = tk.Text(
             logs_container,
@@ -200,8 +213,34 @@ class LogsPageMixin:
         self.logs_text.delete("1.0", "end")
 
         if not filtered:
-            self.logs_text.insert("end", "No log records match the current filters.\n", "EMPTY")
+            has_records = bool(getattr(self, "log_records", []))
+            has_filters = any([
+                self.log_search_var.get().strip() if hasattr(self, "log_search_var") else "",
+                (self.log_level_filter_var.get() if hasattr(self, "log_level_filter_var") else "All") != "All",
+                (self.log_device_filter_var.get() if hasattr(self, "log_device_filter_var") else self.ALL_DEVICES_LABEL) != self.ALL_DEVICES_LABEL,
+            ])
+            if hasattr(self, "logs_state_view"):
+                if has_records and has_filters:
+                    self.logs_state_view.set(
+                        kind="empty",
+                        title="No logs match the current filters",
+                        message="Try a broader search, a different level, or All Devices.",
+                        actions=[
+                            {"text": "Clear Filters", "command": self.clear_log_filters, "bootstyle": "outline-secondary"},
+                        ],
+                    )
+                else:
+                    self.logs_state_view.set(
+                        kind="empty",
+                        title="No logs yet",
+                        message="Runtime events will appear here as the app discovers devices, runs tasks, or handles errors.",
+                        actions=[],
+                    )
+                self.logs_state_view.pack(fill="x", pady=(0, 8))
+            self.logs_text.insert("end", "No log records to display.\n", "EMPTY")
         else:
+            if hasattr(self, "logs_state_view"):
+                self.logs_state_view.pack_forget()
             for record in filtered[-1000:]:
                 self._insert_log_record(record)
 

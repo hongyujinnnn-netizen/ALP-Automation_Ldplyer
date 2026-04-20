@@ -42,9 +42,9 @@ class TopBarMixin:
         self.top_selected_chip = self._make_chip(
             center_meta,
             "Selected: 0",
-            bg="#071820",
+            bg=self.palette.get("primary_bg", self.palette["surface_alt"]),
             fg=self.palette["primary"],
-            border_color="#00485A",
+            border_color=self.palette.get("primary_border", self.palette["primary"]),
         )
         self.top_mode_pill = StatusPill(
             center_meta,
@@ -57,9 +57,9 @@ class TopBarMixin:
         self.top_task_chip = self._make_chip(
             center_meta,
             "Task: Scroll",
-            bg="#10082A",
+            bg=self.palette.get("secondary_bg", self.palette["surface_alt"]),
             fg=self.palette["secondary"],
-            border_color="#3A1878",
+            border_color=self.palette.get("secondary_border", self.palette["secondary"]),
         )
 
         tabs = tb.Frame(top_bar, style="Topbar.TFrame")
