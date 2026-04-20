@@ -2,6 +2,8 @@
 from tkinter import ttk
 import time
 
+from gui.components.status import configure_status_tree_tags, status_tag
+
 class CheckboxTreeview(ttk.Treeview):
     def __init__(self, master=None, **kwargs):
         # Use ttkbootstrap Treeview
@@ -14,11 +16,7 @@ class CheckboxTreeview(ttk.Treeview):
         # Configure tags; keep checked rows uncolored so only the checkmark indicates selection.
         self.tag_configure("checked", background="", foreground="")
         self.tag_configure("unchecked", background="", foreground="")
-        self.tag_configure("active", background="#10B981", foreground="#E2E8F0")
-        self.tag_configure("inactive", background="", foreground="")
-        self.tag_configure("running", background="#F59E0B", foreground="#E2E8F0")
-        self.tag_configure("paused", background="#7C3AED", foreground="#E2E8F0")
-        self.tag_configure("completed", background="#10B981", foreground="#E2E8F0")
+        configure_status_tree_tags(self)
         self.tag_configure("selected", background="#00E5FF", foreground="#0A0C10")
         self.tag_configure("hover", background="#1E2330")
         
@@ -80,15 +78,7 @@ class CheckboxTreeview(ttk.Treeview):
         # Set initial tags based on status
         values = kwargs.get('values', [])
         if len(values) > 2:
-            status = values[2]
-            if status == "Active":
-                tags = ("unchecked", "active")
-            elif status == "Running":
-                tags = ("unchecked", "running")
-            elif status == "Completed":
-                tags = ("unchecked", "completed")
-            else:
-                tags = ("unchecked", "inactive")
+            tags = ("unchecked", status_tag(values[2]))
         else:
             tags = ("unchecked", "inactive")
             

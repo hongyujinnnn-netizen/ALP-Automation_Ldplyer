@@ -25,9 +25,9 @@ class StatusBarMixin:
         self.footer_selected_label = tk.Label(
             left,
             text="Selected: 0/0",
-            bg=self.palette["surface"],
-            fg=self.palette["muted"],
             font=(self.mono_font, 9),
+            padx=7,
+            pady=1,
         )
         self.footer_selected_label.pack(side="left", padx=(0, 14))
 
@@ -45,21 +45,25 @@ class StatusBarMixin:
         # alias for existing log helpers
         self.status_label = self.status_sys_pill
 
-        self.status_adb_lbl = tk.Label(
+        self.status_adb_lbl = StatusPill(
             left,
+            "Inactive",
+            palette=self.palette,
             text="ADB: — devices",
-            bg=self.palette["surface"],
-            fg=self.palette["muted"],
             font=(self.mono_font, 9),
+            padx=7,
+            pady=1,
         )
         self.status_adb_lbl.pack(side="left", padx=(0, 14))
 
-        self.status_task_lbl = tk.Label(
+        self.status_task_lbl = StatusPill(
             left,
+            "Idle",
+            palette=self.palette,
             text="Tasks: 0 active",
-            bg=self.palette["surface"],
-            fg=self.palette["muted"],
             font=(self.mono_font, 9),
+            padx=7,
+            pady=1,
         )
         self.status_task_lbl.pack(side="left", padx=(0, 14))
 
@@ -135,10 +139,16 @@ class StatusBarMixin:
                     self.sidebar_status_pill.set_status(sidebar_status, text=f"ADB Online | {adb_online} active | CPU {cpu:.0f}%")
                 if hasattr(self, "status_adb_lbl"):
                     adb_online = sum(1 for status in self._ld_status_cache.values() if status in ("Active", "Running"))
-                    self.status_adb_lbl.config(text=f"ADB: {adb_online} devices")
+                    self.status_adb_lbl.set_status(
+                        "Active" if adb_online else "Inactive",
+                        text=f"ADB: {adb_online} devices",
+                    )
                 if hasattr(self, "status_task_lbl"):
                     running = sum(1 for status in self._ld_status_cache.values() if status == "Running")
-                    self.status_task_lbl.config(text=f"Tasks: {running} active")
+                    self.status_task_lbl.set_status(
+                        "Running" if running else "Idle",
+                        text=f"Tasks: {running} active",
+                    )
             except Exception:
                 pass
             self.root.after(2500, _tick)

@@ -41,14 +41,15 @@ from services.settings_service import SettingsService
 from gui.checkbox_treeview import CheckboxTreeview
 from gui.components.cards import SectionCard
 from gui.components.status import (
-    status_background,
-    status_color,
+    StatusPill,
+    configure_status_tree_tags,
     status_filter_values,
     status_label,
     status_sort_key,
     status_table_text,
     status_tag,
 )
+from gui.components.command_palette import Command, CommandPalette
 from gui.mixins import ToolsMixin
 from gui.gradient_progress import GradientProgressBar
 from gui.styles import configure_styles
@@ -120,6 +121,7 @@ class LDManagerApp(
         self._ld_search_job = None
         self._main_thread_id = threading.get_ident()
         self._ld_checked_names = set()
+        self._command_palette = None
         self.ld_search_var = tk.StringVar()
         self.ld_sort_var = tk.StringVar(value="Status")
         self.ld_status_filter_var = tk.StringVar(value="All")
@@ -222,6 +224,8 @@ class LDManagerApp(
         }
         
         self.setup_enhanced_ui()
+        self._command_palette_commands = self._build_command_palette_commands()
+        self._bind_command_palette_shortcut()
         self.load_settings()
         self.root.after(0, self._maximize_on_startup)
         self.load_schedule_settings()
@@ -280,6 +284,264 @@ class LDManagerApp(
         # Status bar
         self.create_status_bar()
 
+
+    def _bind_command_palette_shortcut(self):
+        """Bind the global command palette launcher."""
+        self.root.bind_all("<Control-k>", self.open_command_palette, add="+")
+        self.root.bind_all("<Control-K>", self.open_command_palette, add="+")
+
+    def open_command_palette(self, _event=None):
+        """Open or focus the command palette."""
+        palette = getattr(self, "_command_palette", None)
+        if palette is not None and palette.winfo_exists():
+            palette.focus_search()
+            return "break"
+
+        self._command_palette = CommandPalette(
+            self.root,
+            self._command_palette_commands,
+            palette=self.palette,
+            display_font=self.display_font,
+            mono_font=self.mono_font,
+        )
+        self._command_palette.bind(
+            "<Destroy>",
+            lambda event: self._clear_command_palette_reference(event.widget),
+            add="+",
+        )
+        return "break"
+
+    def _clear_command_palette_reference(self, widget):
+        if widget is getattr(self, "_command_palette", None):
+            self._command_palette = None
+
+    def _select_main_page(self, index):
+        """Switch notebook pages through the app's real navigation surface."""
+        if hasattr(self, "notebook"):
+            self.notebook.select(index)
+            self._on_notebook_tab_changed()
+        if index == 1 and hasattr(self, "_render_devices_page"):
+            self._render_devices_page()
+
+    def _build_command_palette_commands(self):
+        return [
+            Command(
+                id="go_dashboard",
+                label="Go to Dashboard",
+                category="Navigation",
+                keywords=("analytics", "home", "overview", "metrics"),
+                hint="Open the analytics dashboard",
+                action=lambda: self._select_main_page(0),
+            ),
+            Command(
+                id="go_devices",
+                label="Go to Devices",
+                category="Navigation",
+                keywords=("fleet", "emulators", "ldplayer", "instances"),
+                hint="Open the LDPlayer fleet page",
+                action=self._focus_devices,
+            ),
+            Command(
+                id="go_tasks",
+                label="Go to Tasks",
+                category="Navigation",
+                keywords=("automation", "task settings", "run controls"),
+                hint="Open automation task controls",
+                action=lambda: self._select_main_page(2),
+            ),
+            Command(
+                id="go_schedule",
+                label="Go to Schedule",
+                category="Navigation",
+                keywords=("scheduler", "time", "daily", "weekly"),
+                hint="Open scheduling controls",
+                action=lambda: self._select_main_page(3),
+            ),
+            Command(
+                id="go_content",
+                label="Go to Content",
+                category="Navigation",
+                keywords=("queue", "videos", "media", "captions"),
+                hint="Open content queue management",
+                action=lambda: self._select_main_page(4),
+            ),
+            Command(
+                id="go_logs",
+                label="Go to Logs",
+                category="Navigation",
+                keywords=("events", "output", "debug", "history"),
+                hint="Open application logs",
+                action=lambda: self._select_main_page(5),
+            ),
+            Command(
+                id="refresh_emulators",
+                label="Refresh emulator list",
+                category="Devices",
+                keywords=("refresh", "reload", "ld", "emulator", "fleet"),
+                hint="Reload LDPlayer instances",
+                action=self.refresh_emulator_list,
+            ),
+            Command(
+                id="select_all_devices",
+                label="Select all devices",
+                category="Devices",
+                keywords=("all", "check", "fleet", "emulators"),
+                hint="Select every visible LD row",
+                action=self.select_all,
+            ),
+            Command(
+                id="select_online_devices",
+                label="Select online devices",
+                category="Devices",
+                keywords=("active", "running", "online", "available"),
+                hint="Select active or running LD rows",
+                action=self.select_online,
+            ),
+            Command(
+                id="clear_device_selection",
+                label="Clear device selection",
+                category="Devices",
+                keywords=("deselect", "uncheck", "clear", "selection"),
+                hint="Deselect all LD rows",
+                action=self.deselect_all,
+            ),
+            Command(
+                id="invert_device_selection",
+                label="Invert device selection",
+                category="Devices",
+                keywords=("toggle", "reverse", "selection", "checked"),
+                hint="Flip checked and unchecked rows",
+                action=self.invert_selection,
+            ),
+            Command(
+                id="clear_device_filters",
+                label="Clear device filters",
+                category="Devices",
+                keywords=("search", "status", "account", "group", "sort"),
+                hint="Reset fleet search, filters, and sorting",
+                action=self.clear_ld_filters,
+            ),
+            Command(
+                id="start_selected_devices",
+                label="Start selected devices",
+                category="Batch Actions",
+                keywords=("boot", "launch", "start ld", "selected"),
+                hint="Start checked LDPlayer instances",
+                action=self.batch_start,
+            ),
+            Command(
+                id="stop_selected_devices",
+                label="Stop selected devices",
+                category="Batch Actions",
+                keywords=("quit", "shutdown", "stop ld", "selected"),
+                hint="Stop checked LDPlayer instances",
+                action=self.batch_stop,
+            ),
+            Command(
+                id="restart_selected_devices",
+                label="Restart selected devices",
+                category="Batch Actions",
+                keywords=("reboot", "restart ld", "selected"),
+                hint="Restart checked LDPlayer instances",
+                action=self.batch_restart,
+            ),
+            Command(
+                id="start_automation",
+                label="Start automation",
+                category="Automation",
+                keywords=("run", "begin", "task", "workflow"),
+                hint="Run the selected task for checked devices",
+                action=self.start_automation,
+            ),
+            Command(
+                id="pause_automation",
+                label="Pause automation",
+                category="Automation",
+                keywords=("resume", "toggle", "hold", "automation"),
+                hint="Toggle pause or resume for the current run",
+                action=self.toggle_pause,
+            ),
+            Command(
+                id="stop_automation",
+                label="Stop automation",
+                category="Automation",
+                keywords=("cancel", "halt", "end", "automation"),
+                hint="Stop the current automation run",
+                action=self.stop_automation,
+            ),
+            Command(
+                id="enable_schedule",
+                label="Enable schedule",
+                category="Schedule",
+                keywords=("start scheduler", "daily", "weekly", "time"),
+                hint="Start the scheduler with current settings",
+                action=self.start_schedule,
+            ),
+            Command(
+                id="disable_schedule",
+                label="Disable schedule",
+                category="Schedule",
+                keywords=("stop scheduler", "off", "pause schedule"),
+                hint="Stop the scheduler",
+                action=self.stop_schedule,
+            ),
+            Command(
+                id="open_settings",
+                label="Open Settings",
+                category="Dialogs",
+                keywords=("preferences", "config", "behavior", "profile"),
+                hint="Open the control settings dialog",
+                action=self.show_settings_dialog,
+            ),
+            Command(
+                id="open_tools_center",
+                label="Open Tools Center",
+                category="Dialogs",
+                keywords=("tools", "adb", "diagnostics", "utilities"),
+                hint="Open quick tools and diagnostics",
+                action=self.show_tools_center,
+            ),
+            Command(
+                id="open_performance_dialog",
+                label="Open Performance dialog",
+                category="Dialogs",
+                keywords=("performance", "metrics", "cpu", "ram", "report"),
+                hint="Open live resource and task metrics",
+                action=self.show_performance_report,
+            ),
+            Command(
+                id="create_backup",
+                label="Create backup",
+                category="Maintenance",
+                keywords=("backup", "archive", "settings", "content"),
+                hint="Create a ZIP backup of app data",
+                action=self.create_backup,
+            ),
+            Command(
+                id="restore_backup",
+                label="Restore backup",
+                category="Maintenance",
+                keywords=("restore", "import", "recover", "zip"),
+                hint="Restore app data from a backup ZIP",
+                action=self.restore_backup,
+            ),
+            Command(
+                id="clean_old_backups",
+                label="Clean old backups",
+                category="Maintenance",
+                keywords=("cleanup", "delete", "archives", "backup"),
+                hint="Keep the 10 most recent backup archives",
+                action=self.cleanup_old_backups,
+            ),
+            Command(
+                id="show_content_stats",
+                label="Show content stats",
+                category="Maintenance",
+                keywords=("content", "queue", "videos", "stats"),
+                hint="Show content queue totals and recent items",
+                action=self.show_content_stats,
+            ),
+        ]
 
     def _is_main_thread(self):
         return threading.get_ident() == self._main_thread_id
@@ -412,15 +674,15 @@ class LDManagerApp(
 
         fleet_stats = tb.Frame(table_frame)
         fleet_stats.pack(fill="x", pady=(0, 10))
-        self.fleet_total_chip = tb.Label(fleet_stats, text="Total: 0", bootstyle="light", style="Chip.TLabel", padding=(8, 4))
+        self.fleet_total_chip = StatusPill(fleet_stats, "Info", palette=self.palette, text="Total: 0", font=(self.display_font, 9), padx=8, pady=3)
         self.fleet_total_chip.pack(side="left", padx=(0, 6))
-        self.fleet_online_chip = tb.Label(fleet_stats, text="Online: 0", bootstyle="success", style="Chip.TLabel", padding=(8, 4))
+        self.fleet_online_chip = StatusPill(fleet_stats, "Active", palette=self.palette, text="Online: 0", font=(self.display_font, 9), padx=8, pady=3)
         self.fleet_online_chip.pack(side="left", padx=(0, 6))
-        self.fleet_running_chip = tb.Label(fleet_stats, text="Running: 0", bootstyle="warning", style="Chip.TLabel", padding=(8, 4))
+        self.fleet_running_chip = StatusPill(fleet_stats, "Running", palette=self.palette, text="Running: 0", font=(self.display_font, 9), padx=8, pady=3)
         self.fleet_running_chip.pack(side="left", padx=(0, 6))
-        self.fleet_account_chip = tb.Label(fleet_stats, text="With Account: 0", bootstyle="info", style="Chip.TLabel", padding=(8, 4))
+        self.fleet_account_chip = StatusPill(fleet_stats, "Ready", palette=self.palette, text="With Account: 0", font=(self.display_font, 9), padx=8, pady=3)
         self.fleet_account_chip.pack(side="left", padx=(0, 6))
-        self.fleet_visible_chip = tb.Label(fleet_stats, text="Visible: 0", bootstyle="secondary", style="Chip.TLabel", padding=(8, 4))
+        self.fleet_visible_chip = StatusPill(fleet_stats, "Idle", palette=self.palette, text="Visible: 0", font=(self.display_font, 9), padx=8, pady=3)
         self.fleet_visible_chip.pack(side="right")
         
         # Treeview with custom style
@@ -470,17 +732,7 @@ class LDManagerApp(
         self.ld_table.heading("groups", text="Groups", anchor="w")
         self.ld_table.column("groups", width=180, anchor="w")
         
-        # Configure tags with state colors
-        self.ld_table.tag_configure("active", background=status_background("Active"), foreground=status_color("Active", self.palette))
-        # Keep inactive rows uncolored; zebra striping will handle contrast.
-        self.ld_table.tag_configure("inactive", background="", foreground="")
-        self.ld_table.tag_configure("running", background=status_background("Running"), foreground=status_color("Running", self.palette))
-        self.ld_table.tag_configure("paused", background=status_background("Paused"), foreground=status_color("Paused", self.palette))
-        self.ld_table.tag_configure("completed", background=status_background("Completed"), foreground=status_color("Completed", self.palette))
-        self.ld_table.tag_configure("queued", background=status_background("Queued"), foreground=status_color("Queued", self.palette))
-        self.ld_table.tag_configure("attention", background=status_background("Attention"), foreground=status_color("Attention", self.palette))
-        self.ld_table.tag_configure("odd_row", background="#0C1016")
-        self.ld_table.tag_configure("even_row", background=self.palette["surface"])
+        configure_status_tree_tags(self.ld_table, self.palette, include_zebra=True)
         
         # Scrollbars
         v_scrollbar = tb.Scrollbar(
@@ -1852,7 +2104,7 @@ Recent Items:
         self.stop_button.config(state="normal")
         self._set_system_status("Running")
         if hasattr(self, "status_task_lbl"):
-            self.status_task_lbl.config(text=f"Tasks: {len(selected_ld_names)} active")
+            self.status_task_lbl.set_status("Running", text=f"Tasks: {len(selected_ld_names)} active")
         self._update_header_chips(mode_text="Running")
 
         self.log(f" Starting automation for {len(selected_ld_names)} LDs", "SUCCESS")
@@ -1955,7 +2207,7 @@ Recent Items:
         self.pause_button.config(text="Pause")
         self._set_system_status("Idle")
         if hasattr(self, "status_task_lbl"):
-            self.status_task_lbl.config(text="Tasks: 0 active")
+            self.status_task_lbl.set_status("Idle", text="Tasks: 0 active")
         self._update_header_chips(mode_text="Idle")
         self.log("Automation stopped", "INFO")
         self.update_progress(0)
@@ -1987,6 +2239,8 @@ Recent Items:
         if hasattr(self, "schedule_enabled_ui"):
             self.schedule_enabled_ui.set(True)
         self.schedule_enable_btn.config(text="Disable Schedule", bootstyle="warning")
+        if hasattr(self, "schedule_state_pill"):
+            self.schedule_state_pill.set_status("Enabled", text="Schedule: Enabled")
         self.log("Scheduling enabled", "SUCCESS")
         if hasattr(self, "_refresh_dashboard"):
             self._refresh_dashboard()
@@ -2003,6 +2257,8 @@ Recent Items:
         if hasattr(self, "schedule_enabled_ui"):
             self.schedule_enabled_ui.set(False)
         self.schedule_enable_btn.config(text="Enable Schedule", bootstyle="success")
+        if hasattr(self, "schedule_state_pill"):
+            self.schedule_state_pill.set_status("Disabled", text="Schedule: Disabled")
         self.log("Scheduling disabled", "INFO")
         if hasattr(self, "_refresh_dashboard"):
             self._refresh_dashboard()

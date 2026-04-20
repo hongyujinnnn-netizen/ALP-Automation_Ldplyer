@@ -4,7 +4,13 @@ from datetime import datetime, timedelta
 import ttkbootstrap as tb
 
 from gui.components.cards import AlertCard, FeedCard, MetricCard
-from gui.components.status import StatusPill, status_bootstyle, status_color, status_label, status_sort_key
+from gui.components.status import (
+    StatusPill,
+    event_level_status,
+    status_color,
+    status_label,
+    status_sort_key,
+)
 from gui.gradient_progress import GradientProgressBar
 
 
@@ -414,7 +420,15 @@ class DashboardPageMixin:
             row.pack(fill="x", pady=5)
             header = tb.Frame(row, style="CardInner.TFrame")
             header.pack(fill="x")
-            tb.Label(header, text=label, style="MetricSub.TLabel").pack(side="left")
+            StatusPill(
+                header,
+                status,
+                palette=self.palette,
+                text=label,
+                font=(self.display_font, 9),
+                padx=8,
+                pady=2,
+            ).pack(side="left")
             tb.Label(header, text=str(count), style="MetricSub.TLabel", foreground=color).pack(side="right")
             bar = GradientProgressBar(row, bg=self.palette["surface_alt"], color_start=color, color_end=color, height=5)
             bar.pack(fill="x", pady=(3, 0))
@@ -497,7 +511,6 @@ class DashboardPageMixin:
                 "progress": progress,
                 "queue": queue,
                 "accent": status_color(state_key, self.palette),
-                "bootstyle": status_bootstyle(state_key),
                 "sort": min(priority.get(state_key, 7), status_sort_key(state_key)),
             })
         rows.sort(key=lambda item: (item["sort"], item["name"].lower()))
@@ -599,7 +612,7 @@ class DashboardPageMixin:
                 event["message"],
                 accent=color,
                 chip_text=event["level"],
-                chip_style=self._event_bootstyle(event["level"]),
+                chip_status=event_level_status(event["level"]),
                 palette=self.palette,
                 padding=(10, 6),
             )
@@ -616,14 +629,6 @@ class DashboardPageMixin:
             "ERROR": self.palette["danger"],
             "INFO": self.palette["primary"],
         }.get(level, self.palette["muted"])
-
-    def _event_bootstyle(self, level):
-        return {
-            "SUCCESS": "success",
-            "WARNING": "warning",
-            "ERROR": "danger",
-            "INFO": "info",
-        }.get(level, "secondary")
 
     def _build_empty_state(self, parent, title, detail, accent):
         severity = "success" if accent == self.palette["success"] else "neutral"

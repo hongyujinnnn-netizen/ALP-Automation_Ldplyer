@@ -2,6 +2,8 @@ import tkinter as tk
 
 import ttkbootstrap as tb
 
+from gui.components.status import StatusPill
+
 
 DEFAULT_PALETTE = {
     "surface": "#0E1118",
@@ -134,12 +136,14 @@ class AlertCard(tb.Frame):
 
         top = tb.Frame(self.body, style="CardInner.TFrame")
         top.pack(fill="x")
-        tb.Label(
+        StatusPill(
             top,
+            self.severity,
+            palette=self.palette,
             text=self.severity.upper(),
-            bootstyle=self.SEVERITY_COLORS.get(self.severity, "secondary"),
-            style="Chip.TLabel",
-            padding=(8, 2),
+            font=("Segoe UI", 8),
+            padx=8,
+            pady=2,
         ).pack(side="left")
         self.title_label = tb.Label(
             top,
@@ -201,6 +205,7 @@ class FeedCard(tb.Frame):
         accent=None,
         chip_text=None,
         chip_style="secondary",
+        chip_status=None,
         palette=None,
         wraplength=620,
         padding=(10, 8),
@@ -224,12 +229,14 @@ class FeedCard(tb.Frame):
         self.title_label.pack(side="left")
         self.chip_label = None
         if chip_text:
-            self.chip_label = tb.Label(
+            self.chip_label = StatusPill(
                 self.header,
+                chip_status or chip_style,
+                palette=self.palette,
                 text=chip_text,
-                bootstyle=chip_style,
-                style="Chip.TLabel",
-                padding=(8, 2),
+                font=("Segoe UI", 8),
+                padx=8,
+                pady=2,
             )
             self.chip_label.pack(side="right")
 

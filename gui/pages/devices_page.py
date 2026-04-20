@@ -2,7 +2,7 @@ import tkinter as tk
 import ttkbootstrap as tb
 
 from gui.components.cards import MetricCard
-from gui.components.status import StatusPill, status_color, status_label, status_table_text, status_tag
+from gui.components.status import StatusPill, configure_status_tree_tags, status_label, status_table_text, status_tag
 from gui.gradient_progress import GradientProgressBar
 
 
@@ -84,14 +84,7 @@ class DevicesPageMixin:
             tree.heading(key, text=title, anchor="w")
             tree.column(key, width=width, anchor="w")
 
-        tree.tag_configure("idle", background=self.palette["surface"], foreground=status_color("Idle", self.palette))
-        tree.tag_configure("inactive", background=self.palette["surface"], foreground=status_color("Inactive", self.palette))
-        tree.tag_configure("active", background="#0A1A20", foreground=status_color("Active", self.palette))
-        tree.tag_configure("queued", background="#111827", foreground=status_color("Queued", self.palette))
-        tree.tag_configure("running", background="#081C14", foreground=status_color("Running", self.palette))
-        tree.tag_configure("attention", background="#1F1720", foreground=status_color("Attention", self.palette))
-        tree.tag_configure("completed", background="#0A1420", foreground=status_color("Completed", self.palette))
-        tree.tag_configure("paused", background="#160F22", foreground=status_color("Paused", self.palette))
+        configure_status_tree_tags(tree, self.palette)
 
         scroll = tb.Scrollbar(card, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
         scroll.pack(side="right", fill="y")

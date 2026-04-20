@@ -3,6 +3,16 @@ from tkinter import filedialog, messagebox as MessageBox
 
 import ttkbootstrap as tb
 
+from gui.components.status import (
+    StatusPill,
+    normalize_status,
+    status_color,
+    status_count_text,
+    status_label,
+    status_table_text,
+    status_tag,
+)
+
 
 class AccountDialogMixin:
     _ACCOUNT_ACCENT = "#F97316"
@@ -81,11 +91,11 @@ class AccountDialogMixin:
 
         pill_row = tk.Frame(body, bg=self._ACCOUNT_BG)
         pill_row.pack(fill="x", pady=(0, 12))
-        self._acct_pill_active = self._pill(pill_row, "0 Active", self._ACCOUNT_SUCCESS)
-        self._acct_pill_idle = self._pill(pill_row, "0 Idle", self._ACCOUNT_MUTED)
-        self._acct_pill_novery = self._pill(pill_row, "0 Novery", self._ACCOUNT_WARNING)
-        self._acct_pill_dead = self._pill(pill_row, "0 Dead", self._ACCOUNT_DANGER)
-        self._acct_pill_total = self._pill(pill_row, "0 Total", self._ACCOUNT_ACCENT, right=True)
+        self._acct_pill_active = self._pill(pill_row, status_count_text("live", 0), "live")
+        self._acct_pill_idle = self._pill(pill_row, status_count_text("idle", 0), "idle")
+        self._acct_pill_novery = self._pill(pill_row, status_count_text("novery", 0), "novery")
+        self._acct_pill_dead = self._pill(pill_row, status_count_text("dead", 0), "dead")
+        self._acct_pill_total = self._pill(pill_row, "0 Total", "info", right=True)
 
         controls = tk.Frame(
             body,
@@ -130,7 +140,7 @@ class AccountDialogMixin:
         tb.Combobox(
             controls,
             textvariable=self._acct_status_filter_var,
-            values=("All", "Active", "Idle", "Novery", "Dead", "Unknown"),
+            values=("All", "Live", "Idle", status_label("novery"), "Dead", "Unknown"),
             state="readonly",
             width=12,
         ).pack(side="left", padx=(10, 0))
@@ -186,11 +196,11 @@ class AccountDialogMixin:
             tree.heading(col, text=title, anchor="w")
             tree.column(col, width=width, anchor="w")
 
-        tree.tag_configure("active", foreground=self._ACCOUNT_SUCCESS)
-        tree.tag_configure("idle", foreground=self._ACCOUNT_MUTED)
-        tree.tag_configure("novery", foreground=self._ACCOUNT_WARNING)
-        tree.tag_configure("dead", foreground=self._ACCOUNT_DANGER)
-        tree.tag_configure("unknown", foreground=self._ACCOUNT_INFO)
+        tree.tag_configure("active", foreground=status_color("live", self.palette))
+        tree.tag_configure("idle", foreground=status_color("idle", self.palette))
+        tree.tag_configure("novery", foreground=status_color("novery", self.palette))
+        tree.tag_configure("dead", foreground=status_color("dead", self.palette))
+        tree.tag_configure("unknown", foreground=status_color("unknown", self.palette))
         tree.tag_configure("even", background=self._ACCOUNT_CARD)
         tree.tag_configure("odd", background=self._ACCOUNT_ROW_ALT)
         scrollbar = tb.Scrollbar(list_frame, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
@@ -246,15 +256,32 @@ class AccountDialogMixin:
             foreground=[("selected", self._ACCOUNT_TEXT)],
         )
 
-    def _pill(self, parent, text, fg, right=False):
-        frame = tk.Frame(parent, bg=self._ACCOUNT_CARD_ALT, highlightthickness=1, highlightbackground=self._ACCOUNT_HOVER)
-        frame.pack(side="right" if right else "left", padx=(0, 4))
-        dot = tk.Canvas(frame, width=10, height=10, bg=self._ACCOUNT_CARD_ALT, highlightthickness=0)
-        dot.pack(side="left", padx=(6, 0), pady=6)
-        dot.create_oval(2, 2, 9, 9, fill=fg, outline="")
-        label = tk.Label(frame, text=text, bg=self._ACCOUNT_CARD_ALT, fg=fg, font=(self.mono_font, 9, "bold"), padx=8, pady=6)
-        label.pack(side="left", padx=(0, 6))
-        return label
+    def _account_status_key(self, status):
+        key = normalize_status(status)
+        if key == "live":
+            return "active"
+        return "unknown" if key == "error" else key
+
+    def _account_display_status_key(self, status):
+        key = self._account_status_key(status)
+        return "live" if key == "active" else key
+
+    def _account_filter_status_key(self, status):
+        key = normalize_status(status)
+        return "active" if key == "live" else key
+
+    def _pill(self, parent, text, status, right=False):
+        pill = StatusPill(
+            parent,
+            status,
+            palette=self.palette,
+            text=text,
+            font=(self.mono_font, 9, "bold"),
+            padx=10,
+            pady=5,
+        )
+        pill.pack(side="right" if right else "left", padx=(0, 4))
+        return pill
 
     def _acct_btn(self, parent, text, command, side):
         button = tk.Button(
@@ -439,7 +466,7 @@ class AccountDialogMixin:
             "password": tk.StringVar(value=str(account.get("password") or "")),
             "instance": tk.StringVar(value=str(account.get("instance") or account.get("device_name") or account.get("ld_name") or "")),
             "ld_adb": tk.StringVar(value=str(account.get("ld_adb") or "")),
-            "status": tk.StringVar(value=str(account.get("status") or "idle")),
+            "status": tk.StringVar(value=status_label(self._account_display_status_key(account.get("status") or "idle"))),
         }
 
         card = tk.Frame(
@@ -491,7 +518,7 @@ class AccountDialogMixin:
                 widget = tb.Combobox(
                     card,
                     textvariable=vars_map[key],
-                    values=("active", "idle", "Novery", "Dead", "Unknown"),
+                    values=("Live", "Idle", status_label("novery"), "Dead", "Unknown"),
                     state="readonly",
                     width=28,
                 )
@@ -543,6 +570,7 @@ class AccountDialogMixin:
 
         def save_account():
             payload = {key: var.get().strip() for key, var in vars_map.items()}
+            payload["status"] = self._account_filter_status_key(payload.get("status") or "idle")
             payload["notes"] = notes_text.get("1.0", "end").strip()
             if not payload["name"] and not payload["email"] and not payload["phone"]:
                 self.log("Name, phone, or email is required.", "WARNING")
@@ -616,7 +644,8 @@ class AccountDialogMixin:
 
     def _get_visible_accounts(self):
         query = getattr(self, "_acct_search_var", tk.StringVar()).get().strip().lower()
-        status_filter = getattr(self, "_acct_status_filter_var", tk.StringVar(value="All")).get().strip().lower()
+        status_filter_raw = getattr(self, "_acct_status_filter_var", tk.StringVar(value="All")).get().strip()
+        status_filter = "all" if status_filter_raw.lower() == "all" else self._account_filter_status_key(status_filter_raw)
         sort_by = getattr(self, "_acct_sort_by_var", tk.StringVar(value="Created")).get().strip().lower()
         descending = getattr(self, "_acct_sort_order_var", tk.StringVar(value="Descending")).get().strip().lower() != "ascending"
         try:
@@ -633,12 +662,10 @@ class AccountDialogMixin:
             instance = str(acc.get("instance") or acc.get("device_name") or acc.get("ld_name") or "")
             contact = str(acc.get("phone") or acc.get("email") or "")
             haystack = f"{uid} {name} {gender} {instance} {contact} {acc.get('notes', '')}".lower()
-            status = str(acc.get("status") or "idle").lower()
-            if status == "error":
-                status = "unknown"
+            status = self._account_status_key(acc.get("status") or "idle")
             if query and query not in haystack:
                 continue
-            if status_filter != "all" and status != status_filter:
+            if status_filter != "all" and self._account_status_key(status) != status_filter:
                 continue
             visible_accounts.append(acc)
 
@@ -676,30 +703,29 @@ class AccountDialogMixin:
             uid = str(acc.get("facebook_uid") or "")
             name = str(acc.get("name") or acc.get("username") or acc.get("email") or "account")
             gender = str(acc.get("gender") or "")
-            status = str(acc.get("status") or "idle").lower()
-            if status == "error":
-                status = "unknown"
+            status = self._account_status_key(acc.get("status") or "idle")
+            display_status = self._account_display_status_key(status)
             instance = str(acc.get("instance") or acc.get("device_name") or acc.get("ld_name") or "")
             contact = str(acc.get("phone") or acc.get("email") or "")
             created = str(acc.get("created_at") or "").replace("T", " ")
 
             visible_index += 1
-            tags = [status if status in {"active", "idle", "novery", "dead", "unknown"} else "idle"]
+            tags = [status_tag(display_status)]
             tags.append("even" if visible_index % 2 == 0 else "odd")
             tree.insert(
                 "",
                 "end",
                 iid=account_id,
-                values=(f"{visible_index:02d}", uid, name, gender, contact, instance, status.title(), created),
+                values=(f"{visible_index:02d}", uid, name, gender, contact, instance, status_table_text(display_status), created),
                 tags=tuple(tags),
             )
             if select_uid and (uid == select_uid or account_id == select_uid):
                 selected_uid = account_id
 
-        self._acct_pill_active.config(text=f"{summary.get('active', 0)} Active")
-        self._acct_pill_idle.config(text=f"{summary.get('idle', 0)} Idle")
-        self._acct_pill_novery.config(text=f"{summary.get('novery', 0)} Novery")
-        self._acct_pill_dead.config(text=f"{summary.get('dead', 0)} Dead")
+        self._acct_pill_active.set_status("live", text=status_count_text("live", summary.get("active", 0)))
+        self._acct_pill_idle.set_status("idle", text=status_count_text("idle", summary.get("idle", 0)))
+        self._acct_pill_novery.set_status("novery", text=status_count_text("novery", summary.get("novery", 0)))
+        self._acct_pill_dead.set_status("dead", text=status_count_text("dead", summary.get("dead", 0)))
         self._acct_pill_total.config(text=f"{summary.get('total', 0)} Total")
 
         if selected_uid and tree.exists(selected_uid):

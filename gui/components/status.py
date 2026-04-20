@@ -32,6 +32,7 @@ class StatusSpec:
 
 STATUS_SPECS = {
     "running": StatusSpec("running", "Running", "RUN", "success", "running", "success", "#081C14", 10, ("run",)),
+    "live": StatusSpec("live", "Live", "LIVE", "success", "active", "success", "#081C14", 19, ("online account",)),
     "active": StatusSpec("active", "Active", "ON", "info", "active", "primary", "#0A1A20", 20, ("online", "ready")),
     "ready": StatusSpec("ready", "Ready", "READY", "success", "active", "success", "#0A1A14", 21),
     "queued": StatusSpec("queued", "Queued", "QUEUE", "warning", "queued", "warning", "#111827", 30, ("queue",)),
@@ -43,11 +44,18 @@ STATUS_SPECS = {
     "inactive": StatusSpec("inactive", "Inactive", "OFF", "secondary", "inactive", "muted", "#0E1118", 60, ("offline",)),
     "idle": StatusSpec("idle", "Idle", "IDLE", "secondary", "idle", "muted", "#0E1118", 61),
     "disabled": StatusSpec("disabled", "Disabled", "OFF", "secondary", "inactive", "muted", "#0E1118", 62),
+    "neutral": StatusSpec("neutral", "Neutral", "INFO", "secondary", "inactive", "muted", "#0E1118", 63, ("secondary",)),
     "scheduled": StatusSpec("scheduled", "Scheduled", "SCHED", "info", "active", "primary", "#0A1A20", 70),
     "enabled": StatusSpec("enabled", "Enabled", "ON", "success", "active", "success", "#0A1A14", 71),
+    "success": StatusSpec("success", "Success", "OK", "success", "active", "success", "#0A1A14", 72),
+    "info": StatusSpec("info", "Info", "INFO", "info", "active", "primary", "#0A1A20", 73),
+    "warning": StatusSpec("warning", "Warning", "WARN", "warning", "queued", "warning", "#111827", 74),
     "attention": StatusSpec("attention", "Attention", "ATTN", "danger", "attention", "danger", "#1F1720", 80),
+    "critical": StatusSpec("critical", "Critical", "CRIT", "danger", "attention", "danger", "#1F1720", 80, ("incident",)),
     "failed": StatusSpec("failed", "Failed", "FAIL", "danger", "attention", "danger", "#1F1720", 81, ("failure",)),
     "error": StatusSpec("error", "Error", "ERR", "danger", "attention", "danger", "#1F1720", 82, ("errors",)),
+    "dead": StatusSpec("dead", "Dead", "DEAD", "danger", "dead", "danger", "#1F1720", 83),
+    "novery": StatusSpec("novery", "No Verify", "NOVER", "warning", "novery", "warning", "#111827", 84, ("no verify", "not verified")),
     "unknown": StatusSpec("unknown", "Unknown", "UNK", "secondary", "inactive", "muted", "#0E1118", 99),
 }
 
@@ -80,6 +88,7 @@ def normalize_status(status):
         ("attention", "attention"),
         ("timeout", "attention"),
         ("running", "running"),
+        ("live", "live"),
         ("queued", "queued"),
         ("waiting", "waiting"),
         ("starting", "starting"),
@@ -90,9 +99,19 @@ def normalize_status(status):
         ("idle", "idle"),
         ("inactive", "inactive"),
         ("disabled", "disabled"),
+        ("secondary", "neutral"),
+        ("neutral", "neutral"),
         ("enabled", "enabled"),
         ("scheduled", "scheduled"),
         ("paused", "paused"),
+        ("success", "success"),
+        ("warning", "warning"),
+        ("critical", "critical"),
+        ("info", "info"),
+        ("dead", "dead"),
+        ("novery", "novery"),
+        ("no verify", "novery"),
+        ("unknown", "unknown"),
     ):
         if token in key:
             return mapped
@@ -114,6 +133,10 @@ def status_code(status):
 def status_table_text(status):
     spec = get_status_spec(status)
     return f"[{spec.code}] {spec.label}"
+
+
+def status_count_text(status, count):
+    return f"{count} {status_label(status)}"
 
 
 def status_tag(status):
@@ -140,6 +163,34 @@ def status_background(status):
 
 def status_filter_values():
     return ("All", "Running", "Active", "Inactive", "Paused", "Completed", "Failed")
+
+
+def configure_status_tree_tags(tree, palette=None, *, include_zebra=False):
+    """Apply shared status colors to a Treeview-compatible tag set."""
+    palette = palette or DEFAULT_PALETTE
+    configured = set()
+    for spec in STATUS_SPECS.values():
+        tag = spec.tag
+        if tag in configured:
+            continue
+        configured.add(tag)
+        background = "" if tag in {"inactive", "idle"} else spec.bg
+        foreground = status_color(spec.key, palette)
+        tree.tag_configure(tag, background=background, foreground=foreground)
+
+    if include_zebra:
+        tree.tag_configure("odd_row", background="#0C1016")
+        tree.tag_configure("even_row", background=palette["surface"])
+
+
+def event_level_status(level):
+    return {
+        "SUCCESS": "success",
+        "WARNING": "warning",
+        "ERROR": "error",
+        "INFO": "info",
+        "DEBUG": "unknown",
+    }.get(str(level or "").upper(), "unknown")
 
 
 class StatusPill(tk.Frame):
@@ -198,3 +249,6 @@ class StatusPill(tk.Frame):
         return None
 
     configure = config
+
+
+StatusBadge = StatusPill

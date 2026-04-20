@@ -1,5 +1,6 @@
 import tkinter as tk
 import ttkbootstrap as tb
+from gui.components.status import StatusPill
 from gui.gradient_progress import GradientProgressBar
 
 class SchedulePageMixin:
@@ -83,6 +84,17 @@ class SchedulePageMixin:
         # Schedule control button
         control_frame = tb.Frame(schedule_frame)
         control_frame.pack(fill="x", padx=10, pady=20)
+
+        self.schedule_state_pill = StatusPill(
+            control_frame,
+            "Disabled",
+            palette=self.palette,
+            text="Schedule: Disabled",
+            font=(self.display_font, 9),
+            padx=10,
+            pady=4,
+        )
+        self.schedule_state_pill.pack(pady=(0, 10))
         
         self.schedule_enable_btn = tb.Button(
             control_frame,
