@@ -117,6 +117,8 @@ class LDManagerApp(
         self._ld_account_cache = {}
         self._device_runtime_state = {}
         self.dashboard_events = []
+        self.log_records = []
+        self._max_log_records = 5000
         self._last_table_signature = None
         self._ld_search_job = None
         self._main_thread_id = threading.get_ident()
@@ -1170,6 +1172,8 @@ class LDManagerApp(
             self._render_devices_page()
         if hasattr(self, "_refresh_dashboard"):
             self._refresh_dashboard()
+        if hasattr(self, "_refresh_log_filter_options"):
+            self._refresh_log_filter_options()
 
     def _show_instance_context_menu(self, event):
         item = self.ld_table.identify_row(event.y)
@@ -1616,47 +1620,45 @@ class LDManagerApp(
 
         self.root.after(3500, _tick)
 
-    def log(self, message, level="INFO"):
-        """Enhanced log method with colors"""
+    def log(self, message, level="INFO", device=None, category=None, **context):
+        """Store and render a structured log record."""
         if not self._is_main_thread():
             try:
-                self.root.after(0, lambda msg=message, lvl=level: self.log(msg, lvl))
+                self.root.after(
+                    0,
+                    lambda msg=message, lvl=level, dev=device, cat=category, ctx=context:
+                        self.log(msg, lvl, device=dev, category=cat, **ctx),
+                )
             except Exception:
                 pass
             return
 
         message = str(message).strip()
+        normalized_level = str(level or "INFO").upper()
         timestamp = datetime.now().strftime("%H:%M:%S")
-        tag = "EMULATOR_COUNT" if message.startswith("Available emulators:") else level
-        
-        # Determine color based on level
-        colors = {
-            "INFO": self.palette["primary"],
-            "SUCCESS": self.palette["success"],
-            "WARNING": self.palette["warning"],
-            "ERROR": self.palette["danger"],
-            "DEBUG": "#9b59b6"
+        log_device = device or self._extract_log_device(message)
+        log_category = category or self._infer_log_category(message, normalized_level)
+        record = {
+            "timestamp": timestamp,
+            "level": normalized_level,
+            "message": message,
+            "device": log_device or "",
+            "category": log_category or "General",
+            "context": dict(context),
         }
-        
-        _ = colors.get(level, "#ecf0f1")
-        
-        self._record_dashboard_event(timestamp, message, level)
-        
-        # Insert with tags for coloring
-        self.logs_text.config(state="normal")
-        
-        # Insert timestamp
-        self.logs_text.insert("end", f"[{timestamp}] ", "TIMESTAMP")
-        
-        # Insert message with level tag
-        self.logs_text.insert("end", f"{message}\n", tag)
-        
-        # Auto-scroll to end
-        self.logs_text.see("end")
-        self.logs_text.config(state="disabled")
+
+        self.log_records.append(record)
+        if len(self.log_records) > self._max_log_records:
+            self.log_records = self.log_records[-self._max_log_records:]
+
+        self._record_dashboard_event(timestamp, message, normalized_level)
+        if hasattr(self, "_refresh_log_filter_options"):
+            self._refresh_log_filter_options()
+        if hasattr(self, "_render_logs_view"):
+            self._render_logs_view()
 
         # Keep the system pill reserved for mode state; important messages live in logs/events.
-        if level in ["SUCCESS", "ERROR", "WARNING"]:
+        if normalized_level in ["SUCCESS", "ERROR", "WARNING"]:
             mode_text = "Idle"
             if getattr(self, "running_event", None) and self.running_event.is_set():
                 mode_text = "Paused" if getattr(self, "pause_event", None) and not self.pause_event.is_set() else "Running"
@@ -1664,12 +1666,46 @@ class LDManagerApp(
                 mode_text=mode_text
             )
 
-        self.app_logger.log(
-            level,
-            message,
-            running=bool(getattr(self, "running_event", None) and self.running_event.is_set()),
-            schedule_running=bool(getattr(self, "schedule_running", False)),
-        )
+        logger_context = dict(context)
+        logger_context.setdefault("device", log_device)
+        logger_context.setdefault("category", log_category)
+        logger_context.setdefault("running", bool(getattr(self, "running_event", None) and self.running_event.is_set()))
+        logger_context.setdefault("schedule_running", bool(getattr(self, "schedule_running", False)))
+        self.app_logger.log(normalized_level, message, **logger_context)
+
+    def _extract_log_device(self, message):
+        """Best-effort device association for legacy log calls."""
+        text = str(message or "")
+        candidates = set(getattr(self, "_ld_snapshot", {}).keys())
+        candidates.update(getattr(self, "_device_runtime_state", {}).keys())
+        emulator = getattr(self, "emulator", None)
+        candidates.update(getattr(emulator, "name_to_serial", {}).keys() if emulator else [])
+
+        lowered = text.lower()
+        for name in sorted((name for name in candidates if name), key=len, reverse=True):
+            if str(name).lower() in lowered:
+                return str(name)
+
+        match = re.search(r"\b(?:LDPlayer|LD)[\s_-]*\d+\b", text, flags=re.IGNORECASE)
+        if match:
+            return match.group(0).strip()
+        return ""
+
+    def _infer_log_category(self, message, level):
+        text = str(message or "").lower()
+        if "backup" in text or "restore" in text:
+            return "Backup"
+        if "schedule" in text or "scheduled" in text:
+            return "Schedule"
+        if "account" in text:
+            return "Accounts"
+        if "adb" in text or "emulator" in text or "ld" in text:
+            return "Devices"
+        if "automation" in text or "task" in text:
+            return "Automation"
+        if level in {"ERROR", "WARNING"}:
+            return "Attention"
+        return "General"
 
     def _record_dashboard_event(self, timestamp, message, level):
         """Keep a compact high-signal event buffer for the dashboard."""
