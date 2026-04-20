@@ -1,6 +1,6 @@
 import re
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 import ttkbootstrap as tb
 
 from gui.appearance import (
@@ -711,7 +711,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         controls.pack(fill="x", pady=(0, 12))
         tk.Button(
             controls,
-            text="Apply Appearance Now",
+            text="Save Appearance",
             relief="flat",
             bg=palette["primary"],
             fg=palette["primary_fg"],
@@ -741,8 +741,8 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         outer, notes = self._premium_card(parent, palette, "Apply Flow", "How appearance changes behave.")
         outer.pack(fill="x")
         self._info_row(notes, palette, "Preview", "Changing a control updates the miniature preview immediately.")
-        self._info_row(notes, palette, "Apply now", "Updates the active window colors and ttk styles without closing settings.")
-        self._info_row(notes, palette, "Save", "Save & Apply persists appearance and automation settings to disk.")
+        self._info_row(notes, palette, "Save appearance", "Persists the look and feel selection. The running window keeps its current theme.")
+        self._info_row(notes, palette, "Restart", "Restart the app when you want the saved appearance to become active.")
 
         def refresh_preview(*_):
             resolved = resolve_appearance(
@@ -849,12 +849,33 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         self.accent_color.set(appearance_vars["accent_color"].get())
         self.ui_density.set(appearance_vars["ui_density"].get())
         self.ui_scale.set(appearance_vars["ui_scale"].get())
-        if hasattr(self, "apply_appearance_settings"):
-            self.apply_appearance_settings()
-        if save and hasattr(self, "save_settings"):
-            self.save_settings()
+        if hasattr(self, "save_settings"):
+            try:
+                self.save_settings()
+            except Exception:
+                pass
         if hasattr(self, "_footer_state_var"):
-            self._footer_state_var.set("Appearance applied. Save & Apply persists the full settings set.")
+            self._footer_state_var.set("Appearance saved. Restart the app to load the new theme.")
+        self._prompt_appearance_restart()
+
+    def _prompt_appearance_restart(self, dialog=None):
+        should_restart = messagebox.askyesno(
+            "Restart Required",
+            (
+                "Appearance settings were saved successfully.\n\n"
+                "The current window will keep its existing theme until the application restarts.\n\n"
+                "Restart the application now?"
+            ),
+            parent=dialog or getattr(self, "_settings_dialog", None) or getattr(self, "root", None),
+        )
+        if should_restart:
+            if dialog is not None:
+                self._close_settings_dialog(dialog)
+            elif getattr(self, "_settings_dialog", None) is not None:
+                self._close_settings_dialog(self._settings_dialog)
+            root = getattr(self, "root", None)
+            if root is not None:
+                root.after(100, root.destroy)
 
     def _reset_appearance_vars(self, appearance_vars):
         for key, value in DEFAULT_APPEARANCE_SETTINGS.items():
@@ -1379,14 +1400,14 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         self.accent_color.set(appearance_vars["accent_color"].get())
         self.ui_density.set(appearance_vars["ui_density"].get())
         self.ui_scale.set(appearance_vars["ui_scale"].get())
-        if hasattr(self, "apply_appearance_settings"):
-            self.apply_appearance_settings()
         if hasattr(self, "save_settings"):
             try:
                 self.save_settings()
             except Exception:
                 pass
-        self._close_settings_dialog(dialog)
+        self._prompt_appearance_restart(dialog)
+        if getattr(self, "_settings_dialog", None) is dialog:
+            self._close_settings_dialog(dialog)
 
     def _close_settings_dialog(self, dialog):
         current = getattr(self, "_settings_dialog", None)
