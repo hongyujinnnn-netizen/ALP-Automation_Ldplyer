@@ -1,5 +1,6 @@
 import tkinter as tk
 import ttkbootstrap as tb
+from gui.components.scrollable_frame import ScrollableFrame
 from gui.components.state_views import StateView
 from gui.components.status import StatusPill
 from gui.gradient_progress import GradientProgressBar
@@ -9,8 +10,11 @@ class SchedulePageMixin:
         """Create Schedule tab"""
         schedule_tab = tb.Frame(self.notebook)
         self.notebook.add(schedule_tab, text="Schedule")
-        
-        self.create_enhanced_schedule(schedule_tab)
+
+        scroller = ScrollableFrame(schedule_tab, bg=self.palette["surface"])
+        scroller.pack(fill="both", expand=True)
+
+        self.create_enhanced_schedule(scroller.body)
 
 
     def create_enhanced_schedule(self, parent):
@@ -18,9 +22,7 @@ class SchedulePageMixin:
         schedule_frame = self._create_card_section(
             parent,
             "Task Scheduling",
-            "Define run windows and repeat cadence."
-            ,
-            expand=True,
+            "Define run windows and repeat cadence.",
         )
         
         # Time settings

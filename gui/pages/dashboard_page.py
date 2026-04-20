@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import ttkbootstrap as tb
 
 from gui.components.cards import AlertCard, FeedCard, MetricCard
+from gui.components.scrollable_frame import ScrollableFrame
 from gui.components.state_views import StateView
 from gui.components.status import (
     StatusPill,
@@ -21,39 +22,41 @@ class DashboardPageMixin:
         dashboard_tab = tb.Frame(self.notebook, style="CardInner.TFrame")
         self.notebook.add(dashboard_tab, text="Analytics")
 
-        dashboard = tb.Frame(dashboard_tab, style="CardInner.TFrame", padding=(2, 0, 2, 0))
-        dashboard.pack(fill="both", expand=True)
+        # Wrap the entire dashboard body in a scroll container so that all
+        # sections remain reachable on small windows.
+        scroller = ScrollableFrame(dashboard_tab, bg=self.palette["surface"])
+        scroller.pack(fill="both", expand=True, padx=2)
+        dashboard = scroller.body
 
         self.create_analytics_dashboard(dashboard)
         self.create_dashboard_alerts_section(dashboard)
 
-        middle = tb.Frame(dashboard, style="CardInner.TFrame")
-        middle.pack(fill="both", expand=True, pady=(0, 14))
+        # Two-column mid row: Fleet Health | Live Activity
+        # fill="x" — height is driven by content, not the viewport remainder.
+        middle = tk.Frame(dashboard, bg=self.palette["surface"])
+        middle.pack(fill="x", pady=(0, 14))
         middle.columnconfigure(0, weight=5, uniform="dashboard_mid")
         middle.columnconfigure(1, weight=4, uniform="dashboard_mid")
-        middle.rowconfigure(0, weight=1)
 
-        fleet_col = tb.Frame(middle, style="CardInner.TFrame", padding=(0, 0, 7, 0))
-        activity_col = tb.Frame(middle, style="CardInner.TFrame", padding=(7, 0, 0, 0))
-        fleet_col.grid(row=0, column=0, sticky="nsew")
-        activity_col.grid(row=0, column=1, sticky="nsew")
+        fleet_col = tk.Frame(middle, bg=self.palette["surface"])
+        activity_col = tk.Frame(middle, bg=self.palette["surface"])
+        fleet_col.grid(row=0, column=0, sticky="ew", padx=(0, 7))
+        activity_col.grid(row=0, column=1, sticky="ew", padx=(7, 0))
         self.create_fleet_health_panel(fleet_col)
         self.create_live_activity_panel(activity_col)
 
-        bottom = tb.Frame(dashboard, style="CardInner.TFrame")
-        bottom.pack(fill="both", expand=True)
+        # Two-column bottom row: Schedule Summary | Recent Events
+        bottom = tk.Frame(dashboard, bg=self.palette["surface"])
+        bottom.pack(fill="x")
         bottom.columnconfigure(0, weight=4, uniform="dashboard_bottom")
         bottom.columnconfigure(1, weight=5, uniform="dashboard_bottom")
-        bottom.rowconfigure(0, weight=1)
 
-        schedule_col = tb.Frame(bottom, style="CardInner.TFrame", padding=(0, 0, 7, 0))
-        events_col = tb.Frame(bottom, style="CardInner.TFrame", padding=(7, 0, 0, 0))
-        schedule_col.grid(row=0, column=0, sticky="nsew")
-        events_col.grid(row=0, column=1, sticky="nsew")
+        schedule_col = tk.Frame(bottom, bg=self.palette["surface"])
+        events_col = tk.Frame(bottom, bg=self.palette["surface"])
+        schedule_col.grid(row=0, column=0, sticky="ew", padx=(0, 7))
+        events_col.grid(row=0, column=1, sticky="ew", padx=(7, 0))
         self.create_schedule_overview_panel(schedule_col)
         self.create_recent_events_panel(events_col)
-
-        self._refresh_dashboard()
 
     def create_analytics_dashboard(self, parent):
         """Create top-level KPI cards for the operations dashboard."""
@@ -67,6 +70,15 @@ class DashboardPageMixin:
         self.dashboard_kpi_labels = {}
         self.dashboard_kpi_sub_labels = {}
         self.dashboard_kpi_cards = {}
+        actions = tb.Frame(panel, style="CardInner.TFrame")
+        actions.pack(fill="x", pady=(0, 8))
+        tb.Button(
+            actions,
+            text="Refresh",
+            bootstyle="info",
+            command=lambda: self.request_dashboard_refresh(force=True),
+        ).pack(side="right")
+
         grid = tb.Frame(panel, style="CardInner.TFrame")
         grid.pack(fill="x")
 
@@ -104,7 +116,6 @@ class DashboardPageMixin:
             parent,
             "Fleet Health",
             "Distribution of emulator states across the current fleet.",
-            expand=True,
         )
         self.dashboard_fleet_health_frame = panel
 
@@ -113,7 +124,6 @@ class DashboardPageMixin:
             parent,
             "Live Activity",
             "Devices with active, queued, or recently completed work.",
-            expand=True,
         )
         self.dashboard_live_activity_frame = panel
 
@@ -122,7 +132,6 @@ class DashboardPageMixin:
             parent,
             "Schedule Summary",
             "Run window, cadence, and next configured trigger.",
-            expand=True,
         )
 
         header = tb.Frame(panel, style="CardInner.TFrame")
@@ -170,14 +179,12 @@ class DashboardPageMixin:
             self.start_schedule()
         elif not self.schedule_enabled_ui.get() and self.schedule_running:
             self.stop_schedule()
-        self._refresh_dashboard()
 
     def create_recent_events_panel(self, parent):
         panel = self._create_card_section(
             parent,
             "Recent Important Events",
             "High-signal successes, warnings, failures, and lifecycle changes.",
-            expand=True,
         )
         self.dashboard_recent_events_frame = panel
 

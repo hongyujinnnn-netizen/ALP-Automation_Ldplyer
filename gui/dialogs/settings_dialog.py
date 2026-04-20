@@ -501,6 +501,38 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             font=(self.mono_font, 9),
         ).pack(anchor="w", pady=(8, 18))
 
+        menu_shell = tk.Frame(inner, bg=palette["surface_alt"])
+        menu_shell.pack(fill="both", expand=True)
+
+        menu_canvas = tk.Canvas(
+            menu_shell,
+            bg=palette["surface_alt"],
+            highlightthickness=0,
+            bd=0,
+        )
+        menu_scrollbar = tb.Scrollbar(
+            menu_shell,
+            orient="vertical",
+            command=menu_canvas.yview,
+            style="Vertical.TScrollbar",
+        )
+        menu_canvas.configure(yscrollcommand=menu_scrollbar.set)
+
+        menu_scrollbar.pack(side="right", fill="y")
+        menu_canvas.pack(side="left", fill="both", expand=True)
+
+        menu_body = tk.Frame(menu_canvas, bg=palette["surface_alt"])
+        menu_window = menu_canvas.create_window((0, 0), window=menu_body, anchor="nw")
+
+        def _sync_menu_scrollregion(_event=None):
+            menu_canvas.configure(scrollregion=menu_canvas.bbox("all"))
+
+        def _sync_menu_width(event):
+            menu_canvas.itemconfigure(menu_window, width=event.width)
+
+        menu_body.bind("<Configure>", _sync_menu_scrollregion)
+        menu_canvas.bind("<Configure>", _sync_menu_width)
+
         menu_items = [
             ("appearance", "*", "Appearance", "Theme, accent, spacing, and scale"),
             ("general", "⚙", "General", "Core launch and session values"),
@@ -511,7 +543,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         ]
 
         for key, icon, title, desc in menu_items:
-            outer = tk.Frame(inner, bg=palette["surface_alt"])
+            outer = tk.Frame(menu_body, bg=palette["surface_alt"])
             outer.pack(fill="x", pady=5)
 
             accent = tk.Frame(outer, bg=palette["surface_alt"], width=4)
@@ -534,6 +566,13 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
                 child.bind("<Button-1>", lambda e, page=key: self._open_settings_page(page))
 
             self._settings_nav_buttons[key] = (outer, accent, btn)
+
+        def _bind_menu_mousewheel(widget):
+            self._bind_settings_mousewheel(widget, menu_canvas)
+            for child in widget.winfo_children():
+                _bind_menu_mousewheel(child)
+
+        _bind_menu_mousewheel(menu_shell)
 
         tip_bg = palette.get("tip_bg", palette["surface_alt"])
         tip = tk.Frame(inner, bg=tip_bg, padx=12, pady=12, highlightthickness=1, highlightbackground=palette["border_alt"])

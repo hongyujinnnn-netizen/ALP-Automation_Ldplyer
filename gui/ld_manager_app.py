@@ -232,7 +232,6 @@ class LDManagerApp(
         self.load_schedule_settings()
         self.populate_ld_table()
         self.start_status_refresh()
-        self.start_analytics_refresh()
         self.start_system_metrics_refresh()
 
     def _maximize_on_startup(self):
@@ -1035,6 +1034,25 @@ class LDManagerApp(
                 active_label = "Logs"
             for label, btn in self._top_tab_buttons.items():
                 btn.configure(bootstyle="info" if label == active_label else "secondary-link")
+        # Refresh the dashboard immediately when the user enters the Analytics tab
+        # so they never see stale data after switching from another tab.
+        if idx == 0:
+            self.request_dashboard_refresh(force=True)
+
+    def _is_analytics_tab_active(self) -> bool:
+        """Return True only when the Analytics tab (index 0) is the visible tab."""
+        try:
+            nb = getattr(self, "notebook", None)
+            return nb is not None and nb.index("current") == 0
+        except Exception:
+            return False
+
+    def request_dashboard_refresh(self, force=True):
+        if hasattr(self, "_refresh_dashboard"):
+            try:
+                self._refresh_dashboard()
+            except Exception:
+                pass
 
     def _status_text(self, status):
         return status_table_text(status)
@@ -1078,8 +1096,6 @@ class LDManagerApp(
         entry.setdefault("started_at", timestamp)
         entry["updated_at"] = timestamp
         self._render_devices_page()
-        if hasattr(self, "_refresh_dashboard"):
-            self._refresh_dashboard()
 
     def _mark_selected_devices_as_queued(self, selected_ld_names):
         timestamp = datetime.now().isoformat()
@@ -1447,8 +1463,6 @@ class LDManagerApp(
         self._render_ld_table()
         if hasattr(self, "_render_devices_page"):
             self._render_devices_page()
-        if hasattr(self, "_refresh_dashboard"):
-            self._refresh_dashboard()
         if hasattr(self, "_refresh_log_filter_options"):
             self._refresh_log_filter_options()
 
@@ -1916,18 +1930,6 @@ class LDManagerApp(
                 self._status_refresh_event.wait(6)
 
         threading.Thread(target=worker, daemon=True).start()
-
-    def start_analytics_refresh(self):
-        """Periodic refresh for analytics dashboard."""
-        def _tick():
-            try:
-                if hasattr(self, "_refresh_dashboard"):
-                    self._refresh_dashboard()
-            except Exception:
-                pass
-            self.root.after(3500, _tick)
-
-        self.root.after(3500, _tick)
 
     def log(self, message, level="INFO", device=None, category=None, **context):
         """Store and render a structured log record."""
@@ -2617,9 +2619,7 @@ Recent Items:
                 ],
             )
         self.log("Scheduling enabled", "SUCCESS")
-        if hasattr(self, "_refresh_dashboard"):
-            self._refresh_dashboard()
-        
+
         self.save_schedule_settings()
         
         if self.schedule_thread is None or not self.schedule_thread.is_alive():
@@ -2644,8 +2644,6 @@ Recent Items:
                 ],
             )
         self.log("Scheduling disabled", "INFO")
-        if hasattr(self, "_refresh_dashboard"):
-            self._refresh_dashboard()
 
     def validate_schedule(self):
         """Validate schedule settings"""

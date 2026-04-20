@@ -2,6 +2,7 @@ import tkinter as tk
 import ttkbootstrap as tb
 
 from gui.components.cards import MetricCard
+from gui.components.scrollable_frame import ScrollableFrame
 from gui.components.state_views import StateView
 from gui.components.status import StatusPill, configure_status_tree_tags, status_label, status_table_text, status_tag
 from gui.gradient_progress import GradientProgressBar
@@ -12,7 +13,14 @@ class DevicesPageMixin:
         devices_tab = tb.Frame(self.notebook)
         self.notebook.add(devices_tab, text="Devices")
 
-        shell = tb.Frame(devices_tab, style="CardInner.TFrame", padding=(0, 0, 0, 0))
+        scroller = ScrollableFrame(
+            devices_tab,
+            bg=self.palette["surface"],
+            fill_viewport_height=True,
+        )
+        scroller.pack(fill="both", expand=True, padx=2)
+
+        shell = tb.Frame(scroller.body, style="CardInner.TFrame", padding=(0, 0, 0, 0))
         shell.pack(fill="both", expand=True)
 
         top = self._create_card_section(
@@ -35,6 +43,7 @@ class DevicesPageMixin:
         self._build_devices_table_panel(left)
         self._build_device_group_panel(right)
         self._build_devices_side_panel(right)
+        scroller.bind_scroll_tree(shell)
         self._render_devices_page()
 
     def _build_devices_hero(self, parent):

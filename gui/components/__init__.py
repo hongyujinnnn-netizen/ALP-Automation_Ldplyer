@@ -1,4 +1,5 @@
 from gui.components.cards import AlertCard, DetailCard, FeedCard, MetricCard, SectionCard
+from gui.components.scrollable_frame import ScrollableFrame
 from gui.components.state_views import StateView, show_state
 from gui.components.status import (
     StatusPill,
@@ -21,6 +22,7 @@ from gui.components.status import (
 
 __all__ = [
     "AlertCard",
+    "ScrollableFrame",
     "DetailCard",
     "FeedCard",
     "MetricCard",

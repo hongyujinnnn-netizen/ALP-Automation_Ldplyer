@@ -1,6 +1,7 @@
 import tkinter as tk
 import ttkbootstrap as tb
 from core.managers import TaskTemplates
+from gui.components.scrollable_frame import ScrollableFrame
 from gui.gradient_progress import GradientProgressBar
 
 class TasksPageMixin:
@@ -8,10 +9,12 @@ class TasksPageMixin:
         """Create Tasks tab with settings"""
         tasks_tab = tb.Frame(self.notebook)
         self.notebook.add(tasks_tab, text="Tasks")
-        
-        # Task Settings
-        self.create_enhanced_settings(tasks_tab)
-        self.create_control_buttons(tasks_tab)
+
+        scroller = ScrollableFrame(tasks_tab, bg=self.palette["surface"])
+        scroller.pack(fill="both", expand=True)
+
+        self.create_enhanced_settings(scroller.body)
+        self.create_control_buttons(scroller.body)
 
     def create_control_buttons(self, parent):
         """Create main automation control buttons."""
@@ -84,14 +87,12 @@ class TasksPageMixin:
         settings_frame = self._create_card_section(
             parent,
             "Task Configuration",
-            "Tune core automation behavior and reusable templates."
-            ,
-            expand=True,
+            "Tune core automation behavior and reusable templates.",
         )
-        
-        # Create notebook for settings categories
+
+        # fill="x" — height is determined by tab content, not the viewport.
         settings_notebook = tb.Notebook(settings_frame)
-        settings_notebook.pack(fill="both", expand=True, padx=4, pady=4)
+        settings_notebook.pack(fill="x", padx=4, pady=4)
         
         # Basic Settings Tab
         basic_tab = tb.Frame(settings_notebook)

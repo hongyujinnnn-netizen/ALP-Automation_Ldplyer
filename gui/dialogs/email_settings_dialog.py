@@ -28,6 +28,7 @@ class EmailSettingsDialogMixin:
         email_timeout_var,
         email_poll_interval_var,
         email_mark_as_seen_var,
+        appearance_vars=None,
     ):
         self._page_heading(
             parent,
