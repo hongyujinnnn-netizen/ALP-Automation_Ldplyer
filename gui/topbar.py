@@ -2,6 +2,8 @@ import tkinter as tk
 import ttkbootstrap as tb
 from datetime import datetime
 
+from gui.components.status import StatusPill
+
 
 class TopBarMixin:
     def _make_chip(self, parent, text, bg, fg, border_color):
@@ -30,7 +32,7 @@ class TopBarMixin:
         ).pack(anchor="w")
         self.top_status_label = tb.Label(
             title_wrap,
-            text=f"System idle | {datetime.now().strftime('%d %b %Y %H:%M')}",
+            text=f"System: Idle | {datetime.now().strftime('%d %b %Y %H:%M')}",
             style="TopSub.TLabel"
         )
         self.top_status_label.pack(anchor="w")
@@ -44,13 +46,14 @@ class TopBarMixin:
             fg=self.palette["primary"],
             border_color="#00485A",
         )
-        self.top_mode_chip = self._make_chip(
+        self.top_mode_pill = StatusPill(
             center_meta,
-            "Mode: Idle",
-            bg="#0A1A10",
-            fg=self.palette["success"],
-            border_color="#1A5030",
+            "Idle",
+            palette=self.palette,
+            text="Mode: Idle",
+            font=(self.display_font, 9),
         )
+        self.top_mode_pill.pack(side="left", padx=4)
         self.top_task_chip = self._make_chip(
             center_meta,
             "Task: Scroll",
@@ -93,8 +96,8 @@ class TopBarMixin:
         if hasattr(self, "top_selected_chip"):
             self.top_selected_chip.config(text=f"Selected: {selected}")
 
-        if hasattr(self, "top_mode_chip") and mode_text is not None:
-            self.top_mode_chip.config(text=f"Mode: {mode_text}")
+        if hasattr(self, "top_mode_pill") and mode_text is not None:
+            self.top_mode_pill.set_status(mode_text, text=f"Mode: {mode_text}")
 
         task_label = {
             "scroll": "Scroll",

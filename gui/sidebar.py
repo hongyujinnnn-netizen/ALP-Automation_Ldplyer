@@ -1,6 +1,8 @@
 import tkinter as tk
 import ttkbootstrap as tb
 
+from gui.components.status import StatusPill
+
 
 class SidebarMixin:
     def create_sidebar(self, parent):
@@ -75,12 +77,13 @@ class SidebarMixin:
 
         footer = tb.Frame(sidebar, style="Sidebar.TFrame")
         footer.pack(side="bottom", fill="x", pady=(8, 0))
-        self.sidebar_status_pill = tb.Label(
+        self.sidebar_status_pill = StatusPill(
             footer,
+            "Waiting",
+            palette=self.palette,
             text="ADB: checking...",
-            bootstyle="success",
-            style="Chip.TLabel",
-            padding=(8, 5),
+            font=(self.display_font, 9),
+            pady=4,
         )
         self.sidebar_status_pill.pack(fill="x")
 

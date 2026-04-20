@@ -1,153 +1,397 @@
-# ALP Automation LDPlayer
+# 🚀 ALP Automation LDPlayer
 
-Windows desktop control center for managing LDPlayer instances, running automation batches, scheduling work, and monitoring live device activity from a Tkinter UI.
+> **Professional Windows Desktop Control Center for Android Emulator Automation**
 
-## Status
+A feature-rich Tkinter + ttkbootstrap desktop application for managing LDPlayer Android emulator instances at scale. Automate repetitive tasks across multiple devices, orchestrate complex workflows, monitor system health in real-time, and manage device scheduling with precision.
 
-This project currently works as a Windows-first desktop app and is being refactored incrementally toward a layered architecture:
+**Perfect for:** Automation engineers, QA teams, content creators, and operations teams managing fleet-wide Android device automation.
 
-`GUI -> Controller -> Service -> Core/Utils`
+---
 
-The codebase is not a full clean-slate rewrite. Some new layers are already in place, and some legacy flow still exists behind compatibility wrappers. The goal is to improve maintainability without breaking working behavior.
+## ✨ Key Features
 
-## What The App Does
+### 🎛️ Fleet Management
+- **Instance Discovery** — Automatically detect and list available LDPlayer instances
+- **Batch Control** — Start, stop, and restart multiple emulators simultaneously
+- **Device Monitoring** — Real-time status tracking and live activity feeds for all devices
+- **Account Assignment** — Assign and manage multiple accounts across emulator instances
+- **ADB Integration** — Direct ADB tool access within the UI for advanced debugging
 
-- discovers LDPlayer instances
-- starts, stops, and restarts selected emulators
-- runs automation batches for `scroll` and `reels`
-- manages content queue, account assignments, backups, and schedule settings
-- configures and tests authorized IMAP email OTP retrieval for owned or explicitly authorized mailboxes
-- exposes ADB tools inside the desktop UI
-- shows fleet state, live task status, system metrics, and logs
+### 🤖 Automation Capabilities
+- **Scroll Automation** — Automated feed scrolling with configurable duration and timing
+- **Reels Automation** — Video content interaction automation
+- **Account Registration** — Automated account registration workflow
+- **Task Templates** — Reusable automation templates with batch execution
+- **Content Queue** — Manage content assignments and task batching
+- **Crash Recovery** — Auto-restart on crash with configurable recovery strategies
 
-## Architecture
+### 📅 Intelligent Scheduling
+- **Time Window Scheduling** — Define automation run windows (start/stop times)
+- **Weekly Patterns** — Configure daily or custom weekly automation patterns
+- **Smart Throttling** — Prevent resource overload with intelligent device sequencing
+- **Next-Run Preview** — See scheduled automation timeline at a glance
+- **Pause & Resume** — Manually override scheduled automation when needed
 
-### Current Layer Design
+### 🔐 Security & OTP
+- **Email OTP Integration** — Automated IMAP mailbox monitoring for OTP codes
+- **Multi-Mailbox Support** — Connect to multiple owned or authorized email accounts
+- **OTP Polling** — Intelligent polling system for time-sensitive OTP retrieval
+- **Account Authorization** — Manage access control for mailbox connections
 
-```text
-app/
-  app.py                    # real application entrypoint
+### 📊 Operations Dashboard
+- **Live Metrics** — Real-time KPI cards showing fleet health
+- **Alert System** — Critical, warning, and info alerts for anomalies
+- **Performance Monitoring** — CPU, RAM, disk, and temperature tracking
+- **Activity Feed** — Live device status and current task information
+- **Health Distribution** — Visual breakdown of device states (running, active, failed, etc.)
+- **Recent Events** — High-signal event summary from structured logs
 
-gui/
-  ld_manager_app.py         # main Tk shell
-  pages/                    # dashboard/devices/tasks/schedule/content/logs
-  dialogs/                  # settings/tools/account/perf dialogs
-  mixins/                   # UI-only helpers
+### 📋 Comprehensive Logging
+- **Structured Logging** — JSON-formatted logs with timestamps and severity
+- **Live Log Panel** — Color-coded event streaming in real-time
+- **Log Export** — Backup and export automation session logs
+- **Event Search** — Find and filter important events by level and timestamp
 
-controllers/
-  app_controller.py
-  emulator_controller.py
-  otp_controller.py
-  task_controller.py
+---
 
-services/
-  adb_service.py
-  email_service.py
-  emulator_service.py
-  logging_service.py
-  otp_service.py
-  scheduler_service.py
-  settings_service.py
-  task_service.py
+## 🏗️ Architecture
 
-core/
-  email_models.py
-  emulator.py
-  managers.py
-  models.py
-  otp_parser.py
-  paths.py
-  settings.py
-  state_machine.py
-  task_handlers.py
+This project follows a **layered, service-oriented architecture** for maintainability and testability:
 
-utils/
-  app_utils.py
-  helpers.py
-  logger.py
-  performance_monitor.py
-  rate_limiter.py
-  ...
+```
+┌─────────────────────────────────────────┐
+│         GUI Layer (Tkinter UI)          │  ← User interaction, visual state
+├─────────────────────────────────────────┤
+│      Controllers (Coordination)          │  ← UI logic, request handling
+├─────────────────────────────────────────┤
+│       Services (Business Logic)          │  ← Emulator, task, scheduler,
+│                                         │     settings, logging, OTP
+├─────────────────────────────────────────┤
+│    Core (Models, State, Handlers)       │  ← Task runners, email, models,
+│                                         │     persistence, emulator control
+├─────────────────────────────────────────┤
+│        Utils (Helpers, Adapters)        │  ← Shared utilities, helpers
+└─────────────────────────────────────────┘
 ```
 
-### Layer Intent
+### Layer Breakdown
 
-- `app/`
-  Startup, relaunch, and bootstrapping only.
-- `gui/`
-  Tkinter widgets, layouts, dialogs, visual state, and user interaction.
-- `controllers/`
-  Thin coordination layer between UI and services.
-- `services/`
-  Emulator, ADB, settings, scheduling, task-run orchestration, and logging boundaries.
-- `core/`
-  Shared models, paths, persistent settings, task handlers, and lower-level logic.
-- `utils/`
-  Reusable helpers and compatibility adapters.
+#### **GUI Layer** (`gui/`)
+- `ld_manager_app.py` — Main application shell and frame orchestration
+- `pages/` — Tab-based page components (dashboard, devices, tasks, schedule, logs)
+- `dialogs/` — Modal dialogs for settings, tools, OTP config, and account management
+- `components/` — Reusable UI widgets (cards, trees, progress bars)
+- `mixins/` — UI-only helper mixins for organization
+- `styles.py` — ttkbootstrap theme configuration and custom styles
+- `sidebar.py`, `topbar.py`, `status_bar.py` — Main window chrome
 
-## Entry Points
+#### **Controllers** (`controllers/`)
+Thin coordination layer between UI and services:
+- `app_controller.py` — Settings persistence, app-wide configuration
+- `emulator_controller.py` — Emulator state changes and discovery
+- `otp_controller.py` — Email OTP setup, validation, and test actions
+- `task_controller.py` — Task creation, batching, and runner delegation
 
-- `python app.py`
-  Safe root shim that forwards to `app/app.py`
-- `python -m app.app`
-  Direct package entrypoint
+#### **Services** (`services/`)
+Business logic and orchestration boundaries:
+- `emulator_service.py` — High-level emulator operations (start, stop, status)
+- `adb_service.py` — Centralized ADB command execution with connection pooling
+- `task_service.py` — Task runner creation and automation delegation
+- `scheduler_service.py` — Scheduling decision logic and time window management
+- `otp_service.py` — OTP polling, email integration, code extraction
+- `email_service.py` — IMAP mailbox access, message search, fetch, cleanup
+- `settings_service.py` — Settings persistence and validation
+- `logging_service.py` — Structured JSON logging to file and UI
 
-Current startup behavior:
+#### **Core** (`core/`)
+Shared models, state machines, and lower-level logic:
+- `models.py` — Data models (Account, Device, Task, etc.)
+- `settings.py` — AppSettings and ScheduleSettings configuration objects
+- `managers.py` — AccountManager, ContentManager, BackupManager, SmartScheduler
+- `task_handlers.py` — Scroll and reels automation implementation
+- `emulator.py` — Low-level LDPlayer/ADB control (legacy compatibility)
+- `state_machine.py` — Device state transition logic
+- `email_models.py` — Email and OTP-related models
+- `otp_parser.py` — OTP code extraction from email content
+- `paths.py` — Application path resolution and directory management
+- `reg_account.py` — Account registration workflow handlers
 
-- if a local `.venv` exists and the app is launched outside it, the app relaunches inside `.venv`
-- on Windows, the app can request administrator rights because some LDPlayer actions may require elevation
+#### **Utils** (`utils/`)
+Reusable helpers and adapters:
+- `performance_monitor.py` — Host system metrics (CPU, RAM, disk, temp)
+- `logger.py` — Logging configuration and helpers
+- `app_utils.py` — General-purpose application utilities
+- `rate_limiter.py` — Request throttling and rate limiting
+- `ip_guard.py` — IP-based access control validation
+- `helpers.py` — Miscellaneous helper functions
 
-## Main Runtime Flow
+---
 
-1. `app/app.py` boots the application.
-2. `gui/ld_manager_app.py` builds the main shell.
-3. `controllers/*` translate UI actions into service calls.
-4. `services/*` coordinate emulator, ADB, task-run, scheduler, and settings behavior.
-5. `core/*` provides shared persistence and lower-level execution pieces.
+## 🚀 Quick Start
 
-## Current Important Files
+### System Requirements
+- **OS:** Windows 7 or later
+- **Python:** 3.9+
+- **LDPlayer:** Latest version with ADB enabled
+- **RAM:** 8GB minimum (more recommended for large fleets)
 
-- `app/app.py`
-  Real application startup path.
-- `app.py`
-  Compatibility launcher.
-- `gui/ld_manager_app.py`
-  Main UI shell. Still the largest class and the main ongoing refactor target.
-- `controllers/app_controller.py`
-  Settings-focused UI coordination.
-- `controllers/emulator_controller.py`
-  Emulator-related UI coordination.
-- `controllers/otp_controller.py`
-  Email OTP settings validation, persistence, and UI-facing test actions.
-- `controllers/task_controller.py`
-  Task request creation and runner delegation.
-- `services/email_service.py`
-  IMAP mailbox access, message search, fetch, decode, and cleanup.
-- `services/emulator_service.py`
-  Emulator facade used by the UI and orchestration layer.
-- `services/otp_service.py`
-  OTP polling orchestration over mailbox results.
-- `services/adb_service.py`
-  Centralized ADB command execution.
-- `services/task_service.py`
-  Task runner creation boundary.
-- `services/scheduler_service.py`
-  Scheduling decision logic.
-- `services/logging_service.py`
-  Structured JSON logging.
-- `core/emulator.py`
-  Legacy emulator control implementation still used underneath the service layer.
-- `core/task_handlers.py`
-  Scroll and reels automation handlers.
+### Installation
 
-## Project Layout Notes
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/hongyujinnnn-netizen/ALP-Automation_Ldplyer.git
+   cd ALP-Automation_Ldplyer
+   ```
 
-Not every new module is a final implementation yet.
+2. **Create virtual environment (recommended):**
+   ```bash
+   python -m venv .venv
+   .venv\Scripts\activate
+   ```
 
-Examples:
+3. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-- `gui/pages/emulator_page.py`, `gui/pages/task_page.py`, and `gui/pages/settings_page.py` are compatibility page aliases added to match the new structure.
-- `services/task_service.py` still creates the current `MainWindow` runner rather than owning the full task engine yet.
+4. **Run the application:**
+   ```bash
+   python app.py
+   ```
+
+   Or directly:
+   ```bash
+   python -m app.app
+   ```
+
+### First-Time Setup
+
+1. **Admin Elevation** — Application will request administrator rights on Windows (required for emulator control)
+2. **Emulator Discovery** — Application auto-discovers connected LDPlayer instances
+3. **ADB Configuration** — Verify ADB connectivity from Tools menu
+4. **Settings** — Configure schedule, OTP, and automation preferences
+
+---
+
+## 📖 Usage Guide
+
+### Dashboard Operations
+
+**View Fleet Overview:**
+- KPI cards show total devices, running, active, offline, and error counts
+- Alert section flags critical issues needing attention
+- Fleet health distribution shows device state breakdown
+- Live activity feed shows current task for each device
+
+**Manage Automation:**
+1. Select devices from the device table or use sidebar groups
+2. Choose automation task type (Scroll, Reels, Register Account, etc.)
+3. Configure batch size, timing, and crash recovery
+4. Click **Run Automation** to start
+
+### Scheduling
+
+**Configure Schedule:**
+1. Go to **Schedule** tab or dashboard Schedule panel
+2. Set start time and stop time
+3. Select active days (M, T, W, T, F, S, S)
+4. Toggle **Enabled** to activate scheduling
+5. Automation will run within configured windows
+
+### Email OTP Configuration
+
+**Add Mailbox:**
+1. Go to **Settings → Email OTP**
+2. Click **Add Mailbox**
+3. Enter IMAP server details (Gmail: `imap.gmail.com`, port 993)
+4. Enter email and app-specific password
+5. Click **Test** to verify connection
+6. Save configuration
+
+### Device Management
+
+**Emulator Table:**
+- View all instances with status, assigned account, and queue position
+- Select devices for batch operations
+- Right-click for context menu (restart, logs, etc.)
+- Drag-select for multiple selection
+
+**Batch Operations:**
+- **Start Selected** — Boot selected emulators
+- **Stop Selected** — Gracefully shut down selected instances
+- **Restart Selected** — Reboot selected devices
+
+---
+
+## 📊 Dashboard Overview
+
+### KPI Section
+| Metric | Purpose |
+|--------|---------|
+| **Total Devices** | Fleet size |
+| **Running** | Active emulator instances |
+| **Active** | Devices executing tasks |
+| **Offline** | Disconnected or unresponsive devices |
+| **Failures** | Tasks with errors |
+
+### Alerts
+- 🔴 **Critical** — ADB disconnection, stuck OTP, device offline
+- 🟡 **Warning** — Empty queue, schedule disabled, repeated failures
+- 🟢 **Info** — Next run time, schedule active
+
+### Fleet Health
+Visual distribution of device states:
+- Running, Active, Inactive, Paused, Completed, Failed
+
+### Live Activity
+Current task information for active devices:
+```
+LD-1     → Posting reel [45% ▓▓▓▒]
+LD-2     → Waiting OTP [pending]
+LD-3     → Scroll feed [15 min]
+LD-4     → Completed [100% ✓]
+```
+
+---
+
+## 🔧 Configuration Files
+
+Configuration stored in `config/` directory:
+
+| File | Purpose |
+|------|---------|
+| `setting.json` | Main app settings (schedule, delays, batch size) |
+| `setting_schedule.json` | Schedule configuration (times, days) |
+| `created_accounts.json` | Device ↔ Account mappings |
+| `test_settings_roundtrip.json` | Settings validation cache |
+
+---
+
+## 📝 Logging
+
+Logs are stored in `logs/` directory:
+
+- `app.jsonl` — Structured JSON log (all events, machine-readable)
+- `facebook_pages_*.xml` — Detected pages from automation runs
+- **Live Log Panel** — Color-coded event stream within UI
+
+View full logs in the **Logs** tab with search and filter capabilities.
+
+---
+
+## 🛠️ Advanced Features
+
+### Performance Monitoring
+System health metrics continuously tracked:
+- CPU usage with gradient visualization
+- RAM consumption and allocation
+- Disk I/O and available space
+- Temperature monitoring
+
+### Content Queue Management
+- Import content lists (URLs, captions, media)
+- Assign content to automation batches
+- Track queue consumption per device
+- Backup and restore queue snapshots
+
+### Backup & Restore
+- Backup app configuration and device state
+- Restore previous settings/state snapshots
+- Automatic backup before major operations
+
+### ADB Tools
+Access advanced debugging from **Tools → ADB Console**:
+- Direct ADB command execution
+- Device shell access
+- Logcat streaming
+- File push/pull
+
+---
+
+## 🏢 Project Status
+
+**Refactor Status:** In-progress toward clean layered architecture
+
+This project is actively being refactored to improve maintainability:
+- ✅ GUI layer — Well-structured with mixins
+- ✅ Controller layer — In place with service delegation
+- ✅ Service layer — Core services stable
+- 🔄 Core layer — Incrementally improving models and abstractions
+- 📝 Ongoing — Reduce MainWindow complexity, improve testability
+
+The application is production-ready with some legacy compatibility paths maintained during refactor. New code follows the service-oriented pattern.
+
+---
+
+## 📦 Dependencies
+
+```
+psutil              # System monitoring (CPU, RAM, disk, temp)
+ttkbootstrap        # Modern Tkinter theme framework
+uiautomator2        # Android UIAutomator for automation
+```
+
+See `requirements.txt` for complete dependency list with versions.
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! Areas of focus:
+
+- Refactoring `ld_manager_app.py` into smaller, focused components
+- Adding new automation task types
+- Improving OTP reliability
+- Performance optimizations
+- Testing infrastructure
+- Documentation
+
+Please follow the layered architecture pattern when adding new features.
+
+---
+
+## 📄 License
+
+[Specify your license here]
+
+---
+
+## 📞 Support
+
+**Issues & Bugs:** Open an issue with:
+- Python version
+- Windows version
+- Error logs from `logs/app.jsonl`
+- Steps to reproduce
+
+**Feature Requests:** Describe use case and expected behavior
+
+---
+
+## 🎯 Roadmap
+
+### Short Term
+- [ ] Dashboard redesign with professional KPI cards and alerts
+- [ ] Improved error recovery mechanisms
+- [ ] Device health scoring system
+
+### Medium Term
+- [ ] REST API for remote control
+- [ ] Web dashboard for monitoring
+- [ ] Task template marketplace
+- [ ] Advanced reporting and analytics
+
+### Long Term
+- [ ] Cross-platform support (macOS, Linux)
+- [ ] Distributed architecture for multi-machine fleets
+- [ ] Machine learning-based optimization
+- [ ] Integration with external analytics platforms
+
+---
+
+**Last Updated:** April 2026  
+**Current Version:** 1.0.0-refactor  
+**Maintainer:** hongyujinnnn-netizen
 - `services/scheduler_service.py` currently owns schedule decision logic, not the entire scheduling thread lifecycle.
 
 This is intentional. The refactor is being done step by step to preserve behavior.

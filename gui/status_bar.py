@@ -2,6 +2,7 @@ import tkinter as tk
 from datetime import datetime
 import psutil
 
+from gui.components.status import StatusPill
 from gui.gradient_progress import GradientProgressBar
 
 
@@ -30,16 +31,19 @@ class StatusBarMixin:
         )
         self.footer_selected_label.pack(side="left", padx=(0, 14))
 
-        self.status_sys_lbl = tk.Label(
+        self.status_sys_pill = StatusPill(
             left,
-            text="● System: Idle",
-            bg=self.palette["surface"],
-            fg=self.palette["muted"],
+            "Idle",
+            palette=self.palette,
+            text="System: Idle",
             font=(self.mono_font, 9),
+            padx=7,
+            pady=1,
         )
-        self.status_sys_lbl.pack(side="left", padx=(0, 14))
+        self.status_sys_pill.pack(side="left", padx=(0, 14))
+        self.status_sys_lbl = self.status_sys_pill
         # alias for existing log helpers
-        self.status_label = self.status_sys_lbl
+        self.status_label = self.status_sys_pill
 
         self.status_adb_lbl = tk.Label(
             left,
@@ -127,32 +131,14 @@ class StatusBarMixin:
                     self.footer_mem_label.config(text=f"Mem: {mem:.0f}%")
                 if hasattr(self, "sidebar_status_pill"):
                     adb_online = sum(1 for status in self._ld_status_cache.values() if status in ("Active", "Running"))
-                    self.sidebar_status_pill.config(text=f"ADB Online | {adb_online} active | CPU {cpu:.0f}%")
+                    sidebar_status = "Active" if adb_online else "Inactive"
+                    self.sidebar_status_pill.set_status(sidebar_status, text=f"ADB Online | {adb_online} active | CPU {cpu:.0f}%")
                 if hasattr(self, "status_adb_lbl"):
                     adb_online = sum(1 for status in self._ld_status_cache.values() if status in ("Active", "Running"))
                     self.status_adb_lbl.config(text=f"ADB: {adb_online} devices")
                 if hasattr(self, "status_task_lbl"):
                     running = sum(1 for status in self._ld_status_cache.values() if status == "Running")
                     self.status_task_lbl.config(text=f"Tasks: {running} active")
-                disk = psutil.disk_usage("/").percent
-                temp = min(95.0, 38.0 + (cpu * 0.35))
-                if hasattr(self, "sys_rows"):
-                    row = self.sys_rows.get("cpu")
-                    if row:
-                        row["bar"].set(cpu)
-                        row["value"].config(text=f"{cpu:.0f}%")
-                    row = self.sys_rows.get("ram")
-                    if row:
-                        row["bar"].set(mem)
-                        row["value"].config(text=f"{mem:.0f}%")
-                    row = self.sys_rows.get("disk")
-                    if row:
-                        row["bar"].set(disk)
-                        row["value"].config(text=f"{disk:.0f}%")
-                    row = self.sys_rows.get("temp")
-                    if row:
-                        row["bar"].set(temp)
-                        row["value"].config(text=f"{temp:.0f}C")
             except Exception:
                 pass
             self.root.after(2500, _tick)

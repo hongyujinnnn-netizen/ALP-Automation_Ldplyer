@@ -1,6 +1,8 @@
 import tkinter as tk
 import ttkbootstrap as tb
 
+from gui.components.cards import MetricCard
+from gui.components.status import StatusPill, status_color, status_label, status_table_text, status_tag
 from gui.gradient_progress import GradientProgressBar
 
 
@@ -35,7 +37,7 @@ class DevicesPageMixin:
         self._render_devices_page()
 
     def _build_devices_hero(self, parent):
-        row = tk.Frame(parent, bg=self.palette["surface"])
+        row = tb.Frame(parent, style="CardInner.TFrame")
         row.pack(fill="x")
         self.device_metric_cards = {}
         metrics = [
@@ -45,21 +47,16 @@ class DevicesPageMixin:
             ("completed", "Completed", "#38BDF8", "Finished in the current session"),
         ]
         for idx, (key, label, accent, subtitle) in enumerate(metrics):
-            card = tk.Frame(
+            card = MetricCard(
                 row,
-                bg=self.palette["surface_alt"],
-                highlightthickness=1,
-                highlightbackground=self.palette["border"],
-                padx=14,
-                pady=12,
+                label,
+                "0",
+                subtitle,
+                accent=accent,
+                palette=self.palette,
             )
             card.pack(side="left", fill="both", expand=True, padx=(0, 8 if idx < len(metrics) - 1 else 0))
-            tk.Frame(card, bg=accent, height=3).pack(fill="x", pady=(0, 10))
-            tk.Label(card, text=label.upper(), bg=self.palette["surface_alt"], fg=self.palette["muted"], font=(self.mono_font, 8)).pack(anchor="w")
-            value = tk.Label(card, text="0", bg=self.palette["surface_alt"], fg=accent, font=(self.display_font, 20))
-            value.pack(anchor="w", pady=(4, 0))
-            tk.Label(card, text=subtitle, bg=self.palette["surface_alt"], fg=self.palette["muted"], font=(self.mono_font, 8)).pack(anchor="w", pady=(2, 0))
-            self.device_metric_cards[key] = value
+            self.device_metric_cards[key] = card.value_label
 
     def _build_devices_table_panel(self, parent):
         card = self._create_card_section(
@@ -87,11 +84,14 @@ class DevicesPageMixin:
             tree.heading(key, text=title, anchor="w")
             tree.column(key, width=width, anchor="w")
 
-        tree.tag_configure("idle", background=self.palette["surface"], foreground=self.palette["muted"])
-        tree.tag_configure("queued", background="#111827", foreground="#FCD34D")
-        tree.tag_configure("running", background="#081C14", foreground="#6EE7B7")
-        tree.tag_configure("attention", background="#1F1720", foreground="#FCA5A5")
-        tree.tag_configure("completed", background="#0A1420", foreground="#93C5FD")
+        tree.tag_configure("idle", background=self.palette["surface"], foreground=status_color("Idle", self.palette))
+        tree.tag_configure("inactive", background=self.palette["surface"], foreground=status_color("Inactive", self.palette))
+        tree.tag_configure("active", background="#0A1A20", foreground=status_color("Active", self.palette))
+        tree.tag_configure("queued", background="#111827", foreground=status_color("Queued", self.palette))
+        tree.tag_configure("running", background="#081C14", foreground=status_color("Running", self.palette))
+        tree.tag_configure("attention", background="#1F1720", foreground=status_color("Attention", self.palette))
+        tree.tag_configure("completed", background="#0A1420", foreground=status_color("Completed", self.palette))
+        tree.tag_configure("paused", background="#160F22", foreground=status_color("Paused", self.palette))
 
         scroll = tb.Scrollbar(card, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
         scroll.pack(side="right", fill="y")
@@ -108,7 +108,14 @@ class DevicesPageMixin:
         )
         self.device_focus_name = tk.Label(focus, text="No device selected", bg=self.palette["surface"], fg=self.palette["text"], font=(self.display_font, 15))
         self.device_focus_name.pack(anchor="w")
-        self.device_focus_state = tk.Label(focus, text="Idle", bg=self.palette["surface"], fg=self.palette["muted"], font=(self.mono_font, 9))
+        self.device_focus_state = StatusPill(
+            focus,
+            "Idle",
+            palette=self.palette,
+            font=(self.mono_font, 9),
+            padx=8,
+            pady=2,
+        )
         self.device_focus_state.pack(anchor="w", pady=(4, 0))
         self.device_focus_task = tk.Label(focus, text="Waiting for selection", bg=self.palette["surface"], fg=self.palette["text"], font=(self.mono_font, 10), wraplength=280, justify="left")
         self.device_focus_task.pack(anchor="w", pady=(12, 8))
@@ -240,7 +247,7 @@ class DevicesPageMixin:
         selected_count = waiting_count = running_count = completed_count = 0
         for row in rows:
             state_lower = row["state"].lower()
-            tag = "idle"
+            tag = status_tag(row["state"])
             if "running" in state_lower:
                 tag = "running"
                 running_count += 1
@@ -258,7 +265,7 @@ class DevicesPageMixin:
             self.devices_tree.insert(
                 "",
                 "end",
-                values=(row["name"], row["state"], row["task"], row["timer"], row["target"], row["queue"], row["account"]),
+                values=(row["name"], status_table_text(row["state"]), row["task"], row["timer"], row["target"], row["queue"], row["account"]),
                 tags=(tag,),
             )
 
@@ -306,23 +313,15 @@ class DevicesPageMixin:
             focus_row = rows[0]
         if focus_row is None:
             self.device_focus_name.config(text="No device selected")
-            self.device_focus_state.config(text="Idle", fg=self.palette["muted"])
+            self.device_focus_state.set_status("Idle")
             self.device_focus_task.config(text="Select LDs from the fleet table to queue them here.")
             self.device_focus_progress.set(0)
             self.device_focus_meta.config(text="Runtime: 00:00  |  Queue: -")
             self.device_focus_ip.config(text="IP: -")
             return
 
-        accent = self.palette["primary"]
-        state_lower = focus_row["state"].lower()
-        if "running" in state_lower:
-            accent = self.palette["success"]
-        elif "queued" in state_lower or "waiting" in state_lower:
-            accent = self.palette["warning"]
-        elif "attention" in state_lower:
-            accent = self.palette["danger"]
         self.device_focus_name.config(text=focus_row["name"])
-        self.device_focus_state.config(text=focus_row["state"], fg=accent)
+        self.device_focus_state.set_status(focus_row["state"], text=status_label(focus_row["state"]))
         self.device_focus_task.config(text=focus_row["task"])
         self.device_focus_progress.set(focus_row["progress"])
         self.device_focus_meta.config(text=f"Runtime: {focus_row['timer']}  |  Queue: {focus_row['queue']}")

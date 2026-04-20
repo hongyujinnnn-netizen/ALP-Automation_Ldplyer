@@ -39,6 +39,16 @@ from utils.ip_guard import check_ip_allowed
 from services.logging_service import AppLogger
 from services.settings_service import SettingsService
 from gui.checkbox_treeview import CheckboxTreeview
+from gui.components.cards import SectionCard
+from gui.components.status import (
+    status_background,
+    status_color,
+    status_filter_values,
+    status_label,
+    status_sort_key,
+    status_table_text,
+    status_tag,
+)
 from gui.mixins import ToolsMixin
 from gui.gradient_progress import GradientProgressBar
 from gui.styles import configure_styles
@@ -105,6 +115,7 @@ class LDManagerApp(
         self._ld_status_cache = {}
         self._ld_account_cache = {}
         self._device_runtime_state = {}
+        self.dashboard_events = []
         self._last_table_signature = None
         self._ld_search_job = None
         self._main_thread_id = threading.get_ident()
@@ -242,21 +253,11 @@ class LDManagerApp(
             pass
 
     def _create_card_section(self, parent, title, subtitle=None, pady=(0, 14), expand=False):
-        """Create a lightweight card section with subtle shadow and generous spacing."""
-        shadow = tb.Frame(parent, style="Shadow.TFrame", padding=(0, 0, 0, 1))
-        shadow.pack(fill="both", expand=expand, pady=pady)
-
-        card = tb.Frame(shadow, style="Card.TFrame", padding=14)
-        card.pack(fill="both", expand=True, padx=(0, 1))
-
-        tb.Label(card, text=title, style="SectionTitle.TLabel").pack(anchor="w")
-        if subtitle:
-            tb.Label(card, text=subtitle, style="Subtitle.TLabel").pack(anchor="w", pady=(2, 12))
-        else:
-            tb.Frame(card, height=8, style="CardInner.TFrame").pack(fill="x")
-        content = tb.Frame(card, style="CardInner.TFrame")
-        content.pack(fill="both", expand=True)
-        return content
+        """Compatibility wrapper for the shared SectionCard component."""
+        section = SectionCard(parent, title, subtitle, palette=self.palette)
+        section.pack(fill="both", expand=expand, pady=pady)
+        section.body.section_card = section
+        return section.body
 
     def setup_enhanced_ui(self):
         self.create_enhanced_menu_bar()
@@ -285,8 +286,13 @@ class LDManagerApp(
 
     def _handle_task_type_change(self):
         self._update_header_chips()
-        if hasattr(self, "_sync_analytics_task_buttons"):
-            self._sync_analytics_task_buttons()
+
+    def _set_system_status(self, status):
+        label = status_label(status)
+        if hasattr(self, "top_status_label"):
+            self.top_status_label.config(text=f"System: {label}  |  {datetime.now().strftime('%A, %d %b %Y')}")
+        if hasattr(self, "status_sys_pill"):
+            self.status_sys_pill.set_status(status, text=f"System: {label}")
 
     def _schedule_ld_table_render(self, delay_ms=140):
         if self._ld_search_job is not None:
@@ -341,7 +347,7 @@ class LDManagerApp(
         status_combo = tb.Combobox(
             filter_frame,
             textvariable=self.ld_status_filter_var,
-            values=("All", "Running", "Active", "Inactive", "Paused", "Completed"),
+            values=status_filter_values(),
             state="readonly",
             width=11
         )
@@ -465,12 +471,14 @@ class LDManagerApp(
         self.ld_table.column("groups", width=180, anchor="w")
         
         # Configure tags with state colors
-        self.ld_table.tag_configure("active", background="#0A1A20", foreground="#67E8F9")
+        self.ld_table.tag_configure("active", background=status_background("Active"), foreground=status_color("Active", self.palette))
         # Keep inactive rows uncolored; zebra striping will handle contrast.
         self.ld_table.tag_configure("inactive", background="", foreground="")
-        self.ld_table.tag_configure("running", background="#0A1A14", foreground="#6EE7B7")
-        self.ld_table.tag_configure("paused", background="#160F22", foreground="#C4B5FD")
-        self.ld_table.tag_configure("completed", background="#0A1420", foreground="#93C5FD")
+        self.ld_table.tag_configure("running", background=status_background("Running"), foreground=status_color("Running", self.palette))
+        self.ld_table.tag_configure("paused", background=status_background("Paused"), foreground=status_color("Paused", self.palette))
+        self.ld_table.tag_configure("completed", background=status_background("Completed"), foreground=status_color("Completed", self.palette))
+        self.ld_table.tag_configure("queued", background=status_background("Queued"), foreground=status_color("Queued", self.palette))
+        self.ld_table.tag_configure("attention", background=status_background("Attention"), foreground=status_color("Attention", self.palette))
         self.ld_table.tag_configure("odd_row", background="#0C1016")
         self.ld_table.tag_configure("even_row", background=self.palette["surface"])
         
@@ -558,23 +566,10 @@ class LDManagerApp(
                 btn.configure(bootstyle="info" if label == active_label else "secondary-link")
 
     def _status_text(self, status):
-        mapping = {
-            "running": "● Running",
-            "active": "◎ Active",
-            "inactive": "○ Inactive",
-            "paused": "⏸ Paused",
-            "completed": "✓ Done",
-        }
-        return mapping.get(status.lower(), status)
+        return status_table_text(status)
 
     def _status_tag(self, status):
-        return {
-            "Active": "active",
-            "Inactive": "inactive",
-            "Running": "running",
-            "Paused": "paused",
-            "Completed": "completed",
-        }.get(status, "inactive")
+        return status_tag(status)
 
     def _ensure_device_runtime_entry(self, ld_name):
         entry = self._device_runtime_state.setdefault(
@@ -608,8 +603,12 @@ class LDManagerApp(
             entry.update(payload)
         if kwargs:
             entry.update(kwargs)
-        entry.setdefault("started_at", datetime.now().isoformat())
+        timestamp = datetime.now().isoformat()
+        entry.setdefault("started_at", timestamp)
+        entry["updated_at"] = timestamp
         self._render_devices_page()
+        if hasattr(self, "_refresh_dashboard"):
+            self._refresh_dashboard()
 
     def _mark_selected_devices_as_queued(self, selected_ld_names):
         timestamp = datetime.now().isoformat()
@@ -842,8 +841,7 @@ class LDManagerApp(
         elif sort_mode == "Group":
             rows.sort(key=lambda r: (r[4] == "Ungrouped", r[4].lower(), r[0].lower()))
         else:
-            status_order = {"Running": 0, "Active": 1, "Paused": 2, "Completed": 3, "Inactive": 4}
-            rows.sort(key=lambda r: (status_order.get(r[2], 3), r[0].lower()))
+            rows.sort(key=lambda r: (status_sort_key(r[2]), r[0].lower()))
         return rows
 
     def _render_ld_table(self):
@@ -918,6 +916,8 @@ class LDManagerApp(
         self._render_ld_table()
         if hasattr(self, "_render_devices_page"):
             self._render_devices_page()
+        if hasattr(self, "_refresh_dashboard"):
+            self._refresh_dashboard()
 
     def _show_instance_context_menu(self, event):
         item = self.ld_table.identify_row(event.y)
@@ -1356,22 +1356,8 @@ class LDManagerApp(
         """Periodic refresh for analytics dashboard."""
         def _tick():
             try:
-                stats = self.performance_monitor.get_stats()
-                total_instances = len(self._ld_snapshot)
-                running_instances = sum(1 for status in self._ld_status_cache.values() if status == "Running")
-
-                if hasattr(self, "metric_labels") and isinstance(self.metric_labels, dict):
-                    if "total_instances" in self.metric_labels:
-                        self.metric_labels["total_instances"].config(text=str(total_instances))
-                    if "running_tasks" in self.metric_labels:
-                        self.metric_labels["running_tasks"].config(text=str(running_instances))
-                    if "completed_tasks" in self.metric_labels:
-                        self.metric_labels["completed_tasks"].config(text=str(stats.get("completed", 0)))
-                    if "errors" in self.metric_labels:
-                        self.metric_labels["errors"].config(text=str(stats.get("failed", 0)))
-                if hasattr(self, "metric_sub_labels") and isinstance(self.metric_sub_labels, dict):
-                    if "total_instances" in self.metric_sub_labels:
-                        self.metric_sub_labels["total_instances"].config(text=f"{len(self._ld_checked_names)} selected")
+                if hasattr(self, "_refresh_dashboard"):
+                    self._refresh_dashboard()
             except Exception:
                 pass
             self.root.after(3500, _tick)
@@ -1402,8 +1388,7 @@ class LDManagerApp(
         
         _ = colors.get(level, "#ecf0f1")
         
-        # Format message with timestamp
-        formatted_message = f"[{timestamp}] {message}\n"
+        self._record_dashboard_event(timestamp, message, level)
         
         # Insert with tags for coloring
         self.logs_text.config(state="normal")
@@ -1418,20 +1403,13 @@ class LDManagerApp(
         self.logs_text.see("end")
         self.logs_text.config(state="disabled")
 
-        if hasattr(self, "live_log_text"):
-            self.live_log_text.config(state="normal")
-            self.live_log_text.insert("end", f"[{timestamp}] ", "TIMESTAMP")
-            self.live_log_text.insert("end", f"{message}\n", tag)
-            if int(float(self.live_log_text.index("end-1c").split(".")[0])) > 300:
-                self.live_log_text.delete("1.0", "120.0")
-            self.live_log_text.see("end")
-            self.live_log_text.config(state="disabled")
-        
-        # Update status label for important messages
-        if level in ["SUCCESS", "ERROR", "WARNING"] and hasattr(self, "status_label"):
-            self.status_label.config(text=f"System: {message[:40]}")
+        # Keep the system pill reserved for mode state; important messages live in logs/events.
+        if level in ["SUCCESS", "ERROR", "WARNING"]:
+            mode_text = "Idle"
+            if getattr(self, "running_event", None) and self.running_event.is_set():
+                mode_text = "Paused" if getattr(self, "pause_event", None) and not self.pause_event.is_set() else "Running"
             self._update_header_chips(
-                mode_text="Running" if getattr(self, "running_event", None) and self.running_event.is_set() else "Idle"
+                mode_text=mode_text
             )
 
         self.app_logger.log(
@@ -1440,6 +1418,42 @@ class LDManagerApp(
             running=bool(getattr(self, "running_event", None) and self.running_event.is_set()),
             schedule_running=bool(getattr(self, "schedule_running", False)),
         )
+
+    def _record_dashboard_event(self, timestamp, message, level):
+        """Keep a compact high-signal event buffer for the dashboard."""
+        important_terms = (
+            "automation",
+            "scheduled",
+            "schedule",
+            "started",
+            "stopped",
+            "restarted",
+            "completed",
+            "failed",
+            "error",
+            "warning",
+            "queue",
+            "backup",
+            "restore",
+            "account",
+        )
+        normalized_level = str(level).upper()
+        normalized_message = str(message).strip()
+        is_important = normalized_level in {"SUCCESS", "WARNING", "ERROR"}
+        is_important = is_important or any(term in normalized_message.lower() for term in important_terms)
+        if not is_important:
+            return
+
+        if not hasattr(self, "dashboard_events"):
+            self.dashboard_events = []
+        self.dashboard_events.append({
+            "time": timestamp,
+            "level": normalized_level,
+            "message": normalized_message[:160],
+        })
+        self.dashboard_events = self.dashboard_events[-80:]
+        if hasattr(self, "dashboard_recent_events_frame"):
+            self._render_recent_events()
 
     def show_time_picker(self):
         """Show time picker dialog"""
@@ -1736,7 +1750,7 @@ Recent Items:
                 
                 # Update tags
                 tags = list(self.ld_table.item(item, "tags"))
-                tags = [t for t in tags if t not in ("active", "inactive", "running", "paused")]
+                tags = [t for t in tags if t not in ("active", "inactive", "running", "paused", "completed", "queued", "attention")]
                 tags.append(self._status_tag(status))
                 self.ld_table.item(item, tags=tags)
                 break
@@ -1836,10 +1850,7 @@ Recent Items:
         self.start_button.config(state="disabled")
         self.pause_button.config(state="normal")
         self.stop_button.config(state="normal")
-        if hasattr(self, "top_status_label"):
-            self.top_status_label.config(text=f"System: Running  |  {datetime.now().strftime('%A, %d %b %Y')}")
-        if hasattr(self, "status_sys_lbl"):
-            self.status_sys_lbl.config(text="● System: Running", fg=self.palette["success"])
+        self._set_system_status("Running")
         if hasattr(self, "status_task_lbl"):
             self.status_task_lbl.config(text=f"Tasks: {len(selected_ld_names)} active")
         self._update_header_chips(mode_text="Running")
@@ -1921,19 +1932,13 @@ Recent Items:
         if self.pause_event.is_set():
             self.pause_event.clear()
             self.pause_button.config(text="Resume")
-            if hasattr(self, "top_status_label"):
-                self.top_status_label.config(text=f"System: Paused  |  {datetime.now().strftime('%A, %d %b %Y')}")
-            if hasattr(self, "status_sys_lbl"):
-                self.status_sys_lbl.config(text="◎ System: Paused", fg=self.palette["warning"])
+            self._set_system_status("Paused")
             self._update_header_chips(mode_text="Paused")
             self.log("Automation paused", "WARNING")
         else:
             self.pause_event.set()
             self.pause_button.config(text="Pause")
-            if hasattr(self, "top_status_label"):
-                self.top_status_label.config(text=f"System: Running  |  {datetime.now().strftime('%A, %d %b %Y')}")
-            if hasattr(self, "status_sys_lbl"):
-                self.status_sys_lbl.config(text="● System: Running", fg=self.palette["success"])
+            self._set_system_status("Running")
             self._update_header_chips(mode_text="Running")
             self.log("Automation resumed", "SUCCESS")
 
@@ -1948,10 +1953,7 @@ Recent Items:
         self.pause_button.config(state="disabled")
         self.stop_button.config(state="disabled")
         self.pause_button.config(text="Pause")
-        if hasattr(self, "top_status_label"):
-            self.top_status_label.config(text=f"System: Idle  |  {datetime.now().strftime('%A, %d %b %Y')}")
-        if hasattr(self, "status_sys_lbl"):
-            self.status_sys_lbl.config(text="○ System: Idle", fg=self.palette["muted"])
+        self._set_system_status("Idle")
         if hasattr(self, "status_task_lbl"):
             self.status_task_lbl.config(text="Tasks: 0 active")
         self._update_header_chips(mode_text="Idle")
@@ -1986,6 +1988,8 @@ Recent Items:
             self.schedule_enabled_ui.set(True)
         self.schedule_enable_btn.config(text="Disable Schedule", bootstyle="warning")
         self.log("Scheduling enabled", "SUCCESS")
+        if hasattr(self, "_refresh_dashboard"):
+            self._refresh_dashboard()
         
         self.save_schedule_settings()
         
@@ -2000,6 +2004,8 @@ Recent Items:
             self.schedule_enabled_ui.set(False)
         self.schedule_enable_btn.config(text="Enable Schedule", bootstyle="success")
         self.log("Scheduling disabled", "INFO")
+        if hasattr(self, "_refresh_dashboard"):
+            self._refresh_dashboard()
 
     def validate_schedule(self):
         """Validate schedule settings"""

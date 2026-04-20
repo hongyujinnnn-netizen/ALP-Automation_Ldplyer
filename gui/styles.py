@@ -103,6 +103,12 @@ def configure_styles(root, style, palette, display_font, mono_font):
         foreground=palette["text"]
     )
     style.configure(
+        "CardItemTitle.TLabel",
+        font=(display_font, 11),
+        foreground=palette["text"],
+        background=palette["surface"],
+    )
+    style.configure(
         "HeroTitle.TLabel",
         font=(display_font, 21),
         foreground=palette["text"]
@@ -116,6 +122,13 @@ def configure_styles(root, style, palette, display_font, mono_font):
         "Chip.TLabel",
         font=(display_font, 9),
         foreground=palette["text"]
+    )
+    style.configure(
+        "StatusPill.TLabel",
+        font=(display_font, 9),
+        foreground=palette["text"],
+        background=palette["surface_alt"],
+        padding=(8, 3),
     )
 
     # Custom scrollbars

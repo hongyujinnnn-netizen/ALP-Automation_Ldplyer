@@ -13,6 +13,71 @@ class TasksPageMixin:
         self.create_enhanced_settings(tasks_tab)
         self.create_control_buttons(tasks_tab)
 
+    def create_control_buttons(self, parent):
+        """Create main automation control buttons."""
+        control_frame = self._create_card_section(
+            parent,
+            "Automation Control",
+            "Start, pause, stop and maintenance actions."
+        )
+
+        button_grid = tb.Frame(control_frame)
+        button_grid.pack(fill="x", padx=6, pady=6)
+
+        self.start_button = tb.Button(
+            button_grid,
+            text="Run Automation",
+            command=self.start_automation,
+            style="Primary.TButton",
+            width=20
+        )
+        self.start_button.grid(row=0, column=0, padx=5, pady=5)
+
+        self.pause_button = tb.Button(
+            button_grid,
+            text="Pause",
+            command=self.toggle_pause,
+            style="Ctrl.TButton",
+            width=20,
+            state="disabled"
+        )
+        self.pause_button.grid(row=0, column=1, padx=5, pady=5)
+
+        self.stop_button = tb.Button(
+            button_grid,
+            text="Stop Run",
+            command=self.stop_automation,
+            style="Ctrl.TButton",
+            width=20,
+            state="disabled"
+        )
+        self.stop_button.grid(row=0, column=2, padx=5, pady=5)
+
+        self.backup_button = tb.Button(
+            button_grid,
+            text="Create Backup",
+            command=self.create_backup,
+            style="Ghost.TButton",
+            width=20
+        )
+        self.backup_button.grid(row=1, column=0, padx=5, pady=5)
+
+        tb.Button(
+            button_grid,
+            text="Restore Backup",
+            command=self.restore_backup,
+            style="Ghost.TButton",
+            width=20
+        ).grid(row=1, column=1, padx=5, pady=5)
+
+        tb.Button(
+            button_grid,
+            text="Settings",
+            command=self.show_settings_dialog,
+            style="Ghost.TButton",
+            width=20
+        ).grid(row=1, column=2, padx=5, pady=5)
+
 
     def create_enhanced_settings(self, parent):
         """Create enhanced settings section"""

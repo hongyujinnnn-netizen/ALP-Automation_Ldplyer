@@ -1,4 +1,5 @@
 import tkinter as tk
+import tkinter as tk
 from tkinter import messagebox as MessageBox, filedialog
 import ttkbootstrap as tb
 from gui.gradient_progress import GradientProgressBar
@@ -97,9 +98,9 @@ class LogsPageMixin:
                 self.logs_text.config(state="normal")
                 self.logs_text.delete("1.0", "end")
                 self.logs_text.config(state="disabled")
-            if hasattr(self, "live_log_text"):
-                self.live_log_text.config(state="normal")
-                self.live_log_text.delete("1.0", "end")
-                self.live_log_text.config(state="disabled")
+            if hasattr(self, "dashboard_events"):
+                self.dashboard_events.clear()
+            if hasattr(self, "dashboard_recent_events_frame"):
+                self._render_recent_events()
             self.log("Logs cleared", "INFO")
 

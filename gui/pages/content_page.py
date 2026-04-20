@@ -3,7 +3,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox as MessageBox
 import ttkbootstrap as tb
-from gui.gradient_progress import GradientProgressBar
+from gui.components.cards import DetailCard
 
 class ContentPageMixin:
     def create_content_tab(self):
@@ -48,23 +48,13 @@ class ContentPageMixin:
         split = ttk.Panedwindow(content_frame, orient=tk.HORIZONTAL)
         split.pack(fill="both", expand=True, padx=6, pady=(0, 12))
 
-        left_shell = tb.Frame(split, style="Shadow.TFrame", padding=(0, 0, 0, 1))
-        right_shell = tb.Frame(split, style="Shadow.TFrame", padding=(0, 0, 0, 1))
-        split.add(left_shell, weight=3)
-        split.add(right_shell, weight=2)
+        left_card = DetailCard(split, "Content List", palette=self.palette, padding=12)
+        right_card = DetailCard(split, "Preview", palette=self.palette, padding=12)
+        split.add(left_card, weight=3)
+        split.add(right_card, weight=2)
 
-        left_card = tb.Frame(left_shell, style="Card.TFrame", padding=12)
-        left_card.pack(fill="both", expand=True, padx=(0, 1))
-        right_card = tb.Frame(right_shell, style="Card.TFrame", padding=12)
-        right_card.pack(fill="both", expand=True, padx=(0, 1))
-
-        tb.Label(left_card, text="Content List", style="SectionTitle.TLabel").pack(anchor="w")
-        tb.Label(right_card, text="Preview", style="SectionTitle.TLabel").pack(anchor="w")
-
-        left = tb.Frame(left_card, style="CardInner.TFrame")
-        left.pack(fill="both", expand=True, pady=(8, 0))
-        right = tb.Frame(right_card, style="CardInner.TFrame")
-        right.pack(fill="both", expand=True, pady=(8, 0))
+        left = left_card.body
+        right = right_card.body
 
         self.content_listbox = tk.Listbox(
             left,
