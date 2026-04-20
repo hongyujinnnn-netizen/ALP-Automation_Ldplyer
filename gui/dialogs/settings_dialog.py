@@ -416,6 +416,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             email_timeout_var,
             email_poll_interval_var,
             email_mark_as_seen_var,
+            appearance_vars,
         )
 
         self._bind_summary_refresh_with_accounts(
@@ -437,7 +438,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             email_sender_filter_var,
             email_subject_filter_var,
         )
-        self._open_settings_page("general")
+        self.root.after(0, lambda: self._open_settings_page("appearance"))
 
     def _build_premium_header(self, parent, palette, parallel_var, task_duration_var, use_queue_var):
         header = tk.Frame(parent, bg=palette["surface"], pady=18, padx=18)
