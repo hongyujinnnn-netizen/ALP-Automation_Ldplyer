@@ -427,7 +427,7 @@ class LDManagerApp(
         tree_frame.pack(fill="both", expand=True)
         
         # Define columns
-        columns = ("name", "serial", "status", "task", "progress", "account", "groups", "actions")
+        columns = ("name", "serial", "status", "task", "progress", "account", "groups")
         
         # Create Treeview with custom style
         self.ld_table = CheckboxTreeview(
@@ -444,28 +444,25 @@ class LDManagerApp(
 
         # Configure columns
         self.ld_table.heading("name", text="LD Name", anchor="w")
-        self.ld_table.column("name", width=110, anchor="w")
+        self.ld_table.column("name", width=118, anchor="w")
         
         self.ld_table.heading("serial", text="ADB Serial", anchor="w")
-        self.ld_table.column("serial", width=120, anchor="w")
+        self.ld_table.column("serial", width=128, anchor="w")
         
         self.ld_table.heading("status", text="Status", anchor="w")
-        self.ld_table.column("status", width=88, anchor="w")
+        self.ld_table.column("status", width=92, anchor="w")
 
         self.ld_table.heading("task", text="Task", anchor="w")
-        self.ld_table.column("task", width=100, anchor="w")
+        self.ld_table.column("task", width=128, anchor="w")
 
         self.ld_table.heading("progress", text="Progress", anchor="w")
-        self.ld_table.column("progress", width=75, anchor="w")
+        self.ld_table.column("progress", width=84, anchor="w")
         
         self.ld_table.heading("account", text="Account", anchor="w")
-        self.ld_table.column("account", width=110, anchor="w")
+        self.ld_table.column("account", width=124, anchor="w")
 
         self.ld_table.heading("groups", text="Groups", anchor="w")
-        self.ld_table.column("groups", width=150, anchor="w")
-
-        self.ld_table.heading("actions", text="Actions", anchor="w")
-        self.ld_table.column("actions", width=88, anchor="w")
+        self.ld_table.column("groups", width=180, anchor="w")
         
         # Configure tags with state colors
         self.ld_table.tag_configure("active", background="#0A1A20", foreground="#67E8F9")
@@ -873,26 +870,22 @@ class LDManagerApp(
                     "test_feature": "Test Feature",
                 }.get(self.task_type_var.get(), self.task_type_var.get().title())
                 progress_text = f"{random.randint(24, 96)}%"
-                actions_text = "Pause | Stop | More"
             elif status == "Active":
                 task_text = "Starting"
                 progress_text = f"{random.randint(8, 30)}%"
-                actions_text = "Pause | Stop | More"
             elif status == "Inactive":
                 task_text = "—"
                 progress_text = "0%"
-                actions_text = "Start | Stop | More"
             else:
                 task_text = "—"
                 progress_text = "0%"
-                actions_text = "Restart | Stop | More"
             zebra_tag = "odd_row" if idx % 2 == 0 else "even_row"
             is_checked = name in checked_names
             item_id = self.ld_table.insert(
                 "",
                 "end",
                 text="☑" if is_checked else "☐",
-                values=(name, serial, self._status_text(status), task_text, progress_text, account_text, group_text, actions_text),
+                values=(name, serial, self._status_text(status), task_text, progress_text, account_text, group_text),
             )
             self.ld_table.checkboxes[item_id] = is_checked
             base_tags = [zebra_tag, self._status_tag(status)]
@@ -1726,11 +1719,9 @@ Recent Items:
                 progress_text = values[4] if len(values) > 4 else "0%"
                 account_text = values[5] if len(values) > 5 else "No account"
                 group_text = values[6] if len(values) > 6 else self._device_group_text(ld_name)
-                actions_text = values[7] if len(values) > 7 else "Pause | Stop | More"
                 if status == "Inactive":
                     task_text = "-"
                     progress_text = "0%"
-                    actions_text = "Start | Stop | More"
                 elif status == "Running" and task_text in ("-", "Starting"):
                     task_text = {
                         "scroll": "Scroll Feed",
@@ -1738,10 +1729,9 @@ Recent Items:
                         "reg_account": "Register Account",
                         "test_feature": "Test Feature",
                     }.get(self.task_type_var.get(), self.task_type_var.get().title())
-                    actions_text = "Pause | Stop | More"
                 self.ld_table.item(
                     item,
-                    values=(values[0], values[1], self._status_text(status), task_text, progress_text, account_text, group_text, actions_text),
+                    values=(values[0], values[1], self._status_text(status), task_text, progress_text, account_text, group_text),
                 )
                 
                 # Update tags
