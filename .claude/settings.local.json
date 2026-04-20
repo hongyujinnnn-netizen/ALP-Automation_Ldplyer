@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import ast; ast.parse\\(open\\('gui/gradient_progress.py', encoding='utf-8'\\).read\\(\\)\\); ast.parse\\(open\\('gui/ld_manager_app.py', encoding='utf-8'\\).read\\(\\)\\); ast.parse\\(open\\('core/emulator.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")"
+    ]
+  }
+}

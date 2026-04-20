@@ -31,9 +31,12 @@ class CommandPalette(tk.Toplevel):
         self.row_widgets = []
 
         self._configure_window()
-        self._build_ui()
-        self._bind_events()
-        self._filter_commands()
+        try:
+            self._build_ui()
+            self._bind_events()
+            self._filter_commands()
+        finally:
+            self._show_window()
         self.after(20, self._focus_search)
 
     @staticmethod
@@ -59,16 +62,18 @@ class CommandPalette(tk.Toplevel):
         self.configure(bg=self._color("app_bg", "#080B10"))
         self.withdraw()
 
-        width = 680
-        height = 520
+        self._width = 680
+        self._height = 520
+
+    def _show_window(self):
         self.update_idletasks()
         master_x = self.master.winfo_rootx()
         master_y = self.master.winfo_rooty()
         master_w = max(self.master.winfo_width(), 1)
         master_h = max(self.master.winfo_height(), 1)
-        x = master_x + (master_w - width) // 2
-        y = master_y + max(80, (master_h - height) // 4)
-        self.geometry(f"{width}x{height}+{max(x, 0)}+{max(y, 0)}")
+        x = master_x + (master_w - self._width) // 2
+        y = master_y + max(80, (master_h - self._height) // 4)
+        self.geometry(f"{self._width}x{self._height}+{max(x, 0)}+{max(y, 0)}")
         self.deiconify()
         self.lift()
         self.grab_set()
@@ -103,14 +108,14 @@ class CommandPalette(tk.Toplevel):
             pady=2,
         ).pack(side="right")
 
-        search_wrap = tk.Frame(self.shell, bg=surface, padx=18, pady=(16, 10))
-        search_wrap.pack(fill="x")
+        search_wrap = tk.Frame(self.shell, bg=surface)
+        search_wrap.pack(fill="x", pady=(16, 10))
         self.query_var = tk.StringVar()
         self.search_entry = ttk.Entry(search_wrap, textvariable=self.query_var, font=(self.display_font, 13))
-        self.search_entry.pack(fill="x", ipady=7)
+        self.search_entry.pack(fill="x", ipady=7, padx=18)
 
-        self.results_container = tk.Frame(self.shell, bg=surface, padx=10, pady=(0, 8))
-        self.results_container.pack(fill="both", expand=True)
+        self.results_container = tk.Frame(self.shell, bg=surface)
+        self.results_container.pack(fill="both", expand=True, padx=10, pady=(0, 8))
 
         self.empty_label = tk.Label(
             self.results_container,

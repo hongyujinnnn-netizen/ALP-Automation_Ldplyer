@@ -53,7 +53,7 @@ class AppSettings:
     email_timeout_seconds: int = 90
     email_poll_interval_seconds: int = 5
     email_mark_as_seen: bool = False
-    theme_preset: str = "dark"
+    theme_preset: str = "light"
     accent_color: str = "cyan"
     ui_density: str = "comfortable"
     ui_scale: str = "normal"

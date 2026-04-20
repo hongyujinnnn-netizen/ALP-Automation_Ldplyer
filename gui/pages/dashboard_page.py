@@ -187,6 +187,7 @@ class DashboardPageMixin:
             "High-signal successes, warnings, failures, and lifecycle changes.",
         )
         self.dashboard_recent_events_frame = panel
+        self.dashboard_recent_events_page = 0
 
     def _refresh_dashboard(self):
         if not hasattr(self, "dashboard_kpi_labels"):
@@ -604,6 +605,7 @@ class DashboardPageMixin:
         self._clear_frame(self.dashboard_recent_events_frame)
         events = self._get_dashboard_recent_events()
         if not events:
+            self.dashboard_recent_events_page = 0
             self._build_empty_state(
                 self.dashboard_recent_events_frame,
                 "No important events yet",
@@ -612,7 +614,14 @@ class DashboardPageMixin:
             )
             return
 
-        for event in events:
+        per_page = 4
+        total_pages = max(1, (len(events) + per_page - 1) // per_page)
+        current_page = min(max(0, getattr(self, "dashboard_recent_events_page", 0)), total_pages - 1)
+        self.dashboard_recent_events_page = current_page
+        start = current_page * per_page
+        visible_events = events[start:start + per_page]
+
+        for event in visible_events:
             color = self._event_color(event["level"])
             card = FeedCard(
                 self.dashboard_recent_events_frame,
@@ -626,9 +635,44 @@ class DashboardPageMixin:
             )
             card.pack(fill="x", pady=3)
 
+        if len(events) > per_page:
+            pager = tb.Frame(self.dashboard_recent_events_frame, style="CardInner.TFrame")
+            pager.pack(fill="x", pady=(8, 0))
+
+            tb.Label(
+                pager,
+                text=f"Page {current_page + 1} of {total_pages}",
+                style="MetricSub.TLabel",
+            ).pack(side="left")
+
+            tb.Button(
+                pager,
+                text="Prev",
+                bootstyle="secondary-outline",
+                command=lambda: self._change_recent_events_page(-1),
+                state="normal" if current_page > 0 else "disabled",
+                width=8,
+            ).pack(side="right", padx=(6, 0))
+            tb.Button(
+                pager,
+                text="Next",
+                bootstyle="info-outline",
+                command=lambda: self._change_recent_events_page(1),
+                state="normal" if current_page < total_pages - 1 else "disabled",
+                width=8,
+            ).pack(side="right")
+
+    def _change_recent_events_page(self, direction):
+        events = self._get_dashboard_recent_events()
+        per_page = 4
+        total_pages = max(1, (len(events) + per_page - 1) // per_page)
+        current_page = getattr(self, "dashboard_recent_events_page", 0)
+        self.dashboard_recent_events_page = min(max(0, current_page + direction), total_pages - 1)
+        self._render_recent_events()
+
     def _get_dashboard_recent_events(self):
         events = getattr(self, "dashboard_events", [])
-        return list(reversed(events[-7:]))
+        return list(reversed(events))
 
     def _event_color(self, level):
         return {

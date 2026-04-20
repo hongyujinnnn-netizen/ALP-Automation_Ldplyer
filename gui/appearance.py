@@ -74,7 +74,7 @@ UI_SCALES = {
 }
 
 DEFAULT_APPEARANCE_SETTINGS = {
-    "theme_preset": "dark",
+    "theme_preset": "light",
     "accent_color": "cyan",
     "ui_density": "comfortable",
     "ui_scale": "normal",

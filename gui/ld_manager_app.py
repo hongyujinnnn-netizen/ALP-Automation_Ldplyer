@@ -1344,8 +1344,9 @@ class LDManagerApp(
             self.update_selection_info()
             return
 
-        for item in self.ld_table.get_children():
-            self.ld_table.delete(item)
+        children = self.ld_table.get_children()
+        if children:
+            self.ld_table.delete(*children)
 
         for idx, (name, serial, status, account_text, group_text) in enumerate(rows):
             if status == "Running":
@@ -1966,7 +1967,17 @@ class LDManagerApp(
         if hasattr(self, "_refresh_log_filter_options"):
             self._refresh_log_filter_options()
         if hasattr(self, "_render_logs_view"):
-            self._render_logs_view()
+            # Debounce rapid log bursts so the Text widget doesn't rebuild per line.
+            pending = getattr(self, "_log_render_job", None)
+            if pending is not None:
+                try:
+                    self.root.after_cancel(pending)
+                except Exception:
+                    pass
+            def _do_render():
+                self._log_render_job = None
+                self._render_logs_view()
+            self._log_render_job = self.root.after(80, _do_render)
 
         # Keep the system pill reserved for mode state; important messages live in logs/events.
         if normalized_level in ["SUCCESS", "ERROR", "WARNING"]:

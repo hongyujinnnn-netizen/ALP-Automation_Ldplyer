@@ -35,10 +35,13 @@ class SimpleLDPlayer:
         
     def list_emulators(self):
         try:
-            result = subprocess.run([self.console_path, "list2"], 
-                                  capture_output=True, text=True)
+            result = subprocess.run([self.console_path, "list2"],
+                                  capture_output=True, text=True, timeout=10)
             print("Console output:", result.stdout)
             return result.stdout
+        except subprocess.TimeoutExpired:
+            print("dnconsole list2 timed out after 10s")
+            return None
         except Exception as e:
             error_str = str(e)
             if "740" in error_str or "elevation" in error_str.lower():
