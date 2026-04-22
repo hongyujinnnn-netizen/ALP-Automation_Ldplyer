@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from gui.main_window import MainWindow
-
 
 @dataclass(slots=True)
 class TaskRunRequest:
@@ -36,7 +34,14 @@ class TaskService:
         progress_callback: Callable[[float], None] | None = None,
         emulator: Any = None,
         state_callback: Callable[..., Any] | None = None,
-    ) -> MainWindow:
+    ) -> Any:
+        # Interim: ``MainWindow`` currently lives under ``gui/`` but is
+        # actually the per-batch automation runner, not a Tk window. Lazy
+        # import avoids a service -> gui dependency at module load time.
+        # The real fix (Phase 2+) is to extract the runner out of ``gui/``
+        # and rename it; until then the import is deferred to call time.
+        from gui.main_window import MainWindow
+
         return MainWindow(
             request.selected_ld_names,
             running_flag,

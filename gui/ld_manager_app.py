@@ -11,7 +11,6 @@ from datetime import datetime
 import json
 import time
 from pathlib import Path
-import subprocess
 import random
 import re
 import sys
@@ -26,6 +25,7 @@ from ttkbootstrap.scrolled import ScrolledText as tbScrolledText
 from controllers.app_controller import AppController
 from controllers.emulator_controller import EmulatorController
 from controllers.otp_controller import OTPController
+from controllers.automation_controller import AutomationController, AutomationState
 from controllers.task_controller import TaskController
 from core.paths import get_app_paths
 from core.managers import AccountManager, ContentManager, BackupManager, SmartScheduler, TaskTemplates
@@ -33,9 +33,15 @@ from core.settings import AppSettings, ScheduleSettings
 from services.scheduler_service import SchedulerService
 from services.emulator_service import EmulatorService
 from services.task_service import TaskService
+from services.task_handler_factory import (
+    TaskHandlerContext,
+    TaskHandlerFactory,
+    UnsupportedTaskTypeError,
+)
 from utils.performance_monitor import PerformanceMonitor
 from utils.app_utils import AppUtils
 from utils.ip_guard import check_ip_allowed
+from utils.system_power import schedule_pc_shutdown
 from services.logging_service import AppLogger
 from services.settings_service import SettingsService
 from gui.checkbox_treeview import CheckboxTreeview
@@ -139,6 +145,7 @@ class LDManagerApp(
             structured_log_func=self.app_logger.log,
         )
         self.task_service = TaskService()
+        self.task_handler_factory = TaskHandlerFactory()
         self.scheduler_service = SchedulerService()
 
         try:
@@ -157,9 +164,15 @@ class LDManagerApp(
         self.backup_manager = BackupManager(self.log, self.paths)
         self.smart_scheduler = SmartScheduler(self.log, self.paths)
         
-        self.running_event = threading.Event()
-        self.pause_event = threading.Event()
-        self.pause_event.set()  # Start unpaused
+        # Lifecycle state is owned by AutomationController. The two
+        # attributes below remain as direct references to the controller's
+        # events so the many existing call sites that read
+        # ``self.running_event.is_set()`` or ``self.pause_event`` keep
+        # working unchanged during the transition.
+        self.automation_controller = AutomationController()
+        self.running_event = self.automation_controller.running_event
+        self.pause_event = self.automation_controller.pause_event
+        self.automation_controller.add_state_listener(self._on_automation_state)
         self.schedule_thread = None
         self.schedule_running = False
         self.schedule_settings_file = self.paths.schedule_settings_file
@@ -749,6 +762,38 @@ class LDManagerApp(
 
     def _handle_task_type_change(self):
         self._update_header_chips()
+
+    def _on_automation_state(self, state: AutomationState) -> None:
+        """Apply UI effects for an AutomationController state transition.
+
+        Registered as a listener on ``self.automation_controller``. May be
+        invoked from a worker thread (e.g. the ``finally`` block in
+        ``automation_thread`` calls ``stop_automation`` which calls
+        ``controller.stop()``). Widget calls here follow the same pattern
+        the previous inline code used; if Tk thread-safety becomes a
+        concern, marshal via ``self.root.after(0, ...)``.
+        """
+        if state is AutomationState.RUNNING:
+            if hasattr(self, "start_button"):
+                self.start_button.config(state="disabled")
+                self.pause_button.config(state="normal")
+                self.stop_button.config(state="normal")
+                self.pause_button.config(text="Pause")
+            self._set_system_status("Running")
+            self._update_header_chips(mode_text="Running")
+        elif state is AutomationState.PAUSED:
+            if hasattr(self, "pause_button"):
+                self.pause_button.config(text="Resume")
+            self._set_system_status("Paused")
+            self._update_header_chips(mode_text="Paused")
+        elif state is AutomationState.IDLE:
+            if hasattr(self, "start_button"):
+                self.start_button.config(state="normal")
+                self.pause_button.config(state="disabled")
+                self.stop_button.config(state="disabled")
+                self.pause_button.config(text="Pause")
+            self._set_system_status("Idle")
+            self._update_header_chips(mode_text="Idle")
 
     def _set_system_status(self, status):
         label = status_label(status)
@@ -2402,70 +2447,31 @@ Recent Items:
         # Determine task type
         task_type = self.task_type_var.get()
 
-        if task_type == "scroll":
-            from core.logic.task_scroll import ScrollTaskHandler
-            task_handler = ScrollTaskHandler(
-                self.emulator,
-                self.log,
-                self.pause_event,
-                lambda: self.running_event.is_set()
-            )
-            # Pass blocked countries for per-LD IP guard inside the handler.
-            task_handler.blocked_countries = [
+        handler_context = TaskHandlerContext(
+            emulator=self.emulator,
+            log=self.log,
+            pause_event=self.pause_event,
+            running_flag=lambda: self.running_event.is_set(),
+            blocked_countries=[
                 code.strip().upper()
                 for code in self.blocked_countries.get().split(",")
                 if code.strip()
-            ]
-            task_handler.contact_mode = self.reg_contact_mode.get()
-            task_handler.contact_value = self.reg_contact_value.get().strip()
-            task_handler.phone_prefix = self.reg_phone_prefix.get().strip()
-            task_handler.auto_arrange_ld = bool(self.auto_arrange_ld.get())
-            task_handler.state_callback = self.update_device_runtime_state
-        elif task_type == "reg_account":
-            from core.logic.reg_account import RegAccountTaskHandler
-            task_handler = RegAccountTaskHandler(
-                self.emulator,
-                self.log,
-                self.pause_event,
-                lambda: self.running_event.is_set(),
-            )
-            task_handler.blocked_countries = [
-                code.strip().upper()
-                for code in self.blocked_countries.get().split(",")
-                if code.strip()
-            ]
-            task_handler.contact_mode = self.reg_contact_mode.get()
-            task_handler.contact_value = self.reg_contact_value.get().strip()
-            task_handler.phone_prefix = self.reg_phone_prefix.get().strip()
-            task_handler.auto_arrange_ld = bool(self.auto_arrange_ld.get())
-            task_handler.state_callback = self.update_device_runtime_state
-        elif task_type == "reels":
-            from core.logic.task_reels import ReelsTaskHandler
-            task_handler = ReelsTaskHandler(
-                self.emulator,
-                self.log,
-                self.pause_event,
-                lambda: self.running_event.is_set(),
-                self.content_manager if self.use_content_queue.get() else None
-            )
-            task_handler.blocked_countries = [
-                code.strip().upper()
-                for code in self.blocked_countries.get().split(",")
-                if code.strip()
-            ]
-            task_handler.auto_arrange_ld = bool(self.auto_arrange_ld.get())
-            task_handler.state_callback = self.update_device_runtime_state
-        elif task_type == "test_feature":
-            from tests.test_feature import TestFeatureTaskHandler
-            task_handler = TestFeatureTaskHandler(
-                self.emulator,
-                self.log,
-                self.pause_event,
-                lambda: self.running_event.is_set(),
-            )
-            task_handler.auto_arrange_ld = bool(self.auto_arrange_ld.get())
-            task_handler.state_callback = self.update_device_runtime_state
-        else:
+            ],
+            auto_arrange_ld=bool(self.auto_arrange_ld.get()),
+            state_callback=self.update_device_runtime_state,
+            verify_account=bool(self.verify_account.get()),
+            scroll_after_post=bool(self.scroll_after_post.get()),
+            clear_cache=bool(self.clear_cache.get()),
+            reg_contact_mode=self.reg_contact_mode.get(),
+            reg_contact_value=self.reg_contact_value.get(),
+            reg_phone_prefix=self.reg_phone_prefix.get(),
+            content_manager=self.content_manager,
+            use_content_queue=bool(self.use_content_queue.get()),
+        )
+
+        try:
+            task_handler = self.task_handler_factory.create(task_type, handler_context)
+        except UnsupportedTaskTypeError:
             MessageBox.showwarning(
                 "Task Not Implemented",
                 "This task type is UI-only right now. Please use Scroll Feed, Register Account, Watch Reels, or Test Feature."
@@ -2475,40 +2481,34 @@ Recent Items:
         # Start performance monitoring
         self.performance_monitor.start_task_timer(f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
 
-        # Start automation
-        self.running_event.set()
-        self.pause_event.set()
-        self.start_button.config(state="disabled")
-        self.pause_button.config(state="normal")
-        self.stop_button.config(state="normal")
-        self._set_system_status("Running")
+        # Start automation. Button/status updates are applied by the
+        # state listener registered on the controller.
+        self.automation_controller.start()
         if hasattr(self, "status_task_lbl"):
             self.status_task_lbl.set_status("Running", text=f"Tasks: {len(selected_ld_names)} active")
-        self._update_header_chips(mode_text="Running")
 
         self.log(f" Starting automation for {len(selected_ld_names)} LDs", "SUCCESS")
         self.log(f"Task type: {task_type}, Duration: {self.task_duration.get()} minutes", "INFO")
 
-        # Create automation thread
+        request = self.task_controller.build_request(
+            selected_ld_names=selected_ld_names,
+            task_type=task_type,
+            task_template=self.task_template_var.get(),
+            parallel_ld=self.parallel_ld.get(),
+            start_same_time=self.start_same_time.get(),
+            auto_arrange_ld=self.auto_arrange_ld.get(),
+            boot_delay=self.boot_delay.get(),
+            task_duration_seconds=self.task_duration.get() * 60,
+            max_videos=self.max_videos.get(),
+            page_per_account=self.page_per_account.get(),
+            accounts_per_ld=self.accounts_per_ld.get(),
+            scroll_after_post=self.scroll_after_post.get(),
+            clear_cache=self.clear_cache.get(),
+            verify_account=self.verify_account.get(),
+        )
+
         def automation_thread():
-            completed_normally = False
             try:
-                request = self.task_controller.build_request(
-                    selected_ld_names=selected_ld_names,
-                    task_type=task_type,
-                    task_template=self.task_template_var.get(),
-                    parallel_ld=self.parallel_ld.get(),
-                    start_same_time=self.start_same_time.get(),
-                    auto_arrange_ld=self.auto_arrange_ld.get(),
-                    boot_delay=self.boot_delay.get(),
-                    task_duration_seconds=self.task_duration.get() * 60,
-                    max_videos=self.max_videos.get(),
-                    page_per_account=self.page_per_account.get(),
-                    accounts_per_ld=self.accounts_per_ld.get(),
-                    scroll_after_post=self.scroll_after_post.get(),
-                    clear_cache=self.clear_cache.get(),
-                    verify_account=self.verify_account.get(),
-                )
                 main_window = self.task_controller.create_runner(
                     request=request,
                     running_flag=lambda: self.running_event.is_set(),
@@ -2518,76 +2518,58 @@ Recent Items:
                     emulator=self.emulator,
                     state_callback=self.update_device_runtime_state,
                 )
-
-                main_window.main()
-                completed_normally = self.running_event.is_set()
-                self.performance_monitor.end_task_timer(True)
-
-            except Exception as e:
-                self.log(f" Error in automation: {str(e)}", "ERROR")
+            except Exception as exc:
+                self.log(f" Error in automation: {exc}", "ERROR")
                 self.performance_monitor.end_task_timer(False)
-                MessageBox.showerror("Error", f"Automation error: {str(e)}")
-            finally:
+                MessageBox.showerror("Error", f"Automation error: {exc}")
                 self.stop_automation(confirm=False)
+                return
+
+            def _on_error(exc: BaseException) -> None:
+                self.log(f" Error in automation: {exc}", "ERROR")
+                self.performance_monitor.end_task_timer(False)
+                MessageBox.showerror("Error", f"Automation error: {exc}")
+
+            def _on_completed(completed_normally: bool) -> None:
+                self.performance_monitor.end_task_timer(True)
                 if completed_normally and self.auto_shutdown_pc.get():
                     self.root.after(0, self._schedule_pc_shutdown)
+
+            try:
+                self.automation_controller.run_batch(
+                    main_window,
+                    on_error=_on_error,
+                    on_completed=_on_completed,
+                )
+            finally:
+                # GUI-side cleanup (task label, device-state reset, progress
+                # bar) that lives on ``stop_automation``. Safe to call after
+                # ``run_batch`` already transitioned state — ``controller.stop``
+                # is a no-op the second time.
+                self.stop_automation(confirm=False)
 
         threading.Thread(target=automation_thread, daemon=True).start()
 
     def _schedule_pc_shutdown(self):
-        """Schedule a PC shutdown after automation completes."""
-        if platform.system().lower() != "windows":
-            self.log("Auto shutdown is only supported on Windows.", "WARNING")
-            return
-
-        try:
-            subprocess.Popen(
-                [
-                    "shutdown",
-                    "/s",
-                    "/t",
-                    "30",
-                    "/c",
-                    "ALP Automation completed all selected tasks.",
-                ]
-            )
-            self.log(
-                "Automation completed. PC shutdown scheduled in 30 seconds. Run 'shutdown /a' to cancel.",
-                "WARNING",
-            )
-        except Exception as exc:
-            self.log(f"Failed to schedule PC shutdown: {exc}", "ERROR")
+        """Delegate to ``utils.system_power.schedule_pc_shutdown``."""
+        schedule_pc_shutdown(self.log)
 
     def toggle_pause(self):
-        """Toggle pause state"""
-        if self.pause_event.is_set():
-            self.pause_event.clear()
-            self.pause_button.config(text="Resume")
-            self._set_system_status("Paused")
-            self._update_header_chips(mode_text="Paused")
+        """Toggle pause state. Delegates state change to AutomationController."""
+        new_state = self.automation_controller.toggle_pause()
+        if new_state is AutomationState.PAUSED:
             self.log("Automation paused", "WARNING")
-        else:
-            self.pause_event.set()
-            self.pause_button.config(text="Pause")
-            self._set_system_status("Running")
-            self._update_header_chips(mode_text="Running")
+        elif new_state is AutomationState.RUNNING:
             self.log("Automation resumed", "SUCCESS")
 
     def stop_automation(self, confirm=True):
-        """Stop automation process"""
+        """Stop automation process. Delegates state change to AutomationController."""
         if confirm and self.running_event.is_set() and not MessageBox.askyesno("Stop Automation", "Stop current automation run?"):
             return
 
-        self.running_event.clear()
-        self.pause_event.set()
-        self.start_button.config(state="normal")
-        self.pause_button.config(state="disabled")
-        self.stop_button.config(state="disabled")
-        self.pause_button.config(text="Pause")
-        self._set_system_status("Idle")
+        self.automation_controller.stop()
         if hasattr(self, "status_task_lbl"):
             self.status_task_lbl.set_status("Idle", text="Tasks: 0 active")
-        self._update_header_chips(mode_text="Idle")
         self.log("Automation stopped", "INFO")
         self.update_progress(0)
         for name in list(self._device_runtime_state.keys()):

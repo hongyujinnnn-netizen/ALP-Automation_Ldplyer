@@ -148,8 +148,8 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         P = self.palette
         dialog = tk.Toplevel(self.root)
         dialog.title("Control Settings")
-        dialog.geometry("1040x700")
-        dialog.minsize(1040, 700)
+        dialog.geometry("1070x750")
+        dialog.minsize(1070, 750)
         dialog.transient(self.root)
         dialog.grab_set()
         dialog.configure(bg=P["surface"])

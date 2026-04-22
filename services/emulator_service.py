@@ -86,19 +86,26 @@ class EmulatorService:
                     return True
         return False
 
-    def wait_for_ld_ready(self, name: str, timeout: int = 120, poll_interval: int = 2) -> bool:
+    def wait_for_ld_ready(self, name: str, timeout: int = 120, poll_interval: int = 2,
+                          max_offline_tries: int = 8) -> bool:
         serial = self.name_to_serial.get(name)
         if not serial:
             return False
 
         deadline = time.time() + timeout
+        offline_streak = 0
         while time.time() < deadline:
             self.adb_service.connect(serial, timeout=10)
 
             if not self.adb_service.is_serial_online(serial, timeout=5):
+                offline_streak += 1
+                if offline_streak >= max_offline_tries:
+                    # ADB unreachable repeatedly — bail out instead of burning the full timeout.
+                    return False
                 time.sleep(poll_interval)
                 continue
 
+            offline_streak = 0
             try:
                 boot = self.adb_service.shell(
                     serial,

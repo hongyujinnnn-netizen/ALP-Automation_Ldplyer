@@ -28,7 +28,6 @@ class DashboardPageMixin:
         scroller.pack(fill="both", expand=True, padx=2)
         dashboard = scroller.body
 
-        self.create_analytics_dashboard(dashboard)
         self.create_dashboard_alerts_section(dashboard)
 
         # Two-column mid row: Fleet Health | Live Activity
@@ -57,49 +56,6 @@ class DashboardPageMixin:
         events_col.grid(row=0, column=1, sticky="ew", padx=(7, 0))
         self.create_schedule_overview_panel(schedule_col)
         self.create_recent_events_panel(events_col)
-
-    def create_analytics_dashboard(self, parent):
-        """Create top-level KPI cards for the operations dashboard."""
-        panel = self._create_card_section(
-            parent,
-            "Command Center",
-            "Current fleet posture, queue readiness, and failure pressure.",
-            pady=(0, 12),
-        )
-
-        self.dashboard_kpi_labels = {}
-        self.dashboard_kpi_sub_labels = {}
-        self.dashboard_kpi_cards = {}
-        actions = tb.Frame(panel, style="CardInner.TFrame")
-        actions.pack(fill="x", pady=(0, 8))
-        tb.Button(
-            actions,
-            text="Refresh",
-            bootstyle="info",
-            command=lambda: self.request_dashboard_refresh(force=True),
-        ).pack(side="right")
-
-        grid = tb.Frame(panel, style="CardInner.TFrame")
-        grid.pack(fill="x")
-
-        kpis = [
-            ("total_devices", "Total Devices", self.palette["primary"]),
-            ("running", "Running", self.palette["success"]),
-            ("active", "Active", "#38BDF8"),
-            ("inactive", "Offline", self.palette["muted"]),
-            ("failures", "Failures", self.palette["danger"]),
-            ("queue", "Queue", self.palette["warning"]),
-        ]
-        for col, (key, title, accent) in enumerate(kpis):
-            grid.columnconfigure(col, weight=1, uniform="dashboard_kpis")
-            self._build_kpi_card(grid, key, title, accent, col)
-
-    def _build_kpi_card(self, parent, key, title, accent, column):
-        card = MetricCard(parent, title, "0", "-", accent=accent, palette=self.palette)
-        card.grid(row=0, column=column, sticky="nsew", padx=(0 if column == 0 else 5, 0 if column == 5 else 5))
-        self.dashboard_kpi_cards[key] = card
-        self.dashboard_kpi_labels[key] = card.value_label
-        self.dashboard_kpi_sub_labels[key] = card.subtitle_label
 
     def create_dashboard_alerts_section(self, parent):
         """Create actionable dashboard alerts."""
@@ -190,65 +146,13 @@ class DashboardPageMixin:
         self.dashboard_recent_events_page = 0
 
     def _refresh_dashboard(self):
-        if not hasattr(self, "dashboard_kpi_labels"):
+        if not hasattr(self, "dashboard_alerts_frame"):
             return
-        self._update_dashboard_kpis()
         self._render_dashboard_alerts(self._compute_dashboard_alerts())
         self._render_fleet_health()
         self._render_live_activity()
         self._render_schedule_summary()
         self._render_recent_events()
-
-    def _update_dashboard_kpis(self):
-        kpis = self._compute_dashboard_kpis()
-        for key, data in kpis.items():
-            card = self.dashboard_kpi_cards.get(key)
-            if card:
-                card.set(data["value"], data["subtitle"])
-
-    def _compute_dashboard_kpis(self):
-        counts = self._get_dashboard_status_counts()
-        queue_stats = self._get_dashboard_queue_stats()
-        perf = self._get_dashboard_performance_stats()
-        total = len(self._ld_snapshot)
-        selected = len(self._ld_checked_names)
-        known_online = counts["Running"] + counts["Active"]
-        success_rate = perf.get("success_rate", 0)
-        total_tasks = perf.get("total_tasks", 0)
-        failed_samples = perf.get("failed", 0)
-
-        failure_subtitle = "No current attention states"
-        if failed_samples:
-            failure_subtitle = f"{failed_samples} failed task sample(s)"
-        if total_tasks:
-            failure_subtitle = f"{success_rate:.0f}% success across {total_tasks} run(s)"
-
-        return {
-            "total_devices": {
-                "value": total,
-                "subtitle": f"{selected} selected / {known_online} online",
-            },
-            "running": {
-                "value": counts["Running"],
-                "subtitle": "Executing automation now",
-            },
-            "active": {
-                "value": counts["Active"],
-                "subtitle": "ADB online and ready",
-            },
-            "inactive": {
-                "value": counts["Inactive"],
-                "subtitle": "Offline or not booted",
-            },
-            "failures": {
-                "value": counts["Failed"],
-                "subtitle": failure_subtitle,
-            },
-            "queue": {
-                "value": queue_stats.get("available", 0),
-                "subtitle": f"{queue_stats.get('used', 0)} used / {queue_stats.get('total', 0)} total",
-            },
-        }
 
     def _get_dashboard_status_counts(self):
         counts = {
