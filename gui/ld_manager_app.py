@@ -65,16 +65,17 @@ from gui.sidebar import SidebarMixin
 from gui.topbar import TopBarMixin
 from gui.status_bar import StatusBarMixin
 from gui.menu_bar import MenuBarMixin
-from gui.pages.dashboard_page import DashboardPageMixin
+from gui.pages.analytics_page import DashboardPageMixin
 from gui.pages.devices_page import DevicesPageMixin
 from gui.pages.tasks_page import TasksPageMixin
 from gui.pages.schedule_page import SchedulePageMixin
 from gui.pages.content_page import ContentPageMixin
 from gui.pages.logs_page import LogsPageMixin
 from gui.dialogs.settings_dialog import SettingsDialogMixin
-from gui.dialogs.account_dialog import AccountDialogMixin
+from gui.pages.account_page import AccountDialogMixin
 from gui.dialogs.tools_dialog import ToolsDialogMixin
 from gui.dialogs.perf_dialog import PerformanceDialogMixin
+from gui.pages.dashboard_page import DashboardDialogMixin
 
 
 class LDManagerApp(
@@ -92,6 +93,7 @@ class LDManagerApp(
     AccountDialogMixin,
     ToolsDialogMixin,
     PerformanceDialogMixin,
+    DashboardDialogMixin,
     ToolsMixin,
 ):
     def __init__(self, root):
@@ -534,7 +536,7 @@ class LDManagerApp(
         if hasattr(self, "notebook"):
             self.notebook.select(index)
             self._on_notebook_tab_changed()
-        if index == 1 and hasattr(self, "_render_devices_page"):
+        if index == 2 and hasattr(self, "_render_devices_page"):
             self._render_devices_page()
 
     def _build_command_palette_commands(self):
@@ -543,9 +545,9 @@ class LDManagerApp(
                 id="go_dashboard",
                 label="Go to Dashboard",
                 category="Navigation",
-                keywords=("analytics", "home", "overview", "metrics"),
-                hint="Open the analytics dashboard",
-                action=lambda: self._select_main_page(0),
+                keywords=("dashboard", "home", "overview", "metrics"),
+                hint="Open the dashboard workspace",
+                action=lambda: self._select_main_page(1),
             ),
             Command(
                 id="go_devices",
@@ -1049,8 +1051,10 @@ class LDManagerApp(
         
         # Create tabs
         self.create_dashboard_tab()
+        self.create_dashboard_hub_tab()
         self.create_devices_tab()
         self.create_tasks_tab()
+        self.create_account_hub_tab()
         self.create_schedule_tab()
         self.create_content_tab()
         self.create_logs_tab()
@@ -1062,20 +1066,26 @@ class LDManagerApp(
         idx = self.notebook.index("current")
         tab_to_nav = {
             0: "analytics",
-            1: "devices",
-            2: "automation",
-            3: "schedule",
-            4: "content",
-            5: "logs",
+            1: "dashboard",
+            2: "devices",
+            3: "automation",
+            4: "accounts",
+            5: "schedule",
+            6: "content",
+            7: "logs",
         }
         self._set_sidebar_nav_active(tab_to_nav.get(idx, "analytics"))
         if hasattr(self, "_top_tab_buttons"):
             active_label = "Analytics"
             if idx == 1:
-                active_label = "Devices"
+                active_label = "Dashboard"
             elif idx == 2:
+                active_label = "Devices"
+            elif idx == 3:
                 active_label = "Tasks"
-            elif idx == 5:
+            elif idx == 4:
+                active_label = "Account"
+            elif idx == 7:
                 active_label = "Logs"
             for label, btn in self._top_tab_buttons.items():
                 btn.configure(bootstyle="info" if label == active_label else "secondary-link")
@@ -1083,6 +1093,10 @@ class LDManagerApp(
         # so they never see stale data after switching from another tab.
         if idx == 0:
             self.request_dashboard_refresh(force=True)
+        elif idx == 1:
+            self.request_embedded_dashboard_refresh()
+        elif idx == 4:
+            self.request_embedded_account_refresh()
 
     def _is_analytics_tab_active(self) -> bool:
         """Return True only when the Analytics tab (index 0) is the visible tab."""

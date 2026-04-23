@@ -1716,7 +1716,7 @@ class ReelsTaskHandler(BaseTaskHandler):
             return False
     
     def check_and_handle_facebook_permission(self, d):
-        """Check for Facebook permission dialog and click ALLOW if found"""
+        """Check for Facebook permission dialog, click ALLOW if found, and continue flow."""
         try:
             # More flexible text matching for permission dialogs
             permission_patterns = [
@@ -1795,7 +1795,8 @@ class ReelsTaskHandler(BaseTaskHandler):
                                 element.click()
                                 time.sleep(3)
                                 self.log(f"Clicked ALLOW button: {text}")
-                                return True
+                                # Permission was handled, but the reels flow still needs to continue.
+                                return False
                         except Exception as e:
                             self.log(f"Error clicking ALLOW button: {e}")
                             continue
@@ -1818,7 +1819,8 @@ class ReelsTaskHandler(BaseTaskHandler):
                             element.click()
                             time.sleep(3)
                             self.log("Clicked right-side element (likely ALLOW button)")
-                            return True
+                            # Permission was handled, but the reels flow still needs to continue.
+                            return False
                     except Exception as e:
                         self.log(f"Error clicking right-side element: {e}")
                         continue

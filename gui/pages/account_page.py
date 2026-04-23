@@ -3,8 +3,12 @@ from tkinter import filedialog, messagebox as MessageBox
 
 import ttkbootstrap as tb
 
+from gui.components.cards import MetricCard
+from gui.components.scrollable_frame import ScrollableFrame
+from gui.components.state_views import StateView
 from gui.components.status import (
     StatusPill,
+    configure_status_tree_tags,
     normalize_status,
     status_color,
     status_count_text,
@@ -15,21 +19,24 @@ from gui.components.status import (
 
 
 class AccountDialogMixin:
-    _ACCOUNT_ACCENT = "#F97316"
-    _ACCOUNT_ACCENT_SOFT = "#FDBA74"
-    _ACCOUNT_SUCCESS = "#22C55E"
-    _ACCOUNT_DANGER = "#EF4444"
-    _ACCOUNT_WARNING = "#F59E0B"
-    _ACCOUNT_INFO = "#38BDF8"
-    _ACCOUNT_BG = "#0F172A"
-    _ACCOUNT_CARD = "#111827"
-    _ACCOUNT_CARD_ALT = "#172033"
-    _ACCOUNT_TEXT = "#F8FAFC"
-    _ACCOUNT_MUTED = "#94A3B8"
-    _ACCOUNT_HOVER = "#24324A"
-    _ACCOUNT_ROW_ALT = "#0B1220"
+    def create_account_hub_tab(self):
+        tab = tb.Frame(self.notebook, style="CardInner.TFrame")
+        self.notebook.add(tab, text="Account")
+        self._account_host = tab
+        self._account_dialog = None
+        self._build_account_surface(tab, embedded=True)
+        self._refresh_account_tree()
 
     def show_account_manager(self):
+        if hasattr(self, "notebook"):
+            try:
+                self.notebook.select(4)
+                self._on_notebook_tab_changed()
+                self.request_embedded_account_refresh()
+                return
+            except Exception:
+                pass
+
         win = getattr(self, "_account_dialog", None)
         if win is not None and win.winfo_exists():
             win.focus()
@@ -37,224 +44,238 @@ class AccountDialogMixin:
 
         win = tk.Toplevel(self.root)
         win.title("Account Manager")
-        win.geometry("1280x980")
-        win.minsize(820, 520)
+        win.geometry("1280x860")
+        win.minsize(980, 620)
         win.transient(self.root)
         win.grab_set()
-        win.configure(bg=self._ACCOUNT_BG)
+        win.configure(bg=self.palette["surface"])
+        self._account_host = None
         self._account_dialog = win
+        self._build_account_surface(win, embedded=False)
+        self._refresh_account_tree()
+
+    # ─────────────────────────────────────────────────────────────────── #
+    # Layout
+
+    def _build_account_surface(self, parent, embedded=False):
+        self._account_embedded = embedded
         self._acct_sort_by_var = tk.StringVar(value="Created")
         self._acct_sort_order_var = tk.StringVar(value="Descending")
-
-        self._configure_account_tree_style()
-
-        header = tk.Frame(
-            win,
-            bg=self._ACCOUNT_CARD,
-            highlightthickness=1,
-            highlightbackground=self._ACCOUNT_ACCENT,
-        )
-        header.pack(fill="x")
-        accent_bar = tk.Frame(header, bg=self._ACCOUNT_ACCENT, height=4)
-        accent_bar.pack(fill="x", side="top")
-        header_body = tk.Frame(header, bg=self._ACCOUNT_CARD, padx=18, pady=16)
-        header_body.pack(fill="x")
-        header_left = tk.Frame(header_body, bg=self._ACCOUNT_CARD)
-        header_left.pack(side="left", fill="x", expand=True)
-        tk.Label(
-            header_left,
-            text="Account Studio",
-            bg=self._ACCOUNT_CARD,
-            fg=self._ACCOUNT_TEXT,
-            font=(self.display_font, 18, "bold"),
-        ).pack(anchor="w")
-        tk.Label(
-            header_left,
-            text="Search, sort, edit, and export account inventory from one place.",
-            bg=self._ACCOUNT_CARD,
-            fg=self._ACCOUNT_MUTED,
-            font=(self.mono_font, 10),
-        ).pack(anchor="w", pady=(4, 0))
-        hero_badge = tk.Label(
-            header_body,
-            text="Right click rows for quick actions",
-            bg=self._ACCOUNT_ACCENT,
-            fg=self._ACCOUNT_BG,
-            font=(self.mono_font, 10, "bold"),
-            padx=12,
-            pady=8,
-        )
-        hero_badge.pack(side="right", padx=(12, 0))
-
-        body = tk.Frame(win, bg=self._ACCOUNT_BG, padx=16, pady=12)
-        body.pack(fill="both", expand=True)
-
-        pill_row = tk.Frame(body, bg=self._ACCOUNT_BG)
-        pill_row.pack(fill="x", pady=(0, 12))
-        self._acct_pill_active = self._pill(pill_row, status_count_text("live", 0), "live")
-        self._acct_pill_idle = self._pill(pill_row, status_count_text("idle", 0), "idle")
-        self._acct_pill_novery = self._pill(pill_row, status_count_text("novery", 0), "novery")
-        self._acct_pill_dead = self._pill(pill_row, status_count_text("dead", 0), "dead")
-        self._acct_pill_total = self._pill(pill_row, "0 Total", "info", right=True)
-
-        controls = tk.Frame(
-            body,
-            bg=self._ACCOUNT_CARD_ALT,
-            highlightthickness=1,
-            highlightbackground=self._ACCOUNT_HOVER,
-            padx=14,
-            pady=14,
-        )
-        controls.pack(fill="x", pady=(0, 12))
-        search_bar = tk.Frame(
-            controls,
-            bg=self._ACCOUNT_BG,
-            highlightthickness=1,
-            highlightbackground=self._ACCOUNT_ACCENT,
-        )
-        search_bar.pack(side="left", fill="x", expand=True)
-        self._acct_search_var = tk.StringVar()
-        self._acct_search_var.trace_add("write", lambda *_: self._refresh_account_tree())
-        tk.Label(
-            search_bar,
-            text="Search",
-            bg=self._ACCOUNT_CARD,
-            fg=self._ACCOUNT_MUTED,
-            font=(self.mono_font, 10),
-            padx=12,
-        ).pack(side="left")
-        tk.Entry(
-            search_bar,
-            textvariable=self._acct_search_var,
-            bg=self._ACCOUNT_CARD,
-            fg=self._ACCOUNT_TEXT,
-            insertbackground=self._ACCOUNT_ACCENT,
-            relief="flat",
-            font=(self.mono_font, 11),
-            highlightthickness=1,
-            highlightbackground=self._ACCOUNT_ACCENT,
-            highlightcolor=self._ACCOUNT_ACCENT,
-        ).pack(side="left", fill="x", expand=True, pady=12, padx=(0, 12))
-
         self._acct_status_filter_var = tk.StringVar(value="All")
+        self._acct_search_var = tk.StringVar()
+
+        scroller = ScrollableFrame(parent, bg=self.palette["surface"])
+        scroller.pack(fill="both", expand=True, padx=2)
+        body = scroller.body
+
+        # Hero metric row
+        hero = self._create_card_section(
+            body,
+            "Account Overview",
+            "Live, idle, and unhealthy account counts across the entire fleet.",
+            pady=(0, 12),
+        )
+        self._build_account_hero(hero)
+
+        # Filters
+        filters = self._create_card_section(
+            body,
+            "Filters",
+            "Search, narrow by status, and control the sort order of the account list.",
+            pady=(0, 12),
+        )
+        self._build_account_filters(filters)
+
+        # Accounts table
+        list_card = self._create_card_section(
+            body,
+            "Accounts",
+            "Right click a row for quick edit, delete, and info actions.",
+            expand=True,
+            pady=(0, 12),
+        )
+        self._build_account_table(list_card)
+
+        # Actions footer
+        actions = self._create_card_section(
+            body,
+            "Actions",
+            "Refresh, import, or export the accounts visible in the list.",
+            pady=(0, 0),
+        )
+        self._build_account_actions(actions, embedded=embedded)
+
+    # ─────────────────────────────────────────────────────────────────── #
+    # Hero metrics
+
+    def _build_account_hero(self, parent):
+        row = tb.Frame(parent, style="CardInner.TFrame")
+        row.pack(fill="x")
+        self._acct_metric_cards = {}
+        specs = [
+            ("active", "Live", self.palette["success"], "Online / in-use accounts"),
+            ("idle", "Idle", self.palette.get("muted", "#64748B"), "Ready, not currently used"),
+            ("novery", "No Verify", self.palette["warning"], "Unverified accounts"),
+            ("dead", "Dead", self.palette["danger"], "Flagged or unusable"),
+            ("total", "Total", self.palette["primary"], "All accounts tracked"),
+        ]
+        for idx, (key, label, accent, subtitle) in enumerate(specs):
+            card = MetricCard(row, label, "0", subtitle, accent=accent, palette=self.palette)
+            card.pack(
+                side="left",
+                fill="both",
+                expand=True,
+                padx=(0, 8 if idx < len(specs) - 1 else 0),
+            )
+            self._acct_metric_cards[key] = card
+
+    # ─────────────────────────────────────────────────────────────────── #
+    # Filters
+
+    def _build_account_filters(self, parent):
+        row = tb.Frame(parent, style="CardInner.TFrame")
+        row.pack(fill="x")
+
+        tb.Label(row, text="SEARCH", style="MetricLabel.TLabel").pack(side="left", padx=(0, 8))
+        self._acct_search_var.trace_add("write", lambda *_: self._refresh_account_tree())
+        tb.Entry(
+            row,
+            textvariable=self._acct_search_var,
+            bootstyle="secondary",
+        ).pack(side="left", fill="x", expand=True)
+
+        tb.Label(row, text="STATUS", style="MetricLabel.TLabel").pack(side="left", padx=(14, 6))
         tb.Combobox(
-            controls,
+            row,
             textvariable=self._acct_status_filter_var,
             values=("All", "Live", "Idle", status_label("novery"), "Dead", "Unknown"),
             state="readonly",
             width=12,
-        ).pack(side="left", padx=(10, 0))
-        self._acct_status_filter_var.trace_add("write", lambda *_: self._refresh_account_tree())
-        tk.Label(
-            controls,
-            text="Sort",
-            bg=self._ACCOUNT_CARD_ALT,
-            fg=self._ACCOUNT_MUTED,
-            font=(self.mono_font, 10),
-            padx=10,
+            bootstyle="secondary",
         ).pack(side="left")
+        self._acct_status_filter_var.trace_add("write", lambda *_: self._refresh_account_tree())
+
+        tb.Label(row, text="SORT", style="MetricLabel.TLabel").pack(side="left", padx=(14, 6))
         tb.Combobox(
-            controls,
+            row,
             textvariable=self._acct_sort_by_var,
             values=("Created", "Updated", "Name", "Status", "Instance"),
             state="readonly",
             width=12,
+            bootstyle="secondary",
         ).pack(side="left")
         self._acct_sort_by_var.trace_add("write", lambda *_: self._refresh_account_tree())
+
         tb.Combobox(
-            controls,
+            row,
             textvariable=self._acct_sort_order_var,
             values=("Descending", "Ascending"),
             state="readonly",
             width=12,
-        ).pack(side="left", padx=(10, 0))
+            bootstyle="secondary",
+        ).pack(side="left", padx=(6, 0))
         self._acct_sort_order_var.trace_add("write", lambda *_: self._refresh_account_tree())
 
-        list_frame = tk.Frame(
-            body,
-            bg=self._ACCOUNT_CARD,
-            highlightthickness=1,
-            highlightbackground=self._ACCOUNT_ACCENT,
-            padx=12,
-            pady=12,
+    # ─────────────────────────────────────────────────────────────────── #
+    # Accounts table
+
+    def _build_account_table(self, parent):
+        self._account_empty_view = StateView(
+            parent,
+            kind="empty",
+            title="No accounts yet",
+            message="Create a new account or import from a JSON/CSV file to populate the list.",
+            palette=self.palette,
+            display_font=self.display_font,
+            mono_font=self.mono_font,
+            actions=[
+                {"text": "New Account", "command": self._create_new_account, "bootstyle": "outline-success"},
+                {"text": "Import", "command": self._import_accounts, "bootstyle": "outline-info"},
+            ],
         )
-        list_frame.pack(fill="both", expand=True)
+        self._account_empty_view.pack(fill="x", pady=(0, 10))
 
         cols = ("num", "uid", "name", "gender", "contact", "instance", "status", "created")
-        tree = tb.Treeview(list_frame, columns=cols, show="headings", height=18, style="Custom.Treeview")
+        tree = tb.Treeview(parent, columns=cols, show="headings", height=16, style="Custom.Treeview")
         self._account_tree = tree
         for col, width, title in (
             ("num", 42, "#"),
-            ("uid", 180, "UID"),
-            ("name", 170, "Account"),
-            ("gender", 90, "Gender"),
-            ("contact", 180, "Phone / Email"),
-            ("instance", 160, "LD Instance"),
+            ("uid", 170, "UID"),
+            ("name", 160, "Account"),
+            ("gender", 80, "Gender"),
+            ("contact", 170, "Phone / Email"),
+            ("instance", 150, "LD Instance"),
             ("status", 90, "Status"),
-            ("created", 150, "Created"),
+            ("created", 140, "Created"),
         ):
             tree.heading(col, text=title, anchor="w")
             tree.column(col, width=width, anchor="w")
 
-        tree.tag_configure("active", foreground=status_color("live", self.palette))
-        tree.tag_configure("idle", foreground=status_color("idle", self.palette))
-        tree.tag_configure("novery", foreground=status_color("novery", self.palette))
-        tree.tag_configure("dead", foreground=status_color("dead", self.palette))
-        tree.tag_configure("unknown", foreground=status_color("unknown", self.palette))
-        tree.tag_configure("even", background=self._ACCOUNT_CARD)
-        tree.tag_configure("odd", background=self._ACCOUNT_ROW_ALT)
-        scrollbar = tb.Scrollbar(list_frame, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
+        configure_status_tree_tags(tree, self.palette, include_zebra=True)
+        # Extra tags not covered by the shared helper.
+        for key in ("live", "idle", "novery", "dead", "unknown"):
+            tree.tag_configure(key, foreground=status_color(key, self.palette))
+
+        scrollbar = tb.Scrollbar(parent, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
         scrollbar.pack(side="right", fill="y")
         tree.configure(yscrollcommand=scrollbar.set)
         tree.pack(fill="both", expand=True)
         tree.bind("<<TreeviewSelect>>", self._on_account_selection_changed)
         tree.bind("<Button-3>", self._show_account_context_menu)
 
-        self._account_context_menu = tk.Menu(win, tearoff=0)
+        self._account_context_menu = tk.Menu(parent, tearoff=0)
         self._account_context_menu.add_command(label="Edit", command=self._edit_selected_account)
         self._account_context_menu.add_command(label="Delete", command=self._delete_selected_account)
         self._account_context_menu.add_separator()
         self._account_context_menu.add_command(label="Info", command=self._view_selected_account_info)
 
-        footer = tk.Frame(
-            win,
-            bg=self._ACCOUNT_CARD,
-            highlightthickness=1,
-            highlightbackground=self._ACCOUNT_HOVER,
-        )
-        footer.pack(fill="x", side="bottom")
-        actions = tk.Frame(footer, bg=self._ACCOUNT_CARD, padx=16, pady=12)
-        actions.pack(fill="x")
-        self._acct_btn(actions, "Close", self._close_account_dialog, "left")
-        self._acct_refresh_btn = self._acct_btn(actions, "Refresh", self._refresh_accounts, "left")
-        self._acct_export_btn = self._acct_btn(actions, "Export", self._export_accounts, "right")
-        self._acct_import_btn = self._acct_btn(actions, "Import", self._import_accounts, "right")
-        self._acct_new_btn = self._acct_btn(actions, "New", self._create_new_account, "right")
+    # ─────────────────────────────────────────────────────────────────── #
+    # Actions footer
 
-        self._refresh_account_tree()
+    def _build_account_actions(self, parent, embedded=False):
+        row = tb.Frame(parent, style="CardInner.TFrame")
+        row.pack(fill="x")
 
-    def _configure_account_tree_style(self):
-        self.style.configure(
-            "Custom.Treeview",
-            rowheight=32,
-            background=self._ACCOUNT_CARD,
-            fieldbackground=self._ACCOUNT_CARD,
-            foreground=self._ACCOUNT_TEXT,
-            borderwidth=0,
-        )
-        self.style.configure(
-            "Custom.Treeview.Heading",
-            background=self._ACCOUNT_CARD_ALT,
-            foreground=self._ACCOUNT_TEXT,
-            relief="flat",
-            borderwidth=0,
-            font=(self.mono_font, 10, "bold"),
-        )
-        self.style.map(
-            "Custom.Treeview",
-            background=[("selected", self._ACCOUNT_HOVER)],
-            foreground=[("selected", self._ACCOUNT_TEXT)],
-        )
+        tb.Button(
+            row,
+            text="New",
+            bootstyle="success",
+            command=self._create_new_account,
+            width=10,
+        ).pack(side="left", padx=(0, 6))
+        tb.Button(
+            row,
+            text="Import",
+            bootstyle="info-outline",
+            command=self._import_accounts,
+            width=10,
+        ).pack(side="left", padx=(0, 6))
+        tb.Button(
+            row,
+            text="Export",
+            bootstyle="secondary-outline",
+            command=self._export_accounts,
+            width=10,
+        ).pack(side="left")
+
+        tb.Button(
+            row,
+            text="Refresh",
+            bootstyle="primary-outline",
+            command=self._refresh_accounts,
+            width=10,
+        ).pack(side="right")
+        if not embedded:
+            tb.Button(
+                row,
+                text="Close",
+                bootstyle="danger-outline",
+                command=self._close_account_dialog,
+                width=10,
+            ).pack(side="right", padx=(0, 6))
+
+    # ─────────────────────────────────────────────────────────────────── #
+    # Status helpers
 
     def _account_status_key(self, status):
         key = normalize_status(status)
@@ -270,39 +291,8 @@ class AccountDialogMixin:
         key = normalize_status(status)
         return "active" if key == "live" else key
 
-    def _pill(self, parent, text, status, right=False):
-        pill = StatusPill(
-            parent,
-            status,
-            palette=self.palette,
-            text=text,
-            font=(self.mono_font, 9, "bold"),
-            padx=10,
-            pady=5,
-        )
-        pill.pack(side="right" if right else "left", padx=(0, 4))
-        return pill
-
-    def _acct_btn(self, parent, text, command, side):
-        button = tk.Button(
-            parent,
-            text=text,
-            bg=self._ACCOUNT_CARD_ALT,
-            fg=self._ACCOUNT_TEXT,
-            activebackground=self._ACCOUNT_HOVER,
-            activeforeground=self._ACCOUNT_TEXT,
-            relief="flat",
-            bd=0,
-            font=("Segoe UI", 10, "bold"),
-            padx=14,
-            pady=8,
-            cursor="hand2",
-            command=command,
-        )
-        button.pack(side=side, padx=4)
-        button.bind("<Enter>", lambda e: e.widget.configure(bg=self._ACCOUNT_HOVER))
-        button.bind("<Leave>", lambda e: e.widget.configure(bg=self._ACCOUNT_CARD_ALT))
-        return button
+    # ─────────────────────────────────────────────────────────────────── #
+    # Dialog lifecycle
 
     def _close_account_dialog(self):
         win = getattr(self, "_account_dialog", None)
@@ -382,7 +372,7 @@ class AccountDialogMixin:
         if not MessageBox.askyesno(
             "Confirm Delete",
             f"Delete account '{name}' from '{instance or 'unassigned'}'?",
-            parent=self._account_dialog,
+            parent=self._account_message_parent(),
         ):
             return
 
@@ -395,31 +385,37 @@ class AccountDialogMixin:
         self.log(f"Account deleted: {name}", "INFO")
         self._refresh_account_tree()
 
+    # ─────────────────────────────────────────────────────────────────── #
+    # Info dialog
+
     def _open_account_info_dialog(self, account):
         win = tk.Toplevel(self.root)
         win.title("Account Info")
-        win.geometry("460x360")
+        win.geometry("480x420")
         win.resizable(False, False)
-        win.transient(self._account_dialog)
+        win.transient(self._account_message_parent())
         win.grab_set()
-        win.configure(bg=self._ACCOUNT_BG)
+        win.configure(bg=self.palette["surface"])
 
-        card = tk.Frame(
-            win,
-            bg=self._ACCOUNT_CARD,
-            highlightthickness=1,
-            highlightbackground=self._ACCOUNT_HOVER,
-            padx=16,
-            pady=16,
-        )
+        card = tb.Frame(win, style="Card.TFrame", padding=20)
         card.pack(fill="both", expand=True, padx=16, pady=16)
 
-        tk.Label(
+        tb.Label(card, text="Account Info", style="SectionTitle.TLabel").pack(anchor="w")
+        tb.Label(
             card,
-            text="Account Info",
-            bg=self._ACCOUNT_CARD,
-            fg=self._ACCOUNT_TEXT,
-            font=(self.display_font, 14, "bold"),
+            text=account.get("name") or account.get("facebook_uid") or "—",
+            style="Subtitle.TLabel",
+        ).pack(anchor="w", pady=(2, 12))
+
+        status_key = self._account_display_status_key(account.get("status") or "idle")
+        StatusPill(
+            card,
+            status_key,
+            palette=self.palette,
+            text=status_label(status_key),
+            font=(self.mono_font, 9, "bold"),
+            padx=10,
+            pady=4,
         ).pack(anchor="w", pady=(0, 12))
 
         rows = [
@@ -429,34 +425,37 @@ class AccountDialogMixin:
             ("Email", account.get("email")),
             ("LD Instance", account.get("instance") or account.get("device_name") or account.get("ld_name")),
             ("ADB Serial", account.get("ld_adb")),
-            ("Status", account.get("status")),
             ("Created", account.get("created_at")),
             ("Updated", account.get("updated_at")),
             ("Notes", account.get("notes")),
         ]
         for label, value in rows:
-            tk.Label(
-                card,
-                text=f"{label}: {value or ''}",
-                bg=self._ACCOUNT_CARD,
-                fg=self._ACCOUNT_MUTED if not value else self._ACCOUNT_TEXT,
-                font=(self.mono_font, 10),
-                anchor="w",
-                justify="left",
-            ).pack(fill="x", pady=4)
+            row = tb.Frame(card, style="CardInner.TFrame")
+            row.pack(fill="x", pady=3)
+            tb.Label(row, text=label.upper(), style="MetricLabel.TLabel").pack(side="left")
+            tb.Label(
+                row,
+                text=str(value) if value else "—",
+                style="MetricSub.TLabel",
+                anchor="e",
+            ).pack(side="right")
 
-        footer = tk.Frame(card, bg=self._ACCOUNT_CARD)
-        footer.pack(fill="x", pady=(12, 0))
-        self._acct_btn(footer, "Close", win.destroy, "right")
+        footer = tb.Frame(card, style="CardInner.TFrame")
+        footer.pack(fill="x", pady=(14, 0))
+        tb.Button(footer, text="Close", bootstyle="secondary-outline", command=win.destroy, width=10).pack(side="right")
+
+    # ─────────────────────────────────────────────────────────────────── #
+    # Editor
 
     def _open_account_editor(self, account):
+        is_edit = bool(account.get("account_id"))
         win = tk.Toplevel(self.root)
-        win.title("Edit Account" if account.get("account_id") else "New Account")
-        win.geometry("520x560")
+        win.title("Edit Account" if is_edit else "New Account")
+        win.geometry("560x620")
         win.resizable(False, False)
-        win.transient(self._account_dialog)
+        win.transient(self._account_message_parent())
         win.grab_set()
-        win.configure(bg=self._ACCOUNT_BG)
+        win.configure(bg=self.palette["surface"])
 
         vars_map = {
             "name": tk.StringVar(value=str(account.get("name") or "")),
@@ -464,28 +463,26 @@ class AccountDialogMixin:
             "phone": tk.StringVar(value=str(account.get("phone") or "")),
             "email": tk.StringVar(value=str(account.get("email") or "")),
             "password": tk.StringVar(value=str(account.get("password") or "")),
-            "instance": tk.StringVar(value=str(account.get("instance") or account.get("device_name") or account.get("ld_name") or "")),
+            "instance": tk.StringVar(
+                value=str(account.get("instance") or account.get("device_name") or account.get("ld_name") or "")
+            ),
             "ld_adb": tk.StringVar(value=str(account.get("ld_adb") or "")),
             "status": tk.StringVar(value=status_label(self._account_display_status_key(account.get("status") or "idle"))),
         }
 
-        card = tk.Frame(
-            win,
-            bg=self._ACCOUNT_CARD,
-            highlightthickness=1,
-            highlightbackground=self._ACCOUNT_HOVER,
-            padx=16,
-            pady=16,
-        )
+        card = tb.Frame(win, style="Card.TFrame", padding=22)
         card.pack(fill="both", expand=True, padx=16, pady=16)
 
-        tk.Label(
+        tb.Label(
             card,
-            text="Edit Account" if account.get("account_id") else "New Account",
-            bg=self._ACCOUNT_CARD,
-            fg=self._ACCOUNT_TEXT,
-            font=(self.display_font, 14, "bold"),
-        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 12))
+            text="Edit Account" if is_edit else "New Account",
+            style="SectionTitle.TLabel",
+        ).grid(row=0, column=0, columnspan=2, sticky="w")
+        tb.Label(
+            card,
+            text="Update credentials, status, and linked LD instance for this account.",
+            style="Subtitle.TLabel",
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(2, 14))
 
         fields = [
             ("Name", "name"),
@@ -497,22 +494,17 @@ class AccountDialogMixin:
             ("ADB Serial", "ld_adb"),
             ("Status", "status"),
         ]
-        for row, (label, key) in enumerate(fields, start=1):
-            tk.Label(
-                card,
-                text=label,
-                bg=self._ACCOUNT_CARD,
-                fg=self._ACCOUNT_MUTED,
-                font=(self.mono_font, 10),
-            ).grid(row=row, column=0, sticky="w", padx=(0, 16), pady=10)
-
+        for row, (label, key) in enumerate(fields, start=2):
+            tb.Label(card, text=label.upper(), style="MetricLabel.TLabel").grid(
+                row=row, column=0, sticky="w", padx=(0, 16), pady=8
+            )
             if key == "gender":
                 widget = tb.Combobox(
                     card,
                     textvariable=vars_map[key],
                     values=("", "Female", "Male"),
                     state="readonly",
-                    width=28,
+                    bootstyle="secondary",
                 )
             elif key == "status":
                 widget = tb.Combobox(
@@ -520,53 +512,41 @@ class AccountDialogMixin:
                     textvariable=vars_map[key],
                     values=("Live", "Idle", status_label("novery"), "Dead", "Unknown"),
                     state="readonly",
-                    width=28,
+                    bootstyle="secondary",
                 )
             else:
-                widget = tk.Entry(
+                widget = tb.Entry(
                     card,
                     textvariable=vars_map[key],
-                    bg=self._ACCOUNT_BG,
-                    fg=self._ACCOUNT_TEXT,
-                    insertbackground=self._ACCOUNT_ACCENT,
-                    relief="flat",
-                    font=(self.mono_font, 10),
-                    width=30,
+                    bootstyle="secondary",
                     show="*" if key == "password" else "",
-                    highlightthickness=1,
-                    highlightbackground=self._ACCOUNT_ACCENT,
-                    highlightcolor=self._ACCOUNT_ACCENT,
                 )
-            widget.grid(row=row, column=1, sticky="ew", pady=10)
+            widget.grid(row=row, column=1, sticky="ew", pady=8, ipady=3)
 
-        tk.Label(
-            card,
-            text="Notes",
-            bg=self._ACCOUNT_CARD,
-            fg=self._ACCOUNT_MUTED,
-            font=(self.mono_font, 10),
-        ).grid(row=len(fields) + 1, column=0, sticky="nw", padx=(0, 16), pady=10)
+        notes_row = len(fields) + 2
+        tb.Label(card, text="NOTES", style="MetricLabel.TLabel").grid(
+            row=notes_row, column=0, sticky="nw", padx=(0, 16), pady=8
+        )
         notes_text = tk.Text(
             card,
             height=5,
-            bg=self._ACCOUNT_BG,
-            fg=self._ACCOUNT_TEXT,
-            insertbackground=self._ACCOUNT_ACCENT,
+            bg=self.palette["surface_alt"],
+            fg=self.palette["text"],
+            insertbackground=self.palette["primary"],
             relief="flat",
             font=(self.mono_font, 10),
             wrap="word",
             highlightthickness=1,
-            highlightbackground=self._ACCOUNT_ACCENT,
-            highlightcolor=self._ACCOUNT_ACCENT,
+            highlightbackground=self.palette["border"],
         )
-        notes_text.grid(row=len(fields) + 1, column=1, sticky="nsew", pady=10)
+        notes_text.grid(row=notes_row, column=1, sticky="nsew", pady=8)
         notes_text.insert("1.0", str(account.get("notes") or ""))
 
         card.columnconfigure(1, weight=1)
-        card.rowconfigure(len(fields) + 1, weight=1)
+        card.rowconfigure(notes_row, weight=1)
 
-        footer = tk.Frame(card, bg=self._ACCOUNT_CARD)
-        footer.grid(row=len(fields) + 2, column=0, columnspan=2, sticky="ew", pady=(12, 0))
+        footer = tb.Frame(card, style="CardInner.TFrame")
+        footer.grid(row=notes_row + 1, column=0, columnspan=2, sticky="ew", pady=(14, 0))
 
         def save_account():
             payload = {key: var.get().strip() for key, var in vars_map.items()}
@@ -580,7 +560,7 @@ class AccountDialogMixin:
                 return
 
             try:
-                if account.get("account_id"):
+                if is_edit:
                     saved = self.account_manager.update_account(str(account["account_id"]), payload)
                     self.log(f"Account updated: {saved.get('name') or saved.get('facebook_uid')}", "SUCCESS")
                 else:
@@ -593,12 +573,15 @@ class AccountDialogMixin:
             self._refresh_account_tree(select_uid=str(saved.get("account_id") or saved.get("facebook_uid") or ""))
             win.destroy()
 
-        self._acct_btn(footer, "Cancel", win.destroy, "left")
-        self._acct_btn(footer, "Save", save_account, "right")
+        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(side="left")
+        tb.Button(footer, text="Save", bootstyle="primary", command=save_account, width=10).pack(side="right")
+
+    # ─────────────────────────────────────────────────────────────────── #
+    # Import / export
 
     def _import_accounts(self):
         file_path = filedialog.askopenfilename(
-            parent=self.root,
+            parent=self._account_message_parent(),
             title="Import Accounts",
             filetypes=[
                 ("Account Files", "*.json *.csv"),
@@ -621,7 +604,7 @@ class AccountDialogMixin:
 
     def _export_accounts(self):
         file_path = filedialog.asksaveasfilename(
-            parent=self.root,
+            parent=self._account_message_parent(),
             title="Export Accounts",
             defaultextension=".csv",
             filetypes=[
@@ -641,6 +624,9 @@ class AccountDialogMixin:
             return
 
         self.log(f"Accounts exported to {exported}", "SUCCESS")
+
+    # ─────────────────────────────────────────────────────────────────── #
+    # Data
 
     def _get_visible_accounts(self):
         query = getattr(self, "_acct_search_var", tk.StringVar()).get().strip().lower()
@@ -710,24 +696,62 @@ class AccountDialogMixin:
             created = str(acc.get("created_at") or "").replace("T", " ")
 
             visible_index += 1
-            tags = [status_tag(display_status)]
+            tags = [status_tag(display_status), display_status]
             tags.append("even" if visible_index % 2 == 0 else "odd")
             tree.insert(
                 "",
                 "end",
                 iid=account_id,
-                values=(f"{visible_index:02d}", uid, name, gender, contact, instance, status_table_text(display_status), created),
+                values=(
+                    f"{visible_index:02d}",
+                    uid,
+                    name,
+                    gender,
+                    contact,
+                    instance,
+                    status_table_text(display_status),
+                    created,
+                ),
                 tags=tuple(tags),
             )
             if select_uid and (uid == select_uid or account_id == select_uid):
                 selected_uid = account_id
 
-        self._acct_pill_active.set_status("live", text=status_count_text("live", summary.get("active", 0)))
-        self._acct_pill_idle.set_status("idle", text=status_count_text("idle", summary.get("idle", 0)))
-        self._acct_pill_novery.set_status("novery", text=status_count_text("novery", summary.get("novery", 0)))
-        self._acct_pill_dead.set_status("dead", text=status_count_text("dead", summary.get("dead", 0)))
-        self._acct_pill_total.config(text=f"{summary.get('total', 0)} Total")
+        # Update metric cards
+        cards = getattr(self, "_acct_metric_cards", {}) or {}
+        if cards:
+            cards["active"].set(summary.get("active", 0), subtitle=status_count_text("live", summary.get("active", 0)))
+            cards["idle"].set(summary.get("idle", 0), subtitle=status_count_text("idle", summary.get("idle", 0)))
+            cards["novery"].set(summary.get("novery", 0), subtitle=status_count_text("novery", summary.get("novery", 0)))
+            cards["dead"].set(summary.get("dead", 0), subtitle=status_count_text("dead", summary.get("dead", 0)))
+            cards["total"].set(summary.get("total", 0), subtitle="All accounts tracked")
+
+        # Empty-state visibility
+        empty_view = getattr(self, "_account_empty_view", None)
+        if empty_view is not None:
+            if visible_index == 0:
+                empty_view.pack(fill="x", pady=(0, 10))
+            else:
+                empty_view.pack_forget()
 
         if selected_uid and tree.exists(selected_uid):
             tree.selection_set(selected_uid)
             tree.focus(selected_uid)
+
+    def _account_message_parent(self):
+        win = getattr(self, "_account_dialog", None)
+        if win is not None and win.winfo_exists():
+            return win
+        host = getattr(self, "_account_host", None)
+        if host is not None and host.winfo_exists():
+            try:
+                return host.winfo_toplevel()
+            except Exception:
+                return host
+        return self.root
+
+    def request_embedded_account_refresh(self):
+        host = getattr(self, "_account_host", None)
+        if host is None or not host.winfo_exists():
+            return
+        self._refresh_account_tree()

@@ -1,605 +1,1003 @@
+"""
+gui/pages/dashboard_page.py
+Dashboard hub — KPI overview, LD instance list, account + page insights.
+Styled to match Analytics/Devices design language.
+Persists to config/dashboard_instances.json.
+"""
+
+import json
 import tkinter as tk
-from datetime import datetime, timedelta
+from tkinter import messagebox as MessageBox
 
 import ttkbootstrap as tb
 
-from gui.components.cards import AlertCard, FeedCard, MetricCard
+from core.paths import get_app_paths
+from gui.components.cards import FeedCard, MetricCard
 from gui.components.scrollable_frame import ScrollableFrame
 from gui.components.state_views import StateView
-from gui.components.status import (
-    StatusPill,
-    event_level_status,
-    status_color,
-    status_label,
-    status_sort_key,
-)
+from gui.components.status import StatusPill
 from gui.gradient_progress import GradientProgressBar
 
 
-class DashboardPageMixin:
-    def create_dashboard_tab(self):
-        """Create the command-center dashboard tab."""
-        dashboard_tab = tb.Frame(self.notebook, style="CardInner.TFrame")
-        self.notebook.add(dashboard_tab, text="Analytics")
+_NONE_TOKEN = "None"
 
-        # Wrap the entire dashboard body in a scroll container so that all
-        # sections remain reachable on small windows.
-        scroller = ScrollableFrame(dashboard_tab, bg=self.palette["surface"])
+
+def _v(value):
+    if value is None:
+        return _NONE_TOKEN
+    text = str(value).strip()
+    return text if text else _NONE_TOKEN
+
+
+class DashboardDialogMixin:
+    # ─────────────────────────────────────────────────────────────────── #
+    # Entry points
+
+    def create_dashboard_hub_tab(self):
+        tab = tb.Frame(self.notebook, style="CardInner.TFrame")
+        self.notebook.add(tab, text="Dashboard")
+
+        self._dashboard_load_data()
+        self._db_clear_widget_refs()
+        self._dashboard_selected = None
+        self._dashboard_dirty = False
+        self._db_sync_from_devices()
+        self._db_build_surface(tab, embedded=True)
+        self._db_render_all()
+
+    def show_dashboard(self):
+        if hasattr(self, "notebook"):
+            try:
+                self.notebook.select(1)
+                self._on_notebook_tab_changed()
+                self.request_embedded_dashboard_refresh()
+                return
+            except Exception:
+                pass
+
+        win = getattr(self, "_dashboard_dialog", None)
+        if self._db_widget_exists(win):
+            win.focus()
+            return
+
+        self._dashboard_host = None
+        self._dashboard_embedded = False
+        self._dashboard_load_data()
+        self._db_clear_widget_refs()
+
+        win = tk.Toplevel(self.root)
+        win.title("Dashboard")
+        win.geometry("1360x820")
+        win.minsize(1120, 680)
+        win.transient(self.root)
+        win.configure(bg=self.palette["surface"])
+        self._dashboard_dialog = win
+        self._dashboard_selected = None
+        self._dashboard_dirty = False
+
+        self._db_sync_from_devices()
+        self._db_build_surface(win, embedded=False)
+        self._db_render_all()
+        win.protocol("WM_DELETE_WINDOW", self._db_on_close)
+
+    def request_embedded_dashboard_refresh(self):
+        host = getattr(self, "_dashboard_host", None)
+        if not self._db_widget_exists(host):
+            return
+        self._dashboard_load_data()
+        self._db_sync_from_devices()
+        self._db_render_all()
+
+    # ─────────────────────────────────────────────────────────────────── #
+    # Layout
+
+    def _db_build_surface(self, parent, embedded=False):
+        self._dashboard_embedded = embedded
+        self._dashboard_host = parent if embedded else None
+        self._dashboard_dialog = None if embedded else parent
+
+        scroller = ScrollableFrame(parent, bg=self.palette["surface"])
         scroller.pack(fill="both", expand=True, padx=2)
-        dashboard = scroller.body
+        body = scroller.body
 
-        self.create_dashboard_alerts_section(dashboard)
-
-        # Two-column mid row: Fleet Health | Live Activity
-        # fill="x" — height is driven by content, not the viewport remainder.
-        middle = tk.Frame(dashboard, bg=self.palette["surface"])
-        middle.pack(fill="x", pady=(0, 14))
-        middle.columnconfigure(0, weight=5, uniform="dashboard_mid")
-        middle.columnconfigure(1, weight=4, uniform="dashboard_mid")
-
-        fleet_col = tk.Frame(middle, bg=self.palette["surface"])
-        activity_col = tk.Frame(middle, bg=self.palette["surface"])
-        fleet_col.grid(row=0, column=0, sticky="ew", padx=(0, 7))
-        activity_col.grid(row=0, column=1, sticky="ew", padx=(7, 0))
-        self.create_fleet_health_panel(fleet_col)
-        self.create_live_activity_panel(activity_col)
-
-        # Two-column bottom row: Schedule Summary | Recent Events
-        bottom = tk.Frame(dashboard, bg=self.palette["surface"])
-        bottom.pack(fill="x")
-        bottom.columnconfigure(0, weight=4, uniform="dashboard_bottom")
-        bottom.columnconfigure(1, weight=5, uniform="dashboard_bottom")
-
-        schedule_col = tk.Frame(bottom, bg=self.palette["surface"])
-        events_col = tk.Frame(bottom, bg=self.palette["surface"])
-        schedule_col.grid(row=0, column=0, sticky="ew", padx=(0, 7))
-        events_col.grid(row=0, column=1, sticky="ew", padx=(7, 0))
-        self.create_schedule_overview_panel(schedule_col)
-        self.create_recent_events_panel(events_col)
-
-    def create_dashboard_alerts_section(self, parent):
-        """Create actionable dashboard alerts."""
-        panel = self._create_card_section(
-            parent,
-            "Alerts / Incidents",
-            "Operator priorities based on current fleet, queue, schedule, and runtime state.",
+        # KPI hero row
+        hero = self._create_card_section(
+            body,
+            "Fleet Overview",
+            "LD instances, linked accounts, pages, and active reels pipelines.",
             pady=(0, 12),
         )
-        self.dashboard_alerts_frame = panel
+        self._db_build_kpis(hero)
 
-    def create_fleet_health_panel(self, parent):
-        panel = self._create_card_section(
-            parent,
-            "Fleet Health",
-            "Distribution of emulator states across the current fleet.",
+        # Two-column layout: instance list | detail
+        grid = tb.Frame(body, style="CardInner.TFrame")
+        grid.pack(fill="both", expand=True)
+        grid.columnconfigure(0, weight=3, uniform="dashboard_hub")
+        grid.columnconfigure(1, weight=5, uniform="dashboard_hub")
+
+        left_col = tb.Frame(grid, style="CardInner.TFrame")
+        right_col = tb.Frame(grid, style="CardInner.TFrame")
+        left_col.grid(row=0, column=0, sticky="nsew", padx=(0, 7))
+        right_col.grid(row=0, column=1, sticky="nsew", padx=(7, 0))
+
+        self._db_build_instance_panel(left_col)
+        self._db_build_detail_panel(right_col)
+
+        # Footer
+        footer = self._create_card_section(
+            body,
+            "Persistence",
+            "Sync with the current device fleet or save account and reels configuration.",
+            pady=(12, 0),
         )
-        self.dashboard_fleet_health_frame = panel
+        self._db_build_footer(footer)
 
-    def create_live_activity_panel(self, parent):
-        panel = self._create_card_section(
-            parent,
-            "Live Activity",
-            "Devices with active, queued, or recently completed work.",
-        )
-        self.dashboard_live_activity_frame = panel
+    # ─────────────────────────────────────────────────────────────────── #
+    # KPI cards
 
-    def create_schedule_overview_panel(self, parent):
-        panel = self._create_card_section(
-            parent,
-            "Schedule Summary",
-            "Run window, cadence, and next configured trigger.",
-        )
-
-        header = tb.Frame(panel, style="CardInner.TFrame")
-        header.pack(fill="x", pady=(0, 8))
-        self.dashboard_schedule_state = StatusPill(
-            header,
-            "Disabled",
-            palette=self.palette,
-            font=(self.display_font, 9),
-            padx=10,
-            pady=4,
-        )
-        self.dashboard_schedule_state.pack(side="left")
-
-        tb.Label(header, text="Enabled", style="MetricSub.TLabel").pack(side="right")
-        self.schedule_enabled_ui = tk.BooleanVar(value=self.schedule_running)
-        tb.Checkbutton(
-            header,
-            variable=self.schedule_enabled_ui,
-            command=self._toggle_schedule_from_dashboard,
-            bootstyle="success-round-toggle",
-        ).pack(side="right", padx=(0, 6))
-
-        self.dashboard_schedule_labels = {}
-        rows = tb.Frame(panel, style="CardInner.TFrame")
-        rows.pack(fill="x")
-        for key, label in (
-            ("next_run", "Next Run"),
-            ("mode", "Mode"),
-            ("repeat", "Repeat"),
-            ("days", "Days"),
-        ):
-            self._build_schedule_summary_row(rows, key, label)
-
-    def _build_schedule_summary_row(self, parent, key, label):
+    def _db_build_kpis(self, parent):
         row = tb.Frame(parent, style="CardInner.TFrame")
-        row.pack(fill="x", pady=5)
-        tb.Label(row, text=label.upper(), style="MetricLabel.TLabel").pack(side="left")
-        value = tb.Label(row, text="-", style="MetricSub.TLabel", anchor="e")
-        value.pack(side="right")
-        self.dashboard_schedule_labels[key] = value
+        row.pack(fill="x")
+        self._db_kpi_cards = {}
+        specs = [
+            ("instances", "LD Instances", self.palette["primary"], "Total registered"),
+            ("accounts", "Accounts", "#38BDF8", "With credentials"),
+            ("pages", "Facebook Pages", self.palette["warning"], "Configured for reels"),
+            ("reels_on", "Reels Automation", self.palette["success"], "Active pipelines"),
+        ]
+        for idx, (key, label, accent, subtitle) in enumerate(specs):
+            card = MetricCard(row, label, "0", subtitle, accent=accent, palette=self.palette)
+            card.pack(
+                side="left",
+                fill="both",
+                expand=True,
+                padx=(0, 8 if idx < len(specs) - 1 else 0),
+            )
+            self._db_kpi_cards[key] = card
 
-    def _toggle_schedule_from_dashboard(self):
-        if self.schedule_enabled_ui.get() and not self.schedule_running:
-            self.start_schedule()
-        elif not self.schedule_enabled_ui.get() and self.schedule_running:
-            self.stop_schedule()
+    def _db_update_kpis(self):
+        if not getattr(self, "_db_kpi_cards", None):
+            return
+        device_names = self._db_device_names()
+        by_name = {str(i.get("name") or ""): i for i in self._db_instances()}
+        visible = [by_name.get(n, {"name": n, "account": {}}) for n in device_names]
 
-    def create_recent_events_panel(self, parent):
-        panel = self._create_card_section(
-            parent,
-            "Recent Important Events",
-            "High-signal successes, warnings, failures, and lifecycle changes.",
+        total_inst = len(device_names)
+        total_acc = sum(
+            1 for i in visible
+            if (i.get("account") or {}).get("uid") or (i.get("account") or {}).get("mail")
         )
-        self.dashboard_recent_events_frame = panel
-        self.dashboard_recent_events_page = 0
+        total_pages = sum(len((i.get("account") or {}).get("pages") or []) for i in visible)
+        total_reels_on = sum(
+            1
+            for i in visible
+            for p in ((i.get("account") or {}).get("pages") or [])
+            if (p.get("reels") or {}).get("enabled")
+        )
 
-    def _refresh_dashboard(self):
-        if not hasattr(self, "dashboard_alerts_frame"):
-            return
-        self._render_dashboard_alerts(self._compute_dashboard_alerts())
-        self._render_fleet_health()
-        self._render_live_activity()
-        self._render_schedule_summary()
-        self._render_recent_events()
+        self._db_kpi_cards["instances"].set(total_inst, subtitle="Total registered")
+        self._db_kpi_cards["accounts"].set(total_acc, subtitle=f"{total_acc} / {max(1, total_inst)} linked")
+        self._db_kpi_cards["pages"].set(total_pages, subtitle=f"across {total_inst} instance(s)")
+        self._db_kpi_cards["reels_on"].set(
+            total_reels_on, subtitle=f"{total_reels_on} / {max(1, total_pages)} pages ON"
+        )
 
-    def _get_dashboard_status_counts(self):
-        counts = {
-            "Running": 0,
-            "Active": 0,
-            "Inactive": 0,
-            "Paused": 0,
-            "Completed": 0,
-            "Failed": 0,
-        }
-        known = set(counts) - {"Failed"}
-        for name in self._ld_snapshot:
-            runtime = self._device_runtime_state.get(name, {})
-            runtime_state = str(runtime.get("state", "")).strip().lower()
-            status = self._ld_status_cache.get(name, "Inactive")
-            if runtime_state in ("attention", "error", "failed"):
-                counts["Failed"] += 1
-            elif status in known:
-                counts[status] += 1
-            else:
-                counts["Failed"] += 1
-        return counts
+    # ─────────────────────────────────────────────────────────────────── #
+    # Instance list panel
 
-    def _get_dashboard_queue_stats(self):
-        if not hasattr(self, "content_manager"):
-            return {"total": 0, "used": 0, "available": 0, "queue_size": 0}
-        try:
-            stats = self.content_manager.get_queue_stats()
-            return {
-                "total": int(stats.get("total", 0)),
-                "used": int(stats.get("used", 0)),
-                "available": int(stats.get("available", 0)),
-                "queue_size": int(stats.get("queue_size", stats.get("total", 0))),
-            }
-        except Exception:
-            items = self.content_manager.get_queue_items() if hasattr(self.content_manager, "get_queue_items") else []
-            total = len(items)
-            used = sum(1 for item in items if item.get("used"))
-            return {"total": total, "used": used, "available": total - used, "queue_size": total}
-
-    def _get_dashboard_performance_stats(self):
-        if not hasattr(self, "performance_monitor"):
-            return {"total_tasks": 0, "success_rate": 0, "completed": 0, "failed": 0}
-        try:
-            return self.performance_monitor.get_stats()
-        except Exception:
-            return {"total_tasks": 0, "success_rate": 0, "completed": 0, "failed": 0}
-
-    def _compute_dashboard_alerts(self):
-        alerts = []
-        counts = self._get_dashboard_status_counts()
-        queue_stats = self._get_dashboard_queue_stats()
-        running = bool(getattr(self, "running_event", None) and self.running_event.is_set())
-        total = len(self._ld_snapshot)
-
-        failure_names = []
-        otp_waiting = []
-        now = datetime.now()
-        for name in self._ld_snapshot:
-            status = self._ld_status_cache.get(name, "Inactive")
-            runtime = self._device_runtime_state.get(name, {})
-            runtime_state = str(runtime.get("state", "")).lower()
-            task = str(runtime.get("task", "")).lower()
-            if runtime_state in ("attention", "error", "failed") or status not in ("Running", "Active", "Inactive", "Paused", "Completed"):
-                failure_names.append(name)
-            if "otp" in task or "verification code" in task:
-                updated = self._parse_dashboard_timestamp(runtime.get("updated_at") or runtime.get("started_at"))
-                if updated and now - updated > timedelta(minutes=6):
-                    otp_waiting.append(name)
-
-        if failure_names:
-            alerts.append({
-                "severity": "critical",
-                "title": "Devices need attention",
-                "detail": self._format_device_list(failure_names, "runtime issue"),
-            })
-        if otp_waiting:
-            alerts.append({
-                "severity": "critical",
-                "title": "OTP flow may be stuck",
-                "detail": self._format_device_list(otp_waiting, "waiting over 6 min"),
-            })
-        if running and counts["Inactive"]:
-            alerts.append({
-                "severity": "warning",
-                "title": "Offline devices during active run",
-                "detail": f"{counts['Inactive']} inactive device(s) may reduce throughput.",
-            })
-
-        no_account = [
-            name for name in self._ld_snapshot
-            if not self._ld_account_cache.get(name) or self._ld_account_cache.get(name) == "No account"
-        ]
-        if no_account:
-            alerts.append({
-                "severity": "warning",
-                "title": "Accounts missing",
-                "detail": self._format_device_list(no_account, "without assigned account"),
-            })
-
-        if bool(getattr(self, "use_content_queue", None) and self.use_content_queue.get()) and queue_stats.get("available", 0) == 0:
-            alerts.append({
-                "severity": "warning",
-                "title": "Content queue empty",
-                "detail": "Queue-backed tasks have no available content to consume.",
-            })
-
-        if total and not self.schedule_running and not running:
-            alerts.append({
-                "severity": "info",
-                "title": "Schedule is disabled",
-                "detail": "Automation will only run manually until scheduling is enabled.",
-            })
-        elif self.schedule_running:
-            summary = self._get_dashboard_schedule_summary()
-            alerts.append({
-                "severity": "info",
-                "title": "Next scheduled run",
-                "detail": summary["next_run"],
-            })
-
-        return alerts[:5]
-
-    def _parse_dashboard_timestamp(self, value):
-        if not value:
-            return None
-        try:
-            return datetime.fromisoformat(str(value))
-        except ValueError:
-            return None
-
-    def _format_device_list(self, names, suffix):
-        names = list(names)
-        preview = ", ".join(names[:4])
-        if len(names) > 4:
-            preview = f"{preview} +{len(names) - 4} more"
-        return f"{preview} {suffix}."
-
-    def _render_dashboard_alerts(self, alerts):
-        self._clear_frame(self.dashboard_alerts_frame)
-        if not alerts:
-            self._build_empty_state(
-                self.dashboard_alerts_frame,
-                "All systems normal",
-                "No current incidents were detected from fleet, queue, schedule, or runtime state.",
-                self.palette["success"],
-            )
-            return
-
-        for alert in alerts:
-            card = AlertCard(
-                self.dashboard_alerts_frame,
-                alert["severity"],
-                alert["title"],
-                alert["detail"],
-                palette=self.palette,
-            )
-            card.pack(fill="x", pady=4)
-
-    def _render_fleet_health(self):
-        self._clear_frame(self.dashboard_fleet_health_frame)
-        counts = self._get_dashboard_status_counts()
-        total = max(1, len(self._ld_snapshot))
-        rows = [
-            ("Running", counts["Running"]),
-            ("Active", counts["Active"]),
-            ("Inactive", counts["Inactive"]),
-            ("Paused", counts["Paused"]),
-            ("Completed", counts["Completed"]),
-            ("Failed", counts["Failed"]),
-        ]
-
-        for status, count in rows:
-            label = status_label(status)
-            color = status_color(status, self.palette)
-            percent = count / total * 100
-            row = tb.Frame(self.dashboard_fleet_health_frame, style="CardInner.TFrame")
-            row.pack(fill="x", pady=5)
-            header = tb.Frame(row, style="CardInner.TFrame")
-            header.pack(fill="x")
-            StatusPill(
-                header,
-                status,
-                palette=self.palette,
-                text=label,
-                font=(self.display_font, 9),
-                padx=8,
-                pady=2,
-            ).pack(side="left")
-            tb.Label(header, text=str(count), style="MetricSub.TLabel", foreground=color).pack(side="right")
-            bar = GradientProgressBar(row, bg=self.palette["surface_alt"], color_start=color, color_end=color, height=5)
-            bar.pack(fill="x", pady=(3, 0))
-            bar.set(percent)
-
-    def _render_live_activity(self):
-        self._clear_frame(self.dashboard_live_activity_frame)
-        activity = self._get_dashboard_live_activity()
-        if not activity:
-            self._build_empty_state(
-                self.dashboard_live_activity_frame,
-                "No active device work",
-                "Start automation or select devices to see live runtime state here.",
-                self.palette["muted"],
-            )
-            return
-
-        for item in activity:
-            detail = f"{item['task']}  |  {item['progress']}%"
-            if item["queue"]:
-                detail = f"{item['queue']}  |  {detail}"
-            card = FeedCard(
-                self.dashboard_live_activity_frame,
-                item["name"],
-                detail,
-                accent=item["accent"],
-                palette=self.palette,
-            )
-            card.pack(fill="x", pady=4)
-            StatusPill(
-                card.header,
-                item["state"],
-                palette=self.palette,
-                font=(self.display_font, 9),
-                padx=8,
-                pady=2,
-            ).pack(side="right")
-            bar = GradientProgressBar(card.body, bg=self.palette["surface_alt"], color_start=item["accent"], color_end=item["accent"], height=4)
-            bar.pack(fill="x", pady=(5, 0))
-            bar.set(item["progress"])
-
-    def _get_dashboard_live_activity(self):
-        priority = {
-            "attention": 0,
-            "error": 0,
-            "failed": 0,
-            "running": 1,
-            "queued": 2,
-            "starting": 3,
-            "preparing": 3,
-            "waiting": 3,
-            "ready": 4,
-            "active": 4,
-            "completed": 5,
-            "idle": 6,
-        }
-        rows = []
-        for name in self._ld_snapshot:
-            runtime = self._device_runtime_state.get(name, {})
-            state = str(runtime.get("state") or self._ld_status_cache.get(name, "Inactive"))
-            task = str(runtime.get("task") or "Waiting for selection")
-            if not runtime and state in ("Inactive", "Idle"):
-                continue
-            if not runtime and state == "Active":
-                task = "Device online"
-            elif not runtime and state == "Running":
-                task = "Automation running"
-            if state == "Inactive" and task in ("Waiting for selection", "Waiting for next run"):
-                continue
-            if state == "Idle" and task in ("Waiting for selection", "Waiting for next run"):
-                continue
-            progress = self._coerce_progress(runtime.get("progress", 0))
-            queue = str(runtime.get("queue_label") or "")
-            queue = "" if queue == "-" else queue
-            state_key = state.lower()
-            rows.append({
-                "name": name,
-                "state": status_label(state),
-                "task": task,
-                "progress": progress,
-                "queue": queue,
-                "accent": status_color(state_key, self.palette),
-                "sort": min(priority.get(state_key, 7), status_sort_key(state_key)),
-            })
-        rows.sort(key=lambda item: (item["sort"], item["name"].lower()))
-        return rows[:6]
-
-    def _coerce_progress(self, value):
-        try:
-            return max(0, min(100, int(float(value))))
-        except (TypeError, ValueError):
-            return 0
-
-    def _render_schedule_summary(self):
-        summary = self._get_dashboard_schedule_summary()
-        if hasattr(self, "schedule_enabled_ui"):
-            self.schedule_enabled_ui.set(bool(self.schedule_running))
-        state_label = getattr(self, "dashboard_schedule_state", None)
-        if state_label:
-            if self.schedule_running:
-                state_label.set_status("Enabled")
-            else:
-                state_label.set_status("Disabled")
-        for key, value in summary.items():
-            label = self.dashboard_schedule_labels.get(key)
-            if label:
-                label.config(text=value)
-
-    def _get_dashboard_schedule_summary(self):
-        mode = "Daily" if self.schedule_daily.get() else "Weekly"
-        repeat_hours = int(self.schedule_repeat_hours.get())
-        repeat = f"Every {repeat_hours}h" if repeat_hours > 0 else "No repeat"
-        days = "Every day" if self.schedule_daily.get() else self._format_schedule_days()
-        next_run = self._format_next_schedule_run()
-        if not self.schedule_running:
-            next_run = f"Disabled / {self.schedule_time.get()} configured"
-        return {
-            "next_run": next_run,
-            "mode": mode,
-            "repeat": repeat,
-            "days": days,
-        }
-
-    def _format_schedule_days(self):
-        selected = [day[:3] for day, var in self.schedule_days.items() if var.get()]
-        return ", ".join(selected) if selected else "No days selected"
-
-    def _format_next_schedule_run(self):
-        next_run = self._get_next_schedule_datetime()
-        if not next_run:
-            return self.schedule_time.get()
-        now = datetime.now()
-        if next_run.date() == now.date():
-            prefix = "Today"
-        elif next_run.date() == (now + timedelta(days=1)).date():
-            prefix = "Tomorrow"
-        else:
-            prefix = next_run.strftime("%a")
-        return f"{prefix} {next_run.strftime('%H:%M')}"
-
-    def _get_next_schedule_datetime(self):
-        try:
-            run_time = datetime.strptime(self.schedule_time.get(), "%H:%M").time()
-        except ValueError:
-            return None
-
-        now = datetime.now()
-        if self.schedule_daily.get():
-            candidate = datetime.combine(now.date(), run_time)
-            if candidate <= now:
-                candidate += timedelta(days=1)
-            return candidate
-
-        selected_days = {day for day, var in self.schedule_days.items() if var.get()}
-        for offset in range(8):
-            day = now + timedelta(days=offset)
-            if day.strftime("%A") not in selected_days:
-                continue
-            candidate = datetime.combine(day.date(), run_time)
-            if candidate > now:
-                return candidate
-        return None
-
-    def _render_recent_events(self):
-        self._clear_frame(self.dashboard_recent_events_frame)
-        events = self._get_dashboard_recent_events()
-        if not events:
-            self.dashboard_recent_events_page = 0
-            self._build_empty_state(
-                self.dashboard_recent_events_frame,
-                "No important events yet",
-                "Warnings, failures, successes, and lifecycle events will appear here.",
-                self.palette["muted"],
-            )
-            return
-
-        per_page = 4
-        total_pages = max(1, (len(events) + per_page - 1) // per_page)
-        current_page = min(max(0, getattr(self, "dashboard_recent_events_page", 0)), total_pages - 1)
-        self.dashboard_recent_events_page = current_page
-        start = current_page * per_page
-        visible_events = events[start:start + per_page]
-
-        for event in visible_events:
-            color = self._event_color(event["level"])
-            card = FeedCard(
-                self.dashboard_recent_events_frame,
-                event["time"],
-                event["message"],
-                accent=color,
-                chip_text=event["level"],
-                chip_status=event_level_status(event["level"]),
-                palette=self.palette,
-                padding=(10, 6),
-            )
-            card.pack(fill="x", pady=3)
-
-        if len(events) > per_page:
-            pager = tb.Frame(self.dashboard_recent_events_frame, style="CardInner.TFrame")
-            pager.pack(fill="x", pady=(8, 0))
-
-            tb.Label(
-                pager,
-                text=f"Page {current_page + 1} of {total_pages}",
-                style="MetricSub.TLabel",
-            ).pack(side="left")
-
-            tb.Button(
-                pager,
-                text="Prev",
-                bootstyle="secondary-outline",
-                command=lambda: self._change_recent_events_page(-1),
-                state="normal" if current_page > 0 else "disabled",
-                width=8,
-            ).pack(side="right", padx=(6, 0))
-            tb.Button(
-                pager,
-                text="Next",
-                bootstyle="info-outline",
-                command=lambda: self._change_recent_events_page(1),
-                state="normal" if current_page < total_pages - 1 else "disabled",
-                width=8,
-            ).pack(side="right")
-
-    def _change_recent_events_page(self, direction):
-        events = self._get_dashboard_recent_events()
-        per_page = 4
-        total_pages = max(1, (len(events) + per_page - 1) // per_page)
-        current_page = getattr(self, "dashboard_recent_events_page", 0)
-        self.dashboard_recent_events_page = min(max(0, current_page + direction), total_pages - 1)
-        self._render_recent_events()
-
-    def _get_dashboard_recent_events(self):
-        events = getattr(self, "dashboard_events", [])
-        return list(reversed(events))
-
-    def _event_color(self, level):
-        return {
-            "SUCCESS": self.palette["success"],
-            "WARNING": self.palette["warning"],
-            "ERROR": self.palette["danger"],
-            "INFO": self.palette["primary"],
-        }.get(level, self.palette["muted"])
-
-    def _build_empty_state(self, parent, title, detail, accent):
-        kind = "success" if accent == self.palette["success"] else "empty"
-        view = StateView(
+    def _db_build_instance_panel(self, parent):
+        card = self._create_card_section(
             parent,
-            kind=kind,
-            title=title,
-            message=detail,
+            "LD Instances",
+            "Pick an instance to inspect its Facebook account and reels pipeline.",
+            expand=True,
+            pady=(0, 0),
+        )
+
+        header = tb.Frame(card, style="CardInner.TFrame")
+        header.pack(fill="x", pady=(0, 8))
+        self._db_list_count = StatusPill(
+            header,
+            "info",
+            palette=self.palette,
+            text="0 instances",
+            font=(self.mono_font, 9),
+            padx=10,
+            pady=3,
+        )
+        self._db_list_count.pack(side="left")
+        tb.Button(
+            header,
+            text="Sync Devices",
+            bootstyle="info-outline",
+            command=self._db_refresh_from_devices,
+            width=14,
+        ).pack(side="right")
+
+        search_row = tb.Frame(card, style="CardInner.TFrame")
+        search_row.pack(fill="x", pady=(0, 8))
+        tb.Label(search_row, text="SEARCH", style="MetricLabel.TLabel").pack(side="left", padx=(0, 8))
+        self._db_search_var = tk.StringVar()
+        self._db_search_var.trace_add("write", lambda *_: self._db_refresh_instance_list())
+        tb.Entry(
+            search_row,
+            textvariable=self._db_search_var,
+            bootstyle="secondary",
+        ).pack(side="left", fill="x", expand=True)
+
+        columns = ("name", "status", "pages")
+        tree = tb.Treeview(
+            card,
+            columns=columns,
+            show="headings",
+            height=14,
+            style="Custom.Treeview",
+            selectmode="browse",
+        )
+        tree.heading("name", text="Instance", anchor="w")
+        tree.heading("status", text="State", anchor="w")
+        tree.heading("pages", text="Pages", anchor="e")
+        tree.column("name", width=180, anchor="w")
+        tree.column("status", width=100, anchor="w")
+        tree.column("pages", width=60, anchor="e")
+
+        scroll = tb.Scrollbar(card, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
+        scroll.pack(side="right", fill="y")
+        tree.configure(yscrollcommand=scroll.set)
+        tree.pack(fill="both", expand=True)
+        tree.bind("<<TreeviewSelect>>", self._db_on_select_instance)
+        self._db_tree = tree
+
+    # ─────────────────────────────────────────────────────────────────── #
+    # Detail panel
+
+    def _db_build_detail_panel(self, parent):
+        card = self._create_card_section(
+            parent,
+            "Instance Detail",
+            "Account credentials health and all configured Facebook pages for this LD.",
+            expand=True,
+            pady=(0, 0),
+        )
+        self._db_detail_host = card
+
+    def _db_render_empty_detail(self):
+        self._clear_frame(self._db_detail_host)
+        view = StateView(
+            self._db_detail_host,
+            kind="empty",
+            title="Select an LD instance",
+            message="Pick one from the list on the left to inspect its account and page analytics.",
             palette=self.palette,
             display_font=self.display_font,
             mono_font=self.mono_font,
-            padding=(14, 14),
         )
-        view.pack(fill="x", pady=4)
+        view.pack(fill="x", pady=(0, 4))
+
+    def _db_render_instance(self, instance):
+        self._clear_frame(self._db_detail_host)
+        acc = instance.get("account") or {}
+        pages = acc.get("pages") or []
+
+        # ── Account profile row ─────────────────────────────────────── #
+        profile = tb.Frame(self._db_detail_host, style="CardInner.TFrame")
+        profile.pack(fill="x", pady=(0, 12))
+
+        avatar = tk.Label(
+            profile,
+            text=(instance.get("name") or "?")[:1].upper(),
+            bg=self.palette["primary"],
+            fg="#0B0F17",
+            font=(self.display_font, 22, "bold"),
+            width=3,
+            height=1,
+        )
+        avatar.pack(side="left")
+
+        meta = tb.Frame(profile, style="CardInner.TFrame")
+        meta.pack(side="left", fill="x", expand=True, padx=14)
+
+        name_row = tb.Frame(meta, style="CardInner.TFrame")
+        name_row.pack(anchor="w", fill="x")
+        tk.Label(
+            name_row,
+            text=instance.get("name") or "Unnamed",
+            bg=self.palette["surface"],
+            fg=self.palette["text"],
+            font=(self.display_font, 16, "bold"),
+        ).pack(side="left")
+        has_2fa = bool((acc.get("twofa") or "").strip())
+        StatusPill(
+            name_row,
+            "success" if has_2fa else "muted",
+            palette=self.palette,
+            text="2FA ON" if has_2fa else "2FA OFF",
+            font=(self.mono_font, 8),
+            padx=8,
+            pady=3,
+        ).pack(side="left", padx=10)
+
+        tb.Label(
+            meta,
+            text="LD Instance · Facebook Account",
+            style="MetricSub.TLabel",
+        ).pack(anchor="w", pady=(4, 8))
+
+        # Credential presence chips
+        chip_row = tb.Frame(meta, style="CardInner.TFrame")
+        chip_row.pack(anchor="w")
+        for lbl, val in [
+            ("UID", acc.get("uid")),
+            ("Password", acc.get("password")),
+            ("2FA", acc.get("twofa")),
+            ("Mail", acc.get("mail")),
+        ]:
+            present = bool((val or "") if not isinstance(val, str) else val.strip())
+            StatusPill(
+                chip_row,
+                "success" if present else "muted",
+                palette=self.palette,
+                text=f"● {lbl}" if present else f"○ {lbl}",
+                font=(self.mono_font, 8),
+                padx=8,
+                pady=3,
+            ).pack(side="left", padx=(0, 6))
+
+        tb.Button(
+            profile,
+            text="Edit Account",
+            bootstyle="primary",
+            command=self._db_edit_account,
+            width=14,
+        ).pack(side="right", anchor="n")
+
+        # ── Mini summary metrics ────────────────────────────────────── #
+        mini = tb.Frame(self._db_detail_host, style="CardInner.TFrame")
+        mini.pack(fill="x", pady=(0, 12))
+
+        reels_on = sum(1 for p in pages if (p.get("reels") or {}).get("enabled"))
+        total_tags = sum(len((p.get("reels") or {}).get("hashtags") or []) for p in pages)
+        auto_pct = (reels_on / len(pages) * 100) if pages else 0
+
+        for idx, (label, value, accent, subtitle) in enumerate([
+            ("Pages", str(len(pages)), self.palette["primary"], "Configured on this LD"),
+            ("Automation", f"{auto_pct:.0f}%", self.palette["success"], f"{reels_on} of {len(pages)} ON"),
+            ("Hashtags", str(total_tags), self.palette["warning"], "across all pages"),
+        ]):
+            card = MetricCard(mini, label, value, subtitle, accent=accent, palette=self.palette)
+            card.pack(side="left", fill="both", expand=True, padx=(0, 8 if idx < 2 else 0))
+
+        # ── Pages section ───────────────────────────────────────────── #
+        sec_head = tb.Frame(self._db_detail_host, style="CardInner.TFrame")
+        sec_head.pack(fill="x", pady=(0, 8))
+        tb.Label(
+            sec_head,
+            text="FACEBOOK PAGES · REELS PIPELINE",
+            style="MetricLabel.TLabel",
+        ).pack(side="left")
+        tb.Button(
+            sec_head,
+            text="+ Add Page",
+            bootstyle="success-outline",
+            command=self._db_add_page,
+            width=12,
+        ).pack(side="right")
+
+        if not pages:
+            view = StateView(
+                self._db_detail_host,
+                kind="empty",
+                title="No pages yet",
+                message="Add a Facebook page to enable the reels pipeline for this LD instance.",
+                palette=self.palette,
+                display_font=self.display_font,
+                mono_font=self.mono_font,
+                actions=[
+                    {"text": "Add Page", "command": self._db_add_page, "bootstyle": "outline-success"},
+                ],
+            )
+            view.pack(fill="x")
+        else:
+            for idx, page in enumerate(pages):
+                self._db_render_page_card(self._db_detail_host, idx, page)
+
+    def _db_render_page_card(self, parent, idx, page):
+        reels = page.get("reels") or {}
+        enabled = bool(reels.get("enabled"))
+        accent = self.palette["success"] if enabled else self.palette["muted"]
+
+        detail_bits = [
+            f"Schedule: {reels.get('schedule') or 'Manual'}",
+            f"Every {reels.get('interval_min', 30)} min",
+            f"{len(reels.get('hashtags') or [])} hashtags",
+            "Source set" if reels.get("source_folder") else "No source",
+        ]
+        message = "  |  ".join(detail_bits)
+
+        card = FeedCard(
+            parent,
+            f"{page.get('name') or f'Page {idx + 1}'}  ·  ID {_v(page.get('page_id'))}",
+            message,
+            accent=accent,
+            chip_text="REELS ON" if enabled else "REELS OFF",
+            chip_status="success" if enabled else "muted",
+            palette=self.palette,
+        )
+        card.pack(fill="x", pady=4)
+
+        actions = tb.Frame(card.body, style="CardInner.TFrame")
+        actions.pack(fill="x", pady=(6, 0))
+        tb.Button(
+            actions,
+            text="Reels Config",
+            bootstyle="info",
+            command=lambda i=idx: self._db_configure_reels(i),
+            width=12,
+        ).pack(side="left", padx=(0, 6))
+        tb.Button(
+            actions,
+            text="Edit",
+            bootstyle="secondary-outline",
+            command=lambda i=idx: self._db_edit_page(i),
+            width=8,
+        ).pack(side="left", padx=(0, 6))
+        tb.Button(
+            actions,
+            text="Remove",
+            bootstyle="danger-outline",
+            command=lambda i=idx: self._db_remove_page(i),
+            width=8,
+        ).pack(side="left")
+
+    # ─────────────────────────────────────────────────────────────────── #
+    # Footer
+
+    def _db_build_footer(self, parent):
+        bar = tb.Frame(parent, style="CardInner.TFrame")
+        bar.pack(fill="x")
+
+        self._db_status_label = tb.Label(bar, text="Ready", style="MetricSub.TLabel")
+        self._db_status_label.pack(side="left")
+
+        tb.Button(
+            bar,
+            text="Save All",
+            bootstyle="success",
+            command=self._db_save_all,
+            width=12,
+        ).pack(side="right", padx=(6, 0))
+        tb.Button(
+            bar,
+            text="Sync Devices",
+            bootstyle="info-outline",
+            command=self._db_refresh_from_devices,
+            width=14,
+        ).pack(side="right", padx=(6, 0))
+        if not getattr(self, "_dashboard_embedded", False):
+            tb.Button(
+                bar,
+                text="Close",
+                bootstyle="secondary-outline",
+                command=self._db_on_close,
+                width=10,
+            ).pack(side="right")
+
+    # ─────────────────────────────────────────────────────────────────── #
+    # Shared helpers
 
     def _clear_frame(self, frame):
         for child in frame.winfo_children():
             child.destroy()
+
+    def _db_status(self, text, color=None):
+        label = getattr(self, "_db_status_label", None)
+        if not self._db_widget_exists(label):
+            self._db_status_label = None
+            return
+        try:
+            if color:
+                label.configure(text=text, foreground=color)
+            else:
+                label.configure(text=text)
+        except tk.TclError:
+            self._db_status_label = None
+
+    def _db_widget_exists(self, widget):
+        if widget is None:
+            return False
+        try:
+            return bool(widget.winfo_exists())
+        except tk.TclError:
+            return False
+
+    def _db_clear_widget_refs(self):
+        self._db_status_label = None
+        self._db_kpi_cards = {}
+        self._db_list_count = None
+        self._db_tree = None
+        self._db_detail_host = None
+
+    def _db_message_parent(self):
+        parent = getattr(self, "_dashboard_dialog", None)
+        if self._db_widget_exists(parent):
+            return parent
+        host = getattr(self, "_dashboard_host", None)
+        if self._db_widget_exists(host):
+            try:
+                return host.winfo_toplevel()
+            except Exception:
+                return host
+        return getattr(self, "root", None)
+
+    # ─────────────────────────────────────────────────────────────────── #
+    # Data
+
+    def _db_data_path(self):
+        paths = get_app_paths()
+        paths.ensure_runtime_dirs()
+        return paths.config_dir / "dashboard_instances.json"
+
+    def _dashboard_load_data(self):
+        path = self._db_data_path()
+        if not path.exists():
+            self._dashboard_data = {"instances": []}
+            return
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8")) or {}
+            if "instances" not in loaded:
+                loaded = {"instances": []}
+            self._dashboard_data = loaded
+        except Exception as exc:
+            self._dashboard_data = {"instances": []}
+            try:
+                self.log(f"Failed to load dashboard data: {exc}", "ERROR")
+            except Exception:
+                pass
+
+    def _db_save_all(self):
+        path = self._db_data_path()
+        try:
+            path.write_text(
+                json.dumps(self._dashboard_data, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except Exception as exc:
+            MessageBox.showerror("Save Failed", str(exc), parent=self._db_message_parent())
+            return
+        self._dashboard_dirty = False
+        self._db_status(f"Saved → {path.name}", self.palette["success"])
+
+    def _db_mark_dirty(self):
+        self._dashboard_dirty = True
+        self._db_status("Unsaved changes", self.palette["warning"])
+
+    def _db_instances(self):
+        return self._dashboard_data.setdefault("instances", [])
+
+    def _db_device_names(self):
+        snapshot = getattr(self, "_ld_snapshot", None) or {}
+        try:
+            return list(snapshot.keys())
+        except Exception:
+            return []
+
+    def _db_sync_from_devices(self):
+        insts = self._db_instances()
+        by_name = {str(i.get("name") or ""): i for i in insts if i.get("name")}
+        changed = False
+        for name in self._db_device_names():
+            if name not in by_name:
+                entry = {
+                    "name": name,
+                    "account": {
+                        "uid": None,
+                        "password": None,
+                        "twofa": None,
+                        "mail": None,
+                        "pages": [],
+                    },
+                }
+                insts.append(entry)
+                by_name[name] = entry
+                changed = True
+        if changed:
+            self._db_mark_dirty()
+
+    def _db_refresh_from_devices(self):
+        self._db_sync_from_devices()
+        if self._dashboard_dirty:
+            self._db_save_all()
+        self._db_render_all()
+        self._db_status("Synced from Devices", self.palette["success"])
+
+    def _db_device_status(self, name):
+        cache = getattr(self, "_ld_status_cache", None) or {}
+        return str(cache.get(name) or "Inactive")
+
+    def _db_selected_instance(self):
+        name = self._dashboard_selected
+        if not name:
+            return None
+        for inst in self._db_instances():
+            if inst.get("name") == name:
+                return inst
+        return None
+
+    # ─────────────────────────────────────────────────────────────────── #
+    # Rendering
+
+    def _db_render_all(self):
+        if not (
+            self._db_widget_exists(getattr(self, "_dashboard_dialog", None))
+            or self._db_widget_exists(getattr(self, "_dashboard_host", None))
+        ):
+            return
+        self._db_refresh_instance_list()
+        self._db_update_kpis()
+        inst = self._db_selected_instance()
+        if inst:
+            self._db_render_instance(inst)
+        else:
+            self._db_render_empty_detail()
+
+    def _db_refresh_instance_list(self):
+        tree = getattr(self, "_db_tree", None)
+        if not self._db_widget_exists(tree):
+            self._db_tree = None
+            return
+
+        try:
+            for item in tree.get_children():
+                tree.delete(item)
+        except tk.TclError:
+            self._db_tree = None
+            return
+
+        query = (self._db_search_var.get() or "").strip().lower() if hasattr(self, "_db_search_var") else ""
+        device_names = self._db_device_names()
+        by_name = {str(i.get("name") or ""): i for i in self._db_instances()}
+
+        for name in device_names:
+            if query and query not in name.lower():
+                continue
+            inst = by_name.get(name) or {}
+            pages = ((inst.get("account") or {}).get("pages") or [])
+            status = self._db_device_status(name)
+            tree.insert(
+                "",
+                "end",
+                iid=name,
+                values=(name, status, str(len(pages))),
+            )
+
+        if self._db_widget_exists(getattr(self, "_db_list_count", None)):
+            count = len(device_names)
+            self._db_list_count.set_status(
+                "info",
+                text=f"{count} instance{'s' if count != 1 else ''}",
+            )
+
+        if self._dashboard_selected and tree.exists(self._dashboard_selected):
+            tree.selection_set(self._dashboard_selected)
+
+    def _db_on_select_instance(self, _event=None):
+        tree = self._db_tree
+        sel = tree.selection()
+        if not sel:
+            self._dashboard_selected = None
+            self._db_render_empty_detail()
+            return
+        self._dashboard_selected = str(sel[0])
+        inst = self._db_selected_instance()
+        if inst:
+            self._db_render_instance(inst)
+        else:
+            self._db_render_empty_detail()
+
+    # ─────────────────────────────────────────────────────────────────── #
+    # Editors
+
+    def _db_edit_account(self):
+        inst = self._db_selected_instance()
+        if not inst:
+            MessageBox.showinfo("Edit", "Select an instance first.", parent=self._db_message_parent())
+            return
+        self._db_open_instance_editor(inst)
+
+    def _db_open_instance_editor(self, instance):
+        data = instance
+        acc = data.get("account") or {}
+
+        win = self._db_modal(f"Account · {data.get('name')}", 540, 500)
+
+        form = tb.Frame(win, style="Card.TFrame", padding=22)
+        form.pack(fill="both", expand=True)
+
+        tb.Label(form, text="Edit Account", style="SectionTitle.TLabel").grid(
+            row=0, column=0, columnspan=2, sticky="w"
+        )
+        tb.Label(
+            form,
+            text=f"LD Instance · {data.get('name')}  (from Devices)",
+            style="Subtitle.TLabel",
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(2, 14))
+
+        vars_map = {
+            "uid": tk.StringVar(value=str(acc.get("uid") or "")),
+            "password": tk.StringVar(value=str(acc.get("password") or "")),
+            "twofa": tk.StringVar(value=str(acc.get("twofa") or "")),
+            "mail": tk.StringVar(value=str(acc.get("mail") or "")),
+        }
+        fields = [
+            ("UID", "uid", False),
+            ("Password", "password", True),
+            ("2FA Secret", "twofa", True),
+            ("Mail", "mail", False),
+        ]
+        for i, (lbl, key, secret) in enumerate(fields, start=2):
+            tb.Label(form, text=lbl.upper(), style="MetricLabel.TLabel").grid(
+                row=i, column=0, sticky="w", pady=8, padx=(0, 16)
+            )
+            tb.Entry(
+                form,
+                textvariable=vars_map[key],
+                bootstyle="secondary",
+                show="•" if secret else "",
+            ).grid(row=i, column=1, sticky="ew", pady=8, ipady=4)
+        form.columnconfigure(1, weight=1)
+
+        def commit():
+            data["account"] = {
+                "uid": vars_map["uid"].get().strip() or None,
+                "password": vars_map["password"].get().strip() or None,
+                "twofa": vars_map["twofa"].get().strip() or None,
+                "mail": vars_map["mail"].get().strip() or None,
+                "pages": acc.get("pages") or [],
+            }
+            self._db_mark_dirty()
+            self._db_save_all()
+            self._db_render_all()
+            win.destroy()
+
+        footer = tb.Frame(win, style="CardInner.TFrame", padding=(18, 12))
+        footer.pack(fill="x", side="bottom")
+        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(side="left")
+        tb.Button(footer, text="Save", bootstyle="primary", command=commit, width=10).pack(side="right")
+
+    def _db_add_page(self):
+        self._db_open_page_editor(None)
+
+    def _db_edit_page(self, idx):
+        inst = self._db_selected_instance()
+        if not inst:
+            return
+        pages = inst.setdefault("account", {}).setdefault("pages", [])
+        if 0 <= idx < len(pages):
+            self._db_open_page_editor(idx)
+
+    def _db_remove_page(self, idx):
+        inst = self._db_selected_instance()
+        if not inst:
+            return
+        pages = inst.setdefault("account", {}).setdefault("pages", [])
+        if not (0 <= idx < len(pages)):
+            return
+        name = pages[idx].get("name") or f"Page {idx + 1}"
+        if not MessageBox.askyesno("Remove Page", f"Remove '{name}'?", parent=self._db_message_parent()):
+            return
+        del pages[idx]
+        self._db_mark_dirty()
+        self._db_save_all()
+        self._db_render_all()
+
+    def _db_open_page_editor(self, idx):
+        inst = self._db_selected_instance()
+        if not inst:
+            return
+        pages = inst.setdefault("account", {}).setdefault("pages", [])
+        is_new = idx is None
+        page = {} if is_new else pages[idx]
+
+        win = self._db_modal("Add Page" if is_new else "Edit Page", 500, 320)
+
+        form = tb.Frame(win, style="Card.TFrame", padding=22)
+        form.pack(fill="both", expand=True)
+
+        tb.Label(
+            form,
+            text="Add Page" if is_new else "Edit Page",
+            style="SectionTitle.TLabel",
+        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 16))
+
+        name_var = tk.StringVar(value=str(page.get("name") or ""))
+        pid_var = tk.StringVar(value=str(page.get("page_id") or ""))
+
+        for i, (lbl, var) in enumerate([("Page Name", name_var), ("Page ID", pid_var)], start=1):
+            tb.Label(form, text=lbl.upper(), style="MetricLabel.TLabel").grid(
+                row=i, column=0, sticky="w", pady=8, padx=(0, 16)
+            )
+            tb.Entry(form, textvariable=var, bootstyle="secondary").grid(
+                row=i, column=1, sticky="ew", pady=8, ipady=4
+            )
+        form.columnconfigure(1, weight=1)
+
+        def commit():
+            name = name_var.get().strip()
+            if not name:
+                MessageBox.showwarning("Missing", "Page name is required.", parent=win)
+                return
+            payload = {
+                "name": name,
+                "page_id": pid_var.get().strip() or None,
+                "reels": page.get("reels") or {
+                    "enabled": False,
+                    "schedule": "Manual",
+                    "interval_min": 30,
+                    "hashtags": [],
+                    "caption_template": "",
+                    "source_folder": "",
+                },
+            }
+            if is_new:
+                pages.append(payload)
+            else:
+                page.update(payload)
+            self._db_mark_dirty()
+            self._db_save_all()
+            self._db_render_all()
+            win.destroy()
+
+        footer = tb.Frame(win, style="CardInner.TFrame", padding=(18, 12))
+        footer.pack(fill="x", side="bottom")
+        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(side="left")
+        tb.Button(footer, text="Save", bootstyle="primary", command=commit, width=10).pack(side="right")
+
+    # ─────────────────────────────────────────────────────────────────── #
+    # Reels config
+
+    def _db_configure_reels(self, page_idx):
+        inst = self._db_selected_instance()
+        if not inst:
+            return
+        pages = inst.setdefault("account", {}).setdefault("pages", [])
+        if not (0 <= page_idx < len(pages)):
+            return
+        page = pages[page_idx]
+        reels = page.setdefault(
+            "reels",
+            {
+                "enabled": False,
+                "schedule": "Manual",
+                "interval_min": 30,
+                "hashtags": [],
+                "caption_template": "",
+                "source_folder": "",
+            },
+        )
+
+        win = self._db_modal(f"Reels · {page.get('name')}", 580, 620)
+
+        head = tb.Frame(win, style="Card.TFrame", padding=(22, 16))
+        head.pack(fill="x")
+        tb.Label(head, text="Reels Configuration", style="SectionTitle.TLabel").pack(anchor="w")
+        tb.Label(
+            head,
+            text=f"Page · {page.get('name')}  ·  {_v(page.get('page_id'))}",
+            style="Subtitle.TLabel",
+        ).pack(anchor="w", pady=(4, 0))
+
+        body = tb.Frame(win, style="Card.TFrame", padding=22)
+        body.pack(fill="both", expand=True)
+
+        enabled_var = tk.BooleanVar(value=bool(reels.get("enabled")))
+        schedule_var = tk.StringVar(value=str(reels.get("schedule") or "Manual"))
+        interval_var = tk.StringVar(value=str(reels.get("interval_min") or 30))
+        hashtags_var = tk.StringVar(value=", ".join(reels.get("hashtags") or []))
+        source_var = tk.StringVar(value=str(reels.get("source_folder") or ""))
+
+        toggle_row = tb.Frame(body, style="CardInner.TFrame")
+        toggle_row.pack(fill="x", pady=(0, 14))
+        tb.Label(toggle_row, text="Enable Reels Posting", style="CardItemTitle.TLabel").pack(side="left")
+        tb.Label(
+            toggle_row,
+            text="Automates video upload to this page.",
+            style="MetricSub.TLabel",
+        ).pack(side="left", padx=10)
+        tb.Checkbutton(toggle_row, variable=enabled_var, bootstyle="success-round-toggle").pack(side="right")
+
+        row = tb.Frame(body, style="CardInner.TFrame")
+        row.pack(fill="x", pady=(0, 12))
+        lcol = tb.Frame(row, style="CardInner.TFrame")
+        lcol.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        tb.Label(lcol, text="SCHEDULE", style="MetricLabel.TLabel").pack(anchor="w", pady=(0, 4))
+        tb.Combobox(
+            lcol,
+            textvariable=schedule_var,
+            values=("Manual", "Hourly", "Daily", "Custom Interval"),
+            state="readonly",
+            bootstyle="secondary",
+        ).pack(fill="x")
+
+        rcol = tb.Frame(row, style="CardInner.TFrame")
+        rcol.pack(side="left", fill="x", expand=True, padx=(8, 0))
+        tb.Label(rcol, text="INTERVAL (MIN)", style="MetricLabel.TLabel").pack(anchor="w", pady=(0, 4))
+        tb.Entry(rcol, textvariable=interval_var, bootstyle="secondary").pack(fill="x", ipady=3)
+
+        tb.Label(body, text="HASHTAGS (COMMA SEPARATED)", style="MetricLabel.TLabel").pack(anchor="w", pady=(0, 4))
+        tb.Entry(body, textvariable=hashtags_var, bootstyle="secondary").pack(fill="x", pady=(0, 12), ipady=3)
+
+        tb.Label(body, text="SOURCE FOLDER / PATH", style="MetricLabel.TLabel").pack(anchor="w", pady=(0, 4))
+        tb.Entry(body, textvariable=source_var, bootstyle="secondary").pack(fill="x", pady=(0, 12), ipady=3)
+
+        tb.Label(body, text="CAPTION TEMPLATE", style="MetricLabel.TLabel").pack(anchor="w", pady=(0, 4))
+        caption_text = tk.Text(
+            body,
+            height=5,
+            bg=self.palette["surface_alt"],
+            fg=self.palette["text"],
+            insertbackground=self.palette["primary"],
+            relief="flat",
+            font=(self.mono_font, 10),
+            wrap="word",
+            highlightthickness=1,
+            highlightbackground=self.palette["border"],
+        )
+        caption_text.pack(fill="both", expand=True)
+        caption_text.insert("1.0", str(reels.get("caption_template") or ""))
+
+        def commit():
+            try:
+                interval = max(1, int(interval_var.get().strip() or 30))
+            except ValueError:
+                MessageBox.showwarning("Invalid", "Interval must be a number.", parent=win)
+                return
+            tags = [t.strip().lstrip("#") for t in hashtags_var.get().split(",") if t.strip()]
+            reels.update(
+                {
+                    "enabled": bool(enabled_var.get()),
+                    "schedule": schedule_var.get().strip() or "Manual",
+                    "interval_min": interval,
+                    "hashtags": tags,
+                    "source_folder": source_var.get().strip(),
+                    "caption_template": caption_text.get("1.0", "end").strip(),
+                }
+            )
+            self._db_mark_dirty()
+            self._db_save_all()
+            self._db_render_all()
+            win.destroy()
+
+        footer = tb.Frame(win, style="CardInner.TFrame", padding=(18, 12))
+        footer.pack(fill="x", side="bottom")
+        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(side="left")
+        tb.Button(footer, text="Save Reels", bootstyle="success", command=commit, width=12).pack(side="right")
+
+    # ─────────────────────────────────────────────────────────────────── #
+    # Modal + close
+
+    def _db_modal(self, title, w, h):
+        parent = self._db_message_parent()
+        win = tk.Toplevel(parent)
+        win.title(title)
+        win.geometry(f"{w}x{h}")
+        win.resizable(False, False)
+        if parent is not None:
+            win.transient(parent)
+        win.grab_set()
+        win.configure(bg=self.palette["surface"])
+        return win
+
+    def _db_on_close(self):
+        if getattr(self, "_dashboard_embedded", False):
+            return
+        win = getattr(self, "_dashboard_dialog", None)
+        if self._dashboard_dirty:
+            choice = MessageBox.askyesnocancel("Unsaved changes", "Save before closing?", parent=win)
+            if choice is None:
+                return
+            if choice:
+                self._db_save_all()
+        if self._db_widget_exists(win):
+            win.destroy()
+        self._dashboard_dialog = None
+        self._db_clear_widget_refs()

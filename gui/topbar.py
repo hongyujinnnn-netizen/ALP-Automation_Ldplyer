@@ -62,25 +62,7 @@ class TopBarMixin:
             border_color=self.palette.get("secondary_border", self.palette["secondary"]),
         )
 
-        tabs = tb.Frame(top_bar, style="Topbar.TFrame")
-        tabs.pack(side="left", padx=(16, 0))
         self._top_tab_buttons = {}
-        tab_defs = [
-            ("Analytics", 0, None),
-            ("Devices", 1, self._focus_devices),
-            ("Tasks", 2, None),
-            ("Logs", 5, None),
-        ]
-        for label, idx, action in tab_defs:
-            btn = tb.Button(
-                tabs,
-                text=label,
-                bootstyle="secondary-link",
-                command=(action if action is not None else (lambda i=idx: self.notebook.select(i) if hasattr(self, "notebook") else None)),
-                width=9,
-            )
-            btn.pack(side="left", padx=2)
-            self._top_tab_buttons[label] = btn
 
         actions = tb.Frame(top_bar, style="Topbar.TFrame")
         actions.pack(side="right")

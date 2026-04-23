@@ -147,9 +147,9 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
 
         P = self.palette
         dialog = tk.Toplevel(self.root)
-        dialog.title("Control Settings")
-        dialog.geometry("1070x750")
-        dialog.minsize(1070, 750)
+        dialog.title("Settings")
+        dialog.geometry("1120x780")
+        dialog.minsize(1080, 720)
         dialog.transient(self.root)
         dialog.grab_set()
         dialog.configure(bg=P["surface"])
@@ -191,7 +191,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         # Reuse the main app variable for blocked countries so changes are live.
         blocked_countries_var = getattr(self, "blocked_countries", tk.StringVar(value=""))
 
-        shell = tk.Frame(dialog, bg=P["surface"], padx=18, pady=18)
+        shell = tk.Frame(dialog, bg=P["surface"], padx=0, pady=0)
         shell.pack(fill="both", expand=True)
 
         self._build_settings_shell(
@@ -260,10 +260,7 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         email_mark_as_seen_var,
         appearance_vars,
     ):
-        wrapper = tk.Frame(parent, bg=palette["border_alt"], padx=1, pady=1)
-        wrapper.pack(fill="both", expand=True)
-
-        container = tk.Frame(wrapper, bg=palette["surface"])
+        container = tk.Frame(parent, bg=palette["surface"])
         container.pack(fill="both", expand=True)
 
         self._build_premium_header(
@@ -274,15 +271,21 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             use_queue_var,
         )
 
-        body = tk.Frame(container, bg=palette["surface"])
-        body.pack(fill="both", expand=True, padx=18, pady=(0, 14))
+        divider = tk.Frame(container, bg=palette["border"], height=1)
+        divider.pack(fill="x")
 
-        sidebar = tk.Frame(body, bg=palette["surface_alt"], width=260)
-        sidebar.pack(side="left", fill="y", padx=(0, 16))
+        body = tk.Frame(container, bg=palette["surface"])
+        body.pack(fill="both", expand=True)
+
+        sidebar = tk.Frame(body, bg=palette["surface_alt"], width=248)
+        sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
 
+        sidebar_divider = tk.Frame(body, bg=palette["border"], width=1)
+        sidebar_divider.pack(side="left", fill="y")
+
         content = tk.Frame(body, bg=palette["surface"])
-        content.pack(side="left", fill="both", expand=True)
+        content.pack(side="left", fill="both", expand=True, padx=28, pady=22)
 
         self._settings_nav_buttons = {}
         self._settings_pages = {}
@@ -441,39 +444,64 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         self.root.after(0, lambda: self._open_settings_page("appearance"))
 
     def _build_premium_header(self, parent, palette, parallel_var, task_duration_var, use_queue_var):
-        header = tk.Frame(parent, bg=palette["surface"], pady=18, padx=18)
+        header = tk.Frame(parent, bg=palette["surface"], pady=22, padx=28)
         header.pack(fill="x")
 
         left = tk.Frame(header, bg=palette["surface"])
         left.pack(side="left", fill="x", expand=True)
 
-        badge_wrap = tk.Frame(left, bg=palette["surface"])
-        badge_wrap.pack(anchor="w")
+        accent_bar = tk.Frame(left, bg=palette["primary"], height=3, width=40)
+        accent_bar.pack(anchor="w")
+        accent_bar.pack_propagate(False)
 
-        tip_bg = palette.get("tip_bg", palette["surface_alt"])
-        icon = tk.Frame(badge_wrap, bg=tip_bg, width=68, height=68, highlightthickness=1, highlightbackground=palette["border_alt"])
-        icon.pack(side="left")
-        icon.pack_propagate(False)
-        tk.Label(icon, text="CTRL", bg=tip_bg, fg=palette["primary"], font=(self.display_font, 12)).pack(expand=True)
-
-        title_wrap = tk.Frame(badge_wrap, bg=palette["surface"], padx=14)
-        title_wrap.pack(side="left", fill="x", expand=True)
-        tk.Label(title_wrap, text="Control Settings", bg=palette["surface"], fg=palette["text"], font=(self.display_font, 20)).pack(anchor="w")
         tk.Label(
-            title_wrap,
-            text="Premium control center for launch pacing, behavior, presets, and review.",
+            left,
+            text="Settings",
+            bg=palette["surface"],
+            fg=palette["text"],
+            font=(self.display_font, 22, "bold"),
+        ).pack(anchor="w", pady=(10, 0))
+        tk.Label(
+            left,
+            text="Manage pacing, behavior, appearance, and automation profiles.",
             bg=palette["surface"],
             fg=palette["muted"],
             font=(self.mono_font, 9),
         ).pack(anchor="w", pady=(4, 0))
 
-        status = tk.Frame(header, bg=palette["surface_alt"], padx=14, pady=10, highlightthickness=1, highlightbackground=palette["border"])
-        status.pack(side="right")
-        tk.Label(status, text="ACTIVE MODE", bg=palette["surface_alt"], fg=palette["muted"], font=(self.mono_font, 8)).pack(anchor="e")
+        status_outer = tk.Frame(header, bg=palette["border"], padx=1, pady=1)
+        status_outer.pack(side="right", anchor="n")
+        status = tk.Frame(status_outer, bg=palette["surface_alt"], padx=16, pady=12)
+        status.pack()
+
+        top_row = tk.Frame(status, bg=palette["surface_alt"])
+        top_row.pack(anchor="e")
+        self._header_status_dot = tk.Frame(top_row, bg=palette["primary"], width=8, height=8)
+        self._header_status_dot.pack(side="left", padx=(0, 6), pady=(4, 0))
+        tk.Label(
+            top_row,
+            text="ACTIVE PROFILE",
+            bg=palette["surface_alt"],
+            fg=palette["muted"],
+            font=(self.mono_font, 8, "bold"),
+        ).pack(side="left")
+
         self._header_status_var = tk.StringVar(value="Balanced")
-        tk.Label(status, textvariable=self._header_status_var, bg=palette["surface_alt"], fg=palette["primary"], font=(self.display_font, 12)).pack(anchor="e")
-        self._header_meta_var = tk.StringVar(value="Ready • Queue On")
-        tk.Label(status, textvariable=self._header_meta_var, bg=palette["surface_alt"], fg=palette["text"], font=(self.mono_font, 8)).pack(anchor="e", pady=(2, 0))
+        tk.Label(
+            status,
+            textvariable=self._header_status_var,
+            bg=palette["surface_alt"],
+            fg=palette["primary"],
+            font=(self.display_font, 14, "bold"),
+        ).pack(anchor="e", pady=(4, 0))
+        self._header_meta_var = tk.StringVar(value="Ready · Queue On")
+        tk.Label(
+            status,
+            textvariable=self._header_meta_var,
+            bg=palette["surface_alt"],
+            fg=palette["text"],
+            font=(self.mono_font, 8),
+        ).pack(anchor="e", pady=(2, 0))
 
     def _build_premium_sidebar(
         self,
@@ -487,19 +515,28 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         use_queue_var,
         auto_arrange_var,
     ):
-        inner = tk.Frame(parent, bg=palette["surface_alt"], padx=16, pady=18)
+        inner = tk.Frame(parent, bg=palette["surface_alt"], padx=18, pady=22)
         inner.pack(fill="both", expand=True)
 
-        tk.Label(inner, text="SETTINGS MENU", bg=palette["surface_alt"], fg=palette["muted"], font=(self.mono_font, 8)).pack(anchor="w")
+        tk.Label(
+            inner,
+            text="WORKSPACE",
+            bg=palette["surface_alt"],
+            fg=palette["muted"],
+            font=(self.mono_font, 8, "bold"),
+        ).pack(anchor="w")
         tk.Label(
             inner,
             textvariable=self._settings_overview_var,
             bg=palette["surface_alt"],
-            fg=palette["primary"],
+            fg=palette["text"],
             justify="left",
-            wraplength=210,
+            wraplength=200,
             font=(self.mono_font, 9),
-        ).pack(anchor="w", pady=(8, 18))
+        ).pack(anchor="w", pady=(6, 4))
+
+        separator = tk.Frame(inner, bg=palette["border"], height=1)
+        separator.pack(fill="x", pady=(14, 14))
 
         menu_shell = tk.Frame(inner, bg=palette["surface_alt"])
         menu_shell.pack(fill="both", expand=True)
@@ -534,38 +571,57 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         menu_canvas.bind("<Configure>", _sync_menu_width)
 
         menu_items = [
-            ("appearance", "*", "Appearance", "Theme, accent, spacing, and scale"),
-            ("general", "⚙", "General", "Core launch and session values"),
-            ("behavior", "⇄", "Behavior", "Queue and dispatch options"),
-            ("email", "@", "Email OTP", "Authorized IMAP inbox reader"),
-            ("profiles", "◈", "Profiles", "Fast preset modes"),
-            ("summary", "▣", "Summary", "Review current control state"),
+            ("appearance", "◐", "Appearance", "Theme, accent, density, scale"),
+            ("general", "◆", "General", "Launch and session values"),
+            ("behavior", "↻", "Behavior", "Dispatch and queue logic"),
+            ("email", "✉", "Email OTP", "IMAP inbox reader"),
+            ("profiles", "▤", "Profiles", "Fast preset modes"),
+            ("summary", "≡", "Summary", "Review current state"),
         ]
 
         for key, icon, title, desc in menu_items:
             outer = tk.Frame(menu_body, bg=palette["surface_alt"])
-            outer.pack(fill="x", pady=5)
+            outer.pack(fill="x", pady=2)
 
-            accent = tk.Frame(outer, bg=palette["surface_alt"], width=4)
+            accent = tk.Frame(outer, bg=palette["surface_alt"], width=3)
             accent.pack(side="left", fill="y")
 
-            btn = tk.Frame(outer, bg=palette["surface_alt"], padx=12, pady=10, cursor="hand2")
+            btn = tk.Frame(outer, bg=palette["surface_alt"], padx=12, pady=11, cursor="hand2")
             btn.pack(side="left", fill="x", expand=True)
 
             top = tk.Frame(btn, bg=palette["surface_alt"])
             top.pack(fill="x")
-            tk.Label(top, text=icon, bg=palette["surface_alt"], fg=palette["primary"], font=(self.display_font, 11)).pack(side="left")
-            tk.Label(top, text=title, bg=palette["surface_alt"], fg=palette["text"], font=(self.display_font, 11)).pack(side="left", padx=(8, 0))
-            tk.Label(btn, text=desc, bg=palette["surface_alt"], fg=palette["muted"], font=(self.mono_font, 8), justify="left").pack(anchor="w", pady=(4, 0))
+            icon_lbl = tk.Label(
+                top,
+                text=icon,
+                bg=palette["surface_alt"],
+                fg=palette["muted"],
+                font=(self.display_font, 12),
+                width=2,
+            )
+            icon_lbl.pack(side="left")
+            title_lbl = tk.Label(
+                top,
+                text=title,
+                bg=palette["surface_alt"],
+                fg=palette["text"],
+                font=(self.display_font, 11, "bold"),
+            )
+            title_lbl.pack(side="left", padx=(6, 0))
+            desc_lbl = tk.Label(
+                btn,
+                text=desc,
+                bg=palette["surface_alt"],
+                fg=palette["muted"],
+                font=(self.mono_font, 8),
+                justify="left",
+            )
+            desc_lbl.pack(anchor="w", pady=(3, 0), padx=(26, 0))
 
-            for widget in (outer, accent, btn, top):
+            for widget in (outer, accent, btn, top, icon_lbl, title_lbl, desc_lbl):
                 widget.bind("<Button-1>", lambda e, page=key: self._open_settings_page(page))
-            for child in btn.winfo_children():
-                child.bind("<Button-1>", lambda e, page=key: self._open_settings_page(page))
-            for child in top.winfo_children():
-                child.bind("<Button-1>", lambda e, page=key: self._open_settings_page(page))
 
-            self._settings_nav_buttons[key] = (outer, accent, btn)
+            self._settings_nav_buttons[key] = (outer, accent, btn, icon_lbl, title_lbl, desc_lbl)
 
         def _bind_menu_mousewheel(widget):
             self._bind_settings_mousewheel(widget, menu_canvas)
@@ -590,10 +646,32 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
 
     def _page_heading(self, parent, palette, eyebrow, title, subtitle):
         wrap = tk.Frame(parent, bg=palette["surface"])
-        wrap.pack(fill="x", pady=(0, 14))
-        tk.Label(wrap, text=eyebrow, bg=palette["surface"], fg=palette["primary"], font=(self.mono_font, 8)).pack(anchor="w")
-        tk.Label(wrap, text=title, bg=palette["surface"], fg=palette["text"], font=(self.display_font, 18)).pack(anchor="w", pady=(4, 0))
-        tk.Label(wrap, text=subtitle, bg=palette["surface"], fg=palette["muted"], font=(self.mono_font, 9)).pack(anchor="w", pady=(4, 0))
+        wrap.pack(fill="x", pady=(0, 18))
+        tk.Label(
+            wrap,
+            text=eyebrow,
+            bg=palette["surface"],
+            fg=palette["primary"],
+            font=(self.mono_font, 8, "bold"),
+        ).pack(anchor="w")
+        tk.Label(
+            wrap,
+            text=title,
+            bg=palette["surface"],
+            fg=palette["text"],
+            font=(self.display_font, 20, "bold"),
+        ).pack(anchor="w", pady=(6, 0))
+        tk.Label(
+            wrap,
+            text=subtitle,
+            bg=palette["surface"],
+            fg=palette["muted"],
+            font=(self.mono_font, 9),
+            wraplength=680,
+            justify="left",
+        ).pack(anchor="w", pady=(4, 10))
+        underline = tk.Frame(wrap, bg=palette["border"], height=1)
+        underline.pack(fill="x")
 
     def _premium_card(self, parent, palette, title, subtitle=None, padding=16):
         if padding == 16:
@@ -602,9 +680,23 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         card = tk.Frame(outer, bg=palette["surface_alt"], padx=padding, pady=padding)
         card.pack(fill="both", expand=True)
         if title:
-            tk.Label(card, text=title, bg=palette["surface_alt"], fg=palette["text"], font=(self.display_font, 12)).pack(anchor="w")
+            tk.Label(
+                card,
+                text=title,
+                bg=palette["surface_alt"],
+                fg=palette["text"],
+                font=(self.display_font, 12, "bold"),
+            ).pack(anchor="w")
         if subtitle:
-            tk.Label(card, text=subtitle, bg=palette["surface_alt"], fg=palette["muted"], font=(self.mono_font, 8)).pack(anchor="w", pady=(4, 10))
+            tk.Label(
+                card,
+                text=subtitle,
+                bg=palette["surface_alt"],
+                fg=palette["muted"],
+                font=(self.mono_font, 8),
+                wraplength=640,
+                justify="left",
+            ).pack(anchor="w", pady=(5, 12))
         return outer, card
 
     def _metric_card(self, parent, palette, title, variable, unit, help_text, step=1, min_value=0):
@@ -612,17 +704,48 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         outer.pack(side="left", fill="both", expand=True, padx=6)
 
         value_row = tk.Frame(card, bg=palette["surface_alt"])
-        value_row.pack(fill="x", pady=(6, 0))
+        value_row.pack(fill="x", pady=(4, 0))
 
-        minus = tk.Button(value_row, text="−", relief="flat", bg=palette["surface"], fg=palette["text"], activebackground=palette["border_alt"], activeforeground=palette["text"], font=(self.display_font, 14), width=3, cursor="hand2", command=lambda: variable.set(max(min_value, variable.get() - step)))
+        def stepper(symbol, cmd, size):
+            wrap = tk.Frame(value_row, bg=palette["border"], padx=1, pady=1)
+            btn = tk.Button(
+                wrap,
+                text=symbol,
+                relief="flat",
+                bd=0,
+                bg=palette["surface"],
+                fg=palette["text"],
+                activebackground=palette["primary"],
+                activeforeground=palette["primary_fg"],
+                font=(self.display_font, size, "bold"),
+                width=3,
+                cursor="hand2",
+                command=cmd,
+            )
+            btn.pack()
+            return wrap
+
+        minus = stepper("−", lambda: variable.set(max(min_value, variable.get() - step)), 14)
         minus.pack(side="left")
 
         center = tk.Frame(value_row, bg=palette["surface_alt"])
         center.pack(side="left", fill="both", expand=True)
-        tk.Label(center, textvariable=variable, bg=palette["surface_alt"], fg=palette["primary"], font=(self.display_font, 24)).pack()
-        tk.Label(center, text=unit, bg=palette["surface_alt"], fg=palette["muted"], font=(self.mono_font, 8)).pack()
+        tk.Label(
+            center,
+            textvariable=variable,
+            bg=palette["surface_alt"],
+            fg=palette["primary"],
+            font=(self.display_font, 26, "bold"),
+        ).pack()
+        tk.Label(
+            center,
+            text=unit.upper(),
+            bg=palette["surface_alt"],
+            fg=palette["muted"],
+            font=(self.mono_font, 8, "bold"),
+        ).pack()
 
-        plus = tk.Button(value_row, text="+", relief="flat", bg=palette["surface"], fg=palette["text"], activebackground=palette["border_alt"], activeforeground=palette["text"], font=(self.display_font, 13), width=3, cursor="hand2", command=lambda: variable.set(variable.get() + step))
+        plus = stepper("+", lambda: variable.set(variable.get() + step), 13)
         plus.pack(side="right")
 
         return outer
@@ -1038,45 +1161,65 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
 
     def _toggle_feature_card(self, parent, palette, title, description, variable):
         outer = tk.Frame(parent, bg=palette["border"], padx=1, pady=1)
-        outer.pack(fill="x", pady=6)
-        card = tk.Frame(outer, bg=palette["surface_alt"], padx=16, pady=14)
+        outer.pack(fill="x", pady=5)
+        card = tk.Frame(outer, bg=palette["surface_alt"], padx=18, pady=16)
         card.pack(fill="x")
 
         left = tk.Frame(card, bg=palette["surface_alt"])
         left.pack(side="left", fill="x", expand=True)
-        tk.Label(left, text=title, bg=palette["surface_alt"], fg=palette["text"], font=(self.display_font, 12)).pack(anchor="w")
-        tk.Label(left, text=description, bg=palette["surface_alt"], fg=palette["muted"], justify="left", wraplength=520, font=(self.mono_font, 8)).pack(anchor="w", pady=(5, 0))
+        title_lbl = tk.Label(
+            left,
+            text=title,
+            bg=palette["surface_alt"],
+            fg=palette["text"],
+            font=(self.display_font, 12, "bold"),
+        )
+        title_lbl.pack(anchor="w")
+        desc_lbl = tk.Label(
+            left,
+            text=description,
+            bg=palette["surface_alt"],
+            fg=palette["muted"],
+            justify="left",
+            wraplength=520,
+            font=(self.mono_font, 8),
+        )
+        desc_lbl.pack(anchor="w", pady=(4, 0))
 
         right = tk.Frame(card, bg=palette["surface_alt"])
-        right.pack(side="right")
+        right.pack(side="right", padx=(20, 0))
 
         state_var = tk.StringVar()
-        state = tk.Label(right, textvariable=state_var, bg=palette["surface_alt"], fg=palette["primary"], font=(self.mono_font, 8))
-        state.pack(anchor="e", pady=(0, 6))
+        state = tk.Label(
+            right,
+            textvariable=state_var,
+            bg=palette["surface_alt"],
+            fg=palette["primary"],
+            font=(self.mono_font, 8, "bold"),
+        )
+        state.pack(anchor="e", pady=(0, 8))
 
-        switch_shell = tk.Frame(right, bg=palette["surface"], width=64, height=30, cursor="hand2")
-        switch_shell.pack(anchor="e")
+        track_border = tk.Frame(right, bg=palette["border"], padx=1, pady=1, cursor="hand2")
+        track_border.pack(anchor="e")
+        switch_shell = tk.Frame(track_border, bg=palette["surface"], width=52, height=26, cursor="hand2")
+        switch_shell.pack()
         switch_shell.pack_propagate(False)
-        knob = tk.Frame(switch_shell, bg=palette["text"], width=24, height=24)
+        knob = tk.Frame(switch_shell, bg=palette["text"], width=20, height=20, highlightthickness=0)
 
         def redraw(*_):
             enabled = bool(variable.get())
-            active_bg = palette.get("nav_active_bg", palette["surface_alt"])
-            state_var.set("ENABLED" if enabled else "DISABLED")
-            card.config(bg=active_bg if enabled else palette["surface_alt"])
-            left.config(bg=active_bg if enabled else palette["surface_alt"])
-            right.config(bg=active_bg if enabled else palette["surface_alt"])
-            state.config(bg=active_bg if enabled else palette["surface_alt"], fg=palette["primary"] if enabled else palette["muted"])
+            state_var.set("ON" if enabled else "OFF")
+            state.config(fg=palette["primary"] if enabled else palette["muted"])
             switch_shell.config(bg=palette["primary"] if enabled else palette["surface"])
-            knob.place(x=36 if enabled else 4, y=3)
+            track_border.config(bg=palette["primary"] if enabled else palette["border"])
+            knob.config(bg="#FFFFFF" if enabled else palette["muted"])
+            knob.place(x=29 if enabled else 3, y=3)
 
         def toggle(_event=None):
             variable.set(not variable.get())
 
-        for widget in (outer, card, left, right, state, switch_shell, knob):
+        for widget in (outer, card, left, right, state, track_border, switch_shell, knob, title_lbl, desc_lbl):
             widget.bind("<Button-1>", toggle)
-        for child in left.winfo_children():
-            child.bind("<Button-1>", toggle)
 
         variable.trace_add("write", redraw)
         redraw()
@@ -1172,54 +1315,100 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
     def _summary_stat_card(self, parent, palette, title, variable, unit):
         outer, card = self._premium_card(parent, palette, title)
         outer.pack(side="left", fill="both", expand=True, padx=6)
-        tk.Label(card, textvariable=variable, bg=palette["surface_alt"], fg=palette["primary"], font=(self.display_font, 22)).pack(anchor="w", pady=(6, 0))
-        tk.Label(card, text=unit, bg=palette["surface_alt"], fg=palette["muted"], font=(self.mono_font, 8)).pack(anchor="w")
+        tk.Label(
+            card,
+            textvariable=variable,
+            bg=palette["surface_alt"],
+            fg=palette["primary"],
+            font=(self.display_font, 24, "bold"),
+        ).pack(anchor="w", pady=(8, 0))
+        tk.Label(
+            card,
+            text=unit.upper(),
+            bg=palette["surface_alt"],
+            fg=palette["muted"],
+            font=(self.mono_font, 8, "bold"),
+        ).pack(anchor="w", pady=(2, 0))
 
     def _build_premium_footer(self, parent, palette, dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, accounts_per_ld_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_app_password_var, email_imap_server_var, email_imap_port_var, email_mailbox_var, email_use_ssl_var, email_unread_only_var, email_sender_filter_var, email_subject_filter_var, email_timeout_var, email_poll_interval_var, email_mark_as_seen_var, appearance_vars):
-        footer = tk.Frame(parent, bg=palette["surface_alt"], padx=18, pady=14, highlightthickness=1, highlightbackground=palette["border_alt"])
+        divider = tk.Frame(parent, bg=palette["border"], height=1)
+        divider.pack(fill="x")
+
+        footer = tk.Frame(parent, bg=palette["surface"], padx=28, pady=16)
         footer.pack(fill="x")
 
-        left = tk.Frame(footer, bg=palette["surface_alt"])
+        left = tk.Frame(footer, bg=palette["surface"])
         left.pack(side="left", fill="x", expand=True)
+        dot = tk.Frame(left, bg=palette["primary"], width=6, height=6)
+        dot.pack(side="left", padx=(0, 8), pady=(6, 0))
         self._footer_state_var = tk.StringVar(value="Changes are local until saved.")
-        tk.Label(left, textvariable=self._footer_state_var, bg=palette["surface_alt"], fg=palette["muted"], font=(self.mono_font, 9)).pack(anchor="w")
+        tk.Label(
+            left,
+            textvariable=self._footer_state_var,
+            bg=palette["surface"],
+            fg=palette["muted"],
+            font=(self.mono_font, 9),
+        ).pack(side="left")
 
-        right = tk.Frame(footer, bg=palette["surface_alt"])
+        right = tk.Frame(footer, bg=palette["surface"])
         right.pack(side="right")
 
-        self._footer_button(right, palette, "Cancel", palette["muted"], palette["surface"], lambda: self._close_settings_dialog(dialog))
+        self._footer_button(
+            right,
+            palette,
+            "Cancel",
+            kind="ghost",
+            command=lambda: self._close_settings_dialog(dialog),
+        )
         self._footer_button(
             right,
             palette,
             "Reset Defaults",
-            "#F59E0B",
-            palette["surface"],
-            lambda: self._apply_settings_profile((2, 8, 15, 2, False, True), "Balanced", parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var),
+            kind="secondary",
+            command=lambda: self._apply_settings_profile((2, 8, 15, 2, False, True), "Balanced", parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var),
         )
         self._footer_button(
             right,
             palette,
             "Save & Apply",
-            palette["surface"],
-            palette["primary"],
-            lambda: self._save_settings_from_dialog(dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, accounts_per_ld_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_app_password_var, email_imap_server_var, email_imap_port_var, email_mailbox_var, email_use_ssl_var, email_unread_only_var, email_sender_filter_var, email_subject_filter_var, email_timeout_var, email_poll_interval_var, email_mark_as_seen_var, appearance_vars),
-            filled=True,
+            kind="primary",
+            command=lambda: self._save_settings_from_dialog(dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, accounts_per_ld_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_app_password_var, email_imap_server_var, email_imap_port_var, email_mailbox_var, email_use_ssl_var, email_unread_only_var, email_sender_filter_var, email_subject_filter_var, email_timeout_var, email_poll_interval_var, email_mark_as_seen_var, appearance_vars),
         )
 
-    def _footer_button(self, parent, palette, text, fg, bg, command, filled=False):
-        wrap = tk.Frame(parent, bg=bg, padx=1, pady=1)
-        wrap.pack(side="right", padx=4)
+    def _footer_button(self, parent, palette, text, kind="ghost", command=None):
+        if kind == "primary":
+            bg = palette["primary"]
+            fg = palette["primary_fg"]
+            active_bg = palette["primary_active"]
+            border = palette["primary"]
+            font = (self.mono_font, 9, "bold")
+        elif kind == "secondary":
+            bg = palette["surface_alt"]
+            fg = palette["text"]
+            active_bg = palette["border_alt"]
+            border = palette["border"]
+            font = (self.mono_font, 9, "bold")
+        else:
+            bg = palette["surface"]
+            fg = palette["muted"]
+            active_bg = palette["surface_alt"]
+            border = palette["border"]
+            font = (self.mono_font, 9)
+
+        wrap = tk.Frame(parent, bg=border, padx=1, pady=1)
+        wrap.pack(side="right", padx=(8, 0))
         tk.Button(
             wrap,
             text=text,
             relief="flat",
-            bg=bg if filled else palette["surface_alt"],
+            bd=0,
+            bg=bg,
             fg=fg,
-            activebackground=palette["border_alt"],
+            activebackground=active_bg,
             activeforeground=fg,
-            font=(self.mono_font, 9),
-            padx=14,
-            pady=7,
+            font=font,
+            padx=18,
+            pady=9,
             cursor="hand2",
             command=command,
         ).pack()
@@ -1340,23 +1529,33 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         for name, page in getattr(self, "_settings_pages", {}).items():
             if name == key:
                 page.lift()
+        P = self.palette
+        active_bg = P.get("nav_active_bg", P["surface_alt"])
         for name, widgets in getattr(self, "_settings_nav_buttons", {}).items():
-            outer, accent, btn = widgets
+            if len(widgets) == 6:
+                outer, accent, btn, icon_lbl, title_lbl, desc_lbl = widgets
+            else:
+                outer, accent, btn = widgets[:3]
+                icon_lbl = title_lbl = desc_lbl = None
             active = name == key
-            active_bg = self.palette.get("nav_active_bg", self.palette["surface_alt"])
-            outer.config(bg=self.palette["border_alt"] if active else self.palette["surface_alt"])
-            accent.config(bg=self.palette["primary"] if active else self.palette["surface_alt"])
-            btn.config(bg=active_bg if active else self.palette["surface_alt"])
+            bg = active_bg if active else P["surface_alt"]
+            outer.config(bg=bg)
+            accent.config(bg=P["primary"] if active else P["surface_alt"])
+            btn.config(bg=bg)
             for child in btn.winfo_children():
                 try:
-                    child.config(bg=active_bg if active else self.palette["surface_alt"])
+                    child.config(bg=bg)
                 except Exception:
                     pass
                 for sub in getattr(child, "winfo_children", lambda: [])():
                     try:
-                        sub.config(bg=active_bg if active else self.palette["surface_alt"])
+                        sub.config(bg=bg)
                     except Exception:
                         pass
+            if icon_lbl is not None:
+                icon_lbl.config(fg=P["primary"] if active else P["muted"])
+                title_lbl.config(fg=P["primary"] if active else P["text"])
+                desc_lbl.config(fg=P["text"] if active else P["muted"])
 
     def _apply_settings_profile(self, values, profile_name, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var):
         parallel, delay, duration, reels, start_same, use_queue = values
