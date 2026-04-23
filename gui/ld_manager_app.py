@@ -68,6 +68,7 @@ from gui.menu_bar import MenuBarMixin
 from gui.pages.analytics_page import DashboardPageMixin
 from gui.pages.devices_page import DevicesPageMixin
 from gui.pages.tasks_page import TasksPageMixin
+from gui.pages.backup_page import BackupPageMixin
 from gui.pages.schedule_page import SchedulePageMixin
 from gui.pages.content_page import ContentPageMixin
 from gui.pages.logs_page import LogsPageMixin
@@ -86,6 +87,7 @@ class LDManagerApp(
     DashboardPageMixin,
     DevicesPageMixin,
     TasksPageMixin,
+    BackupPageMixin,
     SchedulePageMixin,
     ContentPageMixin,
     LogsPageMixin,
@@ -1055,6 +1057,7 @@ class LDManagerApp(
         self.create_devices_tab()
         self.create_tasks_tab()
         self.create_account_hub_tab()
+        self.create_backup_hub_tab()
         self.create_schedule_tab()
         self.create_content_tab()
         self.create_logs_tab()
@@ -1070,9 +1073,10 @@ class LDManagerApp(
             2: "devices",
             3: "automation",
             4: "accounts",
-            5: "schedule",
-            6: "content",
-            7: "logs",
+            5: "backups",
+            6: "schedule",
+            7: "content",
+            8: "logs",
         }
         self._set_sidebar_nav_active(tab_to_nav.get(idx, "analytics"))
         if hasattr(self, "_top_tab_buttons"):
@@ -1085,7 +1089,9 @@ class LDManagerApp(
                 active_label = "Tasks"
             elif idx == 4:
                 active_label = "Account"
-            elif idx == 7:
+            elif idx == 5:
+                active_label = "Backups"
+            elif idx == 8:
                 active_label = "Logs"
             for label, btn in self._top_tab_buttons.items():
                 btn.configure(bootstyle="info" if label == active_label else "secondary-link")
@@ -1097,6 +1103,8 @@ class LDManagerApp(
             self.request_embedded_dashboard_refresh()
         elif idx == 4:
             self.request_embedded_account_refresh()
+        elif idx == 5:
+            self.request_backup_refresh()
 
     def _is_analytics_tab_active(self) -> bool:
         """Return True only when the Analytics tab (index 0) is the visible tab."""
