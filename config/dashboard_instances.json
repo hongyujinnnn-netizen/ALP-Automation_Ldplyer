@@ -12,39 +12,6 @@
       }
     },
     {
-      "name": "LD - Clone-1",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "LD - Clone-2",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "LD - Clone-3",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
       "name": "LD - Clone-4",
       "account": {
         "name": null,
@@ -67,8 +34,9 @@
       }
     },
     {
-      "name": "US - 1",
+      "name": "LD - Juii",
       "account": {
+        "name": null,
         "uid": null,
         "password": null,
         "twofa": null,
@@ -77,23 +45,87 @@
       }
     },
     {
-      "name": "US - 2",
+      "name": "Osaka Chuii",
       "account": {
+        "name": "Osaka Chuii",
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": []
+        "pages": [
+          {
+            "name": "Azúcar Morena Bakery",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "TheBushman Prank",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          }
+        ]
       }
     },
     {
-      "name": "US - 3",
+      "name": "Ryu S. Kennedy",
       "account": {
+        "name": "Leon S. Kennedy",
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": []
+        "pages": [
+          {
+            "name": "Jamreel",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "Demoworld",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "meiileungg",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          }
+        ]
       }
     }
   ]

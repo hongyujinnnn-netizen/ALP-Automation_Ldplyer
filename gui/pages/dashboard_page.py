@@ -167,11 +167,11 @@ class DashboardDialogMixin:
             1 for i in visible
             if (i.get("account") or {}).get("uid") or (i.get("account") or {}).get("mail")
         )
-        total_pages = sum(len((i.get("account") or {}).get("pages") or []) for i in visible)
+        total_pages = sum(len(self._db_account_pages(i.get("account") or {})) for i in visible)
         total_reels_on = sum(
             1
             for i in visible
-            for p in ((i.get("account") or {}).get("pages") or [])
+            for p in self._db_account_pages(i.get("account") or {})
             if (p.get("reels") or {}).get("enabled")
         )
 
@@ -277,7 +277,7 @@ class DashboardDialogMixin:
     def _db_render_instance(self, instance):
         self._clear_frame(self._db_detail_host)
         acc = instance.get("account") or {}
-        pages = acc.get("pages") or []
+        pages = self._db_account_pages(acc)
 
         # ── Account profile row ─────────────────────────────────────── #
         profile = tb.Frame(self._db_detail_host, style="CardInner.TFrame")
@@ -285,7 +285,7 @@ class DashboardDialogMixin:
 
         avatar = tk.Label(
             profile,
-            text=(instance.get("name") or "?")[:1].upper(),
+            text=(acc.get("name") or instance.get("name") or "?")[:1].upper(),
             bg=self.palette["primary"],
             fg="#0B0F17",
             font=(self.display_font, 22, "bold"),
@@ -301,7 +301,7 @@ class DashboardDialogMixin:
         name_row.pack(anchor="w", fill="x")
         tk.Label(
             name_row,
-            text=instance.get("name") or "Unnamed",
+            text=acc.get("name") or instance.get("name") or "Unnamed",
             bg=self.palette["surface"],
             fg=self.palette["text"],
             font=(self.display_font, 16, "bold"),
@@ -555,12 +555,8 @@ class DashboardDialogMixin:
                 pass
 
     def _db_save_all(self):
-        path = self._db_data_path()
         try:
-            path.write_text(
-                json.dumps(self._dashboard_data, indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
+            path = self._db_write_data()
         except Exception as exc:
             MessageBox.showerror("Save Failed", str(exc), parent=self._db_message_parent())
             return
@@ -571,8 +567,29 @@ class DashboardDialogMixin:
         self._dashboard_dirty = True
         self._db_status("Unsaved changes", self.palette["warning"])
 
+    def _db_write_data(self):
+        path = self._db_data_path()
+        path.write_text(
+            json.dumps(self._dashboard_data, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        return path
+
     def _db_instances(self):
         return self._dashboard_data.setdefault("instances", [])
+
+    def _db_blank_instance(self, name):
+        return {
+            "name": name,
+            "account": {
+                "name": None,
+                "uid": None,
+                "password": None,
+                "twofa": None,
+                "mail": None,
+                "pages": [],
+            },
+        }
 
     def _db_device_names(self):
         snapshot = getattr(self, "_ld_snapshot", None) or {}
@@ -587,21 +604,67 @@ class DashboardDialogMixin:
         changed = False
         for name in self._db_device_names():
             if name not in by_name:
-                entry = {
-                    "name": name,
-                    "account": {
-                        "uid": None,
-                        "password": None,
-                        "twofa": None,
-                        "mail": None,
-                        "pages": [],
-                    },
-                }
+                entry = self._db_blank_instance(name)
                 insts.append(entry)
                 by_name[name] = entry
                 changed = True
         if changed:
             self._db_mark_dirty()
+            self._db_write_data()
+            self._dashboard_dirty = False
+
+    def _db_sync_snapshot_changes(self, old_snapshot, new_snapshot):
+        old_snapshot = dict(old_snapshot or {})
+        new_snapshot = dict(new_snapshot or {})
+
+        self._dashboard_load_data()
+        insts = self._db_instances()
+        by_name = {str(i.get("name") or ""): i for i in insts if i.get("name")}
+        changed = False
+
+        removed_names = set(old_snapshot) - set(new_snapshot)
+        added_names = set(new_snapshot) - set(old_snapshot)
+
+        for old_name in sorted(removed_names):
+            old_serial = old_snapshot.get(old_name)
+            if not old_serial:
+                continue
+            matching_new = next(
+                (
+                    new_name for new_name in sorted(added_names)
+                    if new_snapshot.get(new_name) == old_serial
+                ),
+                None,
+            )
+            if not matching_new:
+                continue
+
+            entry = by_name.pop(old_name, None)
+            if entry is None:
+                entry = self._db_blank_instance(matching_new)
+                insts.append(entry)
+            entry["name"] = matching_new
+            by_name[matching_new] = entry
+            added_names.discard(matching_new)
+            changed = True
+            if getattr(self, "_dashboard_selected", None) == old_name:
+                self._dashboard_selected = matching_new
+
+        for name in sorted(new_snapshot):
+            if name not in by_name:
+                entry = self._db_blank_instance(name)
+                insts.append(entry)
+                by_name[name] = entry
+                changed = True
+
+        if changed:
+            self._dashboard_dirty = False
+            self._db_write_data()
+            try:
+                self._db_status("Dashboard synced from LD instances", self.palette["success"])
+            except Exception:
+                pass
+        return changed
 
     def _db_refresh_from_devices(self):
         self._db_sync_from_devices()
@@ -622,6 +685,48 @@ class DashboardDialogMixin:
             if inst.get("name") == name:
                 return inst
         return None
+
+    def _db_default_reels_config(self):
+        return {
+            "enabled": False,
+            "schedule": "Manual",
+            "interval_min": 30,
+            "hashtags": [],
+            "caption_template": "",
+            "source_folder": "",
+        }
+
+    def _db_normalize_page_record(self, page):
+        if isinstance(page, dict):
+            payload = dict(page)
+            name = str(payload.get("name") or "").strip()
+        else:
+            payload = {}
+            name = str(page or "").strip()
+        if not name:
+            return None
+        payload["name"] = name
+        payload.setdefault("page_id", None)
+        payload.setdefault("reels", self._db_default_reels_config())
+        return payload
+
+    def _db_account_pages(self, account):
+        if not isinstance(account, dict):
+            return []
+        pages = account.setdefault("pages", [])
+        normalized = []
+        seen = set()
+        for page in pages:
+            payload = self._db_normalize_page_record(page)
+            if not payload:
+                continue
+            name = payload.get("name")
+            if name in seen:
+                continue
+            seen.add(name)
+            normalized.append(payload)
+        account["pages"] = normalized
+        return normalized
 
     # ─────────────────────────────────────────────────────────────────── #
     # Rendering
@@ -661,7 +766,7 @@ class DashboardDialogMixin:
             if query and query not in name.lower():
                 continue
             inst = by_name.get(name) or {}
-            pages = ((inst.get("account") or {}).get("pages") or [])
+            pages = self._db_account_pages(inst.get("account") or {})
             status = self._db_device_status(name)
             tree.insert(
                 "",
@@ -707,6 +812,7 @@ class DashboardDialogMixin:
     def _db_open_instance_editor(self, instance):
         data = instance
         acc = data.get("account") or {}
+        pages = self._db_account_pages(acc)
 
         win = self._db_modal(f"Account · {data.get('name')}", 540, 500)
 
@@ -723,12 +829,14 @@ class DashboardDialogMixin:
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(2, 14))
 
         vars_map = {
+            "name": tk.StringVar(value=str(acc.get("name") or "")),
             "uid": tk.StringVar(value=str(acc.get("uid") or "")),
             "password": tk.StringVar(value=str(acc.get("password") or "")),
             "twofa": tk.StringVar(value=str(acc.get("twofa") or "")),
             "mail": tk.StringVar(value=str(acc.get("mail") or "")),
         }
         fields = [
+            ("Facebook Name", "name", False),
             ("UID", "uid", False),
             ("Password", "password", True),
             ("2FA Secret", "twofa", True),
@@ -748,11 +856,12 @@ class DashboardDialogMixin:
 
         def commit():
             data["account"] = {
+                "name": vars_map["name"].get().strip() or None,
                 "uid": vars_map["uid"].get().strip() or None,
                 "password": vars_map["password"].get().strip() or None,
                 "twofa": vars_map["twofa"].get().strip() or None,
                 "mail": vars_map["mail"].get().strip() or None,
-                "pages": acc.get("pages") or [],
+                "pages": pages,
             }
             self._db_mark_dirty()
             self._db_save_all()
@@ -771,7 +880,7 @@ class DashboardDialogMixin:
         inst = self._db_selected_instance()
         if not inst:
             return
-        pages = inst.setdefault("account", {}).setdefault("pages", [])
+        pages = self._db_account_pages(inst.setdefault("account", {}))
         if 0 <= idx < len(pages):
             self._db_open_page_editor(idx)
 
@@ -779,7 +888,7 @@ class DashboardDialogMixin:
         inst = self._db_selected_instance()
         if not inst:
             return
-        pages = inst.setdefault("account", {}).setdefault("pages", [])
+        pages = self._db_account_pages(inst.setdefault("account", {}))
         if not (0 <= idx < len(pages)):
             return
         name = pages[idx].get("name") or f"Page {idx + 1}"
@@ -794,7 +903,7 @@ class DashboardDialogMixin:
         inst = self._db_selected_instance()
         if not inst:
             return
-        pages = inst.setdefault("account", {}).setdefault("pages", [])
+        pages = self._db_account_pages(inst.setdefault("account", {}))
         is_new = idx is None
         page = {} if is_new else pages[idx]
 
@@ -829,14 +938,7 @@ class DashboardDialogMixin:
             payload = {
                 "name": name,
                 "page_id": pid_var.get().strip() or None,
-                "reels": page.get("reels") or {
-                    "enabled": False,
-                    "schedule": "Manual",
-                    "interval_min": 30,
-                    "hashtags": [],
-                    "caption_template": "",
-                    "source_folder": "",
-                },
+                "reels": page.get("reels") or self._db_default_reels_config(),
             }
             if is_new:
                 pages.append(payload)
@@ -859,20 +961,13 @@ class DashboardDialogMixin:
         inst = self._db_selected_instance()
         if not inst:
             return
-        pages = inst.setdefault("account", {}).setdefault("pages", [])
+        pages = self._db_account_pages(inst.setdefault("account", {}))
         if not (0 <= page_idx < len(pages)):
             return
         page = pages[page_idx]
         reels = page.setdefault(
             "reels",
-            {
-                "enabled": False,
-                "schedule": "Manual",
-                "interval_min": 30,
-                "hashtags": [],
-                "caption_template": "",
-                "source_folder": "",
-            },
+            self._db_default_reels_config(),
         )
 
         win = self._db_modal(f"Reels · {page.get('name')}", 580, 620)

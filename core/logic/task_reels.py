@@ -1,4 +1,5 @@
 import os
+import json
 import random
 import re
 import subprocess
@@ -8,6 +9,7 @@ from unittest import result
 import xml.etree.ElementTree as ET
 
 from core.task_base import BaseTaskHandler, U2_AVAILABLE, u2
+from core.paths import get_app_paths
 from utils.ip_guard import check_ld_ip_allowed
 
 class ReelsTaskHandler(BaseTaskHandler):
@@ -175,15 +177,18 @@ class ReelsTaskHandler(BaseTaskHandler):
                 self.click_profile_dropdown(d)
 
                 time.sleep(4)
-                try:
-                    page = self.get_name_pages_by_bounds(d, [
-                        "[168,702][336,743]",
-                        "[168,851][328,892]"
-                    ])
-                except Exception as e:
-                    self.log(f"Error occurred while detecting page names on {name}: {e}")
-                    return False
-                self.log(f"Detected page names on {name}: {page}")
+                page = self._get_dashboard_page_names(name)
+                if page:
+                    self.log(f"Using dashboard page names on {name}: {page}")
+                else:
+                    try:
+                        detected_names = self.detect_facebook_page(d)
+                    except Exception as e:
+                        self.log(f"Error occurred while detecting page names on {name}: {e}")
+                        return False
+                    self.log(f"Detected page names on {name}: {detected_names}")
+                    self._sync_detected_pages_to_dashboard(name, detected_names)
+                    page = self._page_names_from_detected_switcher(detected_names)
 
                 time.sleep(4)
                 if not self.click_on_page(d, page, page_to_click=click_pages):
@@ -2098,5 +2103,210 @@ class ReelsTaskHandler(BaseTaskHandler):
         except Exception as e:
             self.log(f"Failed to tap back to account: {e}")
             return False
+        
+    def detect_facebook_page(self, d):
+        """
+        Detect Facebook Pages from Facebook account/page switcher.
 
-    
+        Returns:
+            list[str]: page names found
+        """
+
+        pages = []
+
+        try:
+            # Wait for switcher / account list
+            d(resourceId="com.facebook.katana:id/(name removed)").exists(timeout=3)
+        except Exception:
+            pass
+
+        try:
+            # Get all visible text elements
+            text_elements = d(className="android.view.View")
+
+            for el in text_elements:
+                try:
+                    info = el.info
+                    text = (info.get("text") or "").strip()
+                    desc = (info.get("contentDescription") or "").strip()
+
+                    if not text:
+                        continue
+
+                    # Skip non-page UI text
+                    skip_words = [
+                        "Create Facebook Page",
+                        "Go to Accounts Center",
+                        "Meta",
+                        "Cancel",
+                        "notification",
+                        "notifications",
+                    ]
+
+                    if any(word.lower() in text.lower() for word in skip_words):
+                        continue
+
+                    # Detect page by parent content-desc like:
+                    # "Demoworld, 1 notification"
+                    if desc:
+                        continue
+
+                    # avoid number/notification text
+                    if "notification" in text.lower():
+                        continue
+
+                    # basic valid page name filter
+                    if len(text) >= 2:
+                        pages.append(text)
+
+                except Exception:
+                    continue
+
+            # remove duplicate but keep order
+            clean_pages = []
+            for p in pages:
+                if p not in clean_pages:
+                    clean_pages.append(p)
+
+            self.log(f"Detected Facebook pages: {clean_pages}")
+            return clean_pages
+
+        except Exception as e:
+            self.log(f"Failed to detect Facebook pages: {e}")
+            return []
+
+    def _get_dashboard_page_names(self, instance_name):
+        if not instance_name:
+            return []
+
+        try:
+            paths = get_app_paths()
+            path = paths.config_dir / "dashboard_instances.json"
+            if not path.exists():
+                return []
+
+            data = json.loads(path.read_text(encoding="utf-8")) or {}
+            for instance in data.get("instances") or []:
+                if str(instance.get("name") or "").strip() != str(instance_name).strip():
+                    continue
+                account = instance.get("account") or {}
+                return self._page_names_from_dashboard(account.get("pages") or [])
+        except Exception as exc:
+            self.log(f"Failed to read dashboard pages for {instance_name}: {exc}")
+        return []
+
+    def _page_names_from_dashboard(self, pages):
+        page_names = []
+        for page in pages or []:
+            if isinstance(page, dict):
+                text = str(page.get("name") or "").strip()
+            else:
+                text = str(page or "").strip()
+            if text and text not in page_names:
+                page_names.append(text)
+        return page_names
+
+    def _page_names_from_detected_switcher(self, detected_names):
+        clean_names = []
+        for value in detected_names or []:
+            text = str(value or "").strip()
+            if text and text not in clean_names:
+                clean_names.append(text)
+        if len(clean_names) <= 1:
+            return []
+        return clean_names[1:]
+
+    def _sync_detected_pages_to_dashboard(self, instance_name, detected_names):
+        """
+        Persist Facebook switcher names to dashboard config.
+
+        Facebook returns the main account first, followed by managed pages. The
+        dashboard stores pages as objects so existing reels settings can survive.
+        """
+        clean_names = []
+        for value in detected_names or []:
+            text = str(value or "").strip()
+            if text and text not in clean_names:
+                clean_names.append(text)
+
+        if not instance_name or not clean_names:
+            return False
+
+        account_name = clean_names[0]
+        page_names = self._page_names_from_detected_switcher(clean_names)
+
+        try:
+            paths = get_app_paths()
+            paths.ensure_runtime_dirs()
+            path = paths.config_dir / "dashboard_instances.json"
+            if path.exists():
+                data = json.loads(path.read_text(encoding="utf-8")) or {}
+            else:
+                data = {}
+
+            instances = data.setdefault("instances", [])
+            instance = None
+            for item in instances:
+                if str(item.get("name") or "").strip() == str(instance_name).strip():
+                    instance = item
+                    break
+
+            if instance is None:
+                instance = {"name": instance_name, "account": {}}
+                instances.append(instance)
+
+            account = instance.setdefault("account", {})
+            account["name"] = account_name
+            account.setdefault("uid", None)
+            account.setdefault("password", None)
+            account.setdefault("twofa", None)
+            account.setdefault("mail", None)
+
+            existing_pages = []
+            by_name = {}
+            for page in account.get("pages") or []:
+                if isinstance(page, dict):
+                    page_name = str(page.get("name") or "").strip()
+                    payload = dict(page)
+                else:
+                    page_name = str(page or "").strip()
+                    payload = self._dashboard_page_payload(page_name)
+                if not page_name or page_name == account_name or page_name in by_name:
+                    continue
+                payload.setdefault("name", page_name)
+                payload.setdefault("page_id", None)
+                payload.setdefault("reels", self._dashboard_reels_defaults())
+                by_name[page_name] = payload
+                existing_pages.append(payload)
+
+            for page_name in page_names:
+                if page_name in by_name:
+                    continue
+                payload = self._dashboard_page_payload(page_name)
+                by_name[page_name] = payload
+                existing_pages.append(payload)
+
+            account["pages"] = existing_pages
+            path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+            self.log(f"Updated dashboard config for {instance_name}: account '{account_name}', {len(page_names)} page(s)")
+            return True
+        except Exception as exc:
+            self.log(f"Failed to update dashboard config for {instance_name}: {exc}")
+            return False
+
+    def _dashboard_page_payload(self, name):
+        return {
+            "name": name,
+            "page_id": None,
+            "reels": self._dashboard_reels_defaults(),
+        }
+
+    def _dashboard_reels_defaults(self):
+        return {
+            "enabled": True,
+            "schedule": "Manual",
+            "interval_min": 30,
+            "hashtags": [],
+            "caption_template": "",
+            "source_folder": "",
+        }

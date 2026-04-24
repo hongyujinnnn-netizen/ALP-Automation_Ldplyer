@@ -1517,6 +1517,17 @@ class LDManagerApp(
         if account_cache is not None and account_cache != self._ld_account_cache:
             changed = True
 
+        old_snapshot = dict(self._ld_snapshot)
+        if hasattr(self, "_db_sync_snapshot_changes"):
+            try:
+                if self._db_sync_snapshot_changes(old_snapshot, snapshot):
+                    changed = True
+            except Exception as exc:
+                try:
+                    self.log(f"Failed to sync dashboard LD data: {exc}", "ERROR")
+                except Exception:
+                    pass
+
         self._ld_snapshot = snapshot
         self._ld_checked_names.intersection_update(snapshot.keys())
         self._sync_ld_groups_with_snapshot()
