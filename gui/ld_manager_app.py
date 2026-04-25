@@ -127,6 +127,15 @@ class LDManagerApp(
         self._max_log_records = 5000
         self._last_table_signature = None
         self._ld_search_job = None
+        self._ld_right_hold_job = None
+        self._ld_right_hold_item = None
+        self._ld_right_hold_triggered = False
+        self._ld_right_hold_delay_ms = 550
+        self._ld_drag_toggle_anchor = None
+        self._ld_drag_toggle_last = None
+        self._ld_drag_toggle_active = False
+        self._ld_drag_toggle_target = None
+        self._ld_drag_toggle_visited = set()
         self._main_thread_id = threading.get_ident()
         self._ld_checked_names = set()
         self._command_palette = None
@@ -1024,8 +1033,11 @@ class LDManagerApp(
         )
         
         self.ld_table.pack(fill="both", expand=True)
-        self.ld_table.bind("<Button-3>", self._show_instance_context_menu)
-        self.ld_table.bind("<ButtonRelease-1>", lambda _e: (self.update_selection_info(), self._update_device_focus_card()), add="+")
+        self.ld_table.bind("<ButtonPress-1>", self._on_ld_drag_toggle_start, add="+")
+        self.ld_table.bind("<B1-Motion>", self._on_ld_drag_toggle_motion, add="+")
+        self.ld_table.bind("<ButtonRelease-1>", self._on_ld_drag_toggle_end, add="+")
+        self.ld_table.bind("<ButtonPress-3>", self._on_ld_table_right_press)
+        self.ld_table.bind("<ButtonRelease-3>", self._on_ld_table_right_release)
 
         self.instance_context_menu = tk.Menu(self.root, tearoff=0)
         self.instance_context_menu.add_command(label="Select All", command=self.select_all)
@@ -1514,9 +1526,6 @@ class LDManagerApp(
         changed = force or snapshot != self._ld_snapshot
         if status_cache is not None and status_cache != self._ld_status_cache:
             changed = True
-        if account_cache is not None and account_cache != self._ld_account_cache:
-            changed = True
-
         old_snapshot = dict(self._ld_snapshot)
         if hasattr(self, "_db_sync_snapshot_changes"):
             try:
@@ -1527,6 +1536,11 @@ class LDManagerApp(
                     self.log(f"Failed to sync dashboard LD data: {exc}", "ERROR")
                 except Exception:
                     pass
+
+        if account_cache is not None:
+            account_cache = self._apply_dashboard_account_cache(snapshot, account_cache)
+            if account_cache != self._ld_account_cache:
+                changed = True
 
         self._ld_snapshot = snapshot
         self._ld_checked_names.intersection_update(snapshot.keys())
@@ -1545,16 +1559,250 @@ class LDManagerApp(
         if hasattr(self, "_refresh_log_filter_options"):
             self._refresh_log_filter_options()
 
-    def _show_instance_context_menu(self, event):
-        item = self.ld_table.identify_row(event.y)
+    def _dashboard_account_lookup(self):
+        try:
+            path = self.paths.config_dir / "dashboard_instances.json"
+            if not path.exists():
+                return {}
+            data = json.loads(path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            return {}
+
+        lookup = {}
+        for instance in data.get("instances") or []:
+            name = str(instance.get("name") or "").strip()
+            if not name:
+                continue
+            display = self._dashboard_account_display(instance.get("account") or {})
+            if display:
+                lookup[name] = display
+        return lookup
+
+    def _dashboard_account_display(self, account):
+        if not isinstance(account, dict):
+            return ""
+        for key in ("name", "uid", "mail"):
+            value = str(account.get(key) or "").strip()
+            if value:
+                return value
+        return ""
+
+    def _build_ld_account_cache(self, snapshot):
+        cache = {}
+        for name in snapshot:
+            account = self.account_manager.get_device_account(name)
+            cache[name] = account.get("username", "No account") if account else "No account"
+        return self._apply_dashboard_account_cache(snapshot, cache)
+
+    def _apply_dashboard_account_cache(self, snapshot, account_cache):
+        merged = dict(account_cache or {})
+        dashboard_accounts = self._dashboard_account_lookup()
+        for name in snapshot:
+            dashboard_account = dashboard_accounts.get(name)
+            if dashboard_account:
+                merged[name] = dashboard_account
+            else:
+                merged.setdefault(name, "No account")
+        return merged
+
+    def _on_ld_drag_toggle_start(self, event):
+        try:
+            item = self.ld_table.identify_row(event.y)
+            self._ld_drag_toggle_active = False
+            self._ld_drag_toggle_anchor = item
+            self._ld_drag_toggle_last = item
+            self._ld_drag_toggle_target = None
+            self._ld_drag_toggle_visited = set()
+
+            if not item:
+                self._clear_ld_table_selection()
+                self.update_selection_info()
+                self._update_device_focus_card()
+                return
+
+            currently_selected = bool(self.ld_table.checkboxes.get(item, False))
+            self._ld_drag_toggle_active = True
+            self._ld_drag_toggle_target = not currently_selected
+            self.ld_table.select_item(item)
+            self._set_context_from_ld_item(item)
+        except Exception as exc:
+            self.log(f"LD drag selection start failed: {exc}", "ERROR")
+
+    def _on_ld_drag_toggle_motion(self, event):
+        try:
+            if not getattr(self, "_ld_drag_toggle_active", False):
+                return
+            self._scroll_ld_table_during_drag(event)
+            item = self.ld_table.identify_row(event.y)
+            if not item:
+                return
+            previous = getattr(self, "_ld_drag_toggle_last", None) or getattr(self, "_ld_drag_toggle_anchor", None)
+            for row in self._ld_table_items_between(previous, item):
+                self._toggle_ld_row_selection(row, self._ld_drag_toggle_target)
+            self._ld_drag_toggle_last = item
+            self.ld_table.select_item(item)
+            self._set_context_from_ld_item(item)
+            self.update_selection_info()
+            self._update_device_focus_card()
+        except Exception as exc:
+            self.log(f"LD drag selection motion failed: {exc}", "ERROR")
+
+    def _on_ld_drag_toggle_end(self, _event):
+        try:
+            self._ld_drag_toggle_active = False
+            self._ld_drag_toggle_anchor = None
+            self._ld_drag_toggle_last = None
+            self._ld_drag_toggle_target = None
+            self._ld_drag_toggle_visited = set()
+            self.update_selection_info()
+            self._update_device_focus_card()
+        except Exception as exc:
+            self.log(f"LD drag selection end failed: {exc}", "ERROR")
+
+    def _toggle_ld_row_selection(self, item, selected):
         if not item:
+            return False
+        visited = getattr(self, "_ld_drag_toggle_visited", None)
+        if visited is None:
+            visited = set()
+            self._ld_drag_toggle_visited = visited
+        if item in visited:
+            return False
+        visited.add(item)
+
+        current = bool(self.ld_table.checkboxes.get(item, False))
+        desired = bool(selected)
+        if current != desired:
+            self.ld_table.toggle_checkbox(item)
+        return True
+
+    def _ld_table_items_between(self, start_item, end_item):
+        if not start_item or not end_item:
+            return []
+        items = list(self.ld_table.get_children())
+        if start_item not in items or end_item not in items:
+            return [end_item] if end_item in items else []
+        start = items.index(start_item)
+        end = items.index(end_item)
+        if start > end:
+            start, end = end, start
+        return items[start:end + 1]
+
+    def _clear_ld_table_selection(self):
+        try:
+            for item in self.ld_table.get_children():
+                if self.ld_table.checkboxes.get(item, False):
+                    self.ld_table.toggle_checkbox(item)
+            self.ld_table.select_item(None)
+            self._context_ld_name = None
+            self._context_ld_serial = None
+        except Exception as exc:
+            self.log(f"Failed to clear LD selection: {exc}", "ERROR")
+
+    def _scroll_ld_table_during_drag(self, event):
+        try:
+            height = self.ld_table.winfo_height()
+        except Exception as exc:
+            self.log(f"LD drag auto-scroll failed: {exc}", "ERROR")
+            return
+        margin = 18
+        if event.y < margin:
+            self.ld_table.yview_scroll(-1, "units")
+        elif event.y > max(margin, height - margin):
+            self.ld_table.yview_scroll(1, "units")
+
+    def _on_ld_table_right_press(self, event):
+        try:
+            item = self.ld_table.identify_row(event.y)
+            self._cancel_ld_right_hold()
+            self._ld_right_hold_item = item
+            self._ld_right_hold_triggered = False
+            if not item:
+                return "break"
+
+            self.ld_table.select_item(item)
+            self._set_context_from_ld_item(item)
+            self._ld_right_hold_job = self.root.after(
+                getattr(self, "_ld_right_hold_delay_ms", 550),
+                lambda target=item: self._trigger_ld_right_hold_select(target),
+            )
             return "break"
+        except Exception as exc:
+            self.log(f"LD right-click press failed: {exc}", "ERROR")
+            return "break"
+
+    def _on_ld_table_right_release(self, event):
+        try:
+            item = self.ld_table.identify_row(event.y) or getattr(self, "_ld_right_hold_item", None)
+            hold_triggered = bool(getattr(self, "_ld_right_hold_triggered", False))
+            self._cancel_ld_right_hold()
+
+            if not item:
+                return "break"
+            self.ld_table.select_item(item)
+            self._set_context_from_ld_item(item)
+
+            if hold_triggered:
+                self.update_selection_info()
+                self._update_device_focus_card()
+                return "break"
+
+            self._prepare_ld_context_selection(item)
+            self._show_instance_context_menu(event, item=item)
+            return "break"
+        except Exception as exc:
+            self.log(f"LD right-click release failed: {exc}", "ERROR")
+            return "break"
+
+    def _cancel_ld_right_hold(self):
+        job = getattr(self, "_ld_right_hold_job", None)
+        if job is not None:
+            try:
+                self.root.after_cancel(job)
+            except Exception:
+                pass
+        self._ld_right_hold_job = None
+
+    def _trigger_ld_right_hold_select(self, item):
+        try:
+            self._ld_right_hold_job = None
+            if not item or not hasattr(self, "ld_table") or not self.ld_table.exists(item):
+                return
+            self._ld_right_hold_triggered = True
+            self.ld_table.select_item(item)
+            self._set_context_from_ld_item(item)
+            self._prepare_ld_context_selection(item)
+            self.update_selection_info()
+            self._update_device_focus_card()
+        except Exception as exc:
+            self.log(f"LD right-hold selection failed: {exc}", "ERROR")
+
+    def _prepare_ld_context_selection(self, item):
+        if not item:
+            return
+        if self.ld_table.checkboxes.get(item, False):
+            return
+        for row in self.ld_table.get_children():
+            if self.ld_table.checkboxes.get(row, False):
+                self.ld_table.toggle_checkbox(row)
+        self.ld_table.toggle_checkbox(item)
+        self.update_selection_info()
+
+    def _set_context_from_ld_item(self, item):
         values = self.ld_table.item(item, "values")
         if not values:
+            return False
+        self._context_ld_name = values[0]
+        self._context_ld_serial = values[1] if len(values) > 1 else None
+        return True
+
+    def _show_instance_context_menu(self, event, item=None):
+        item = item or self.ld_table.identify_row(event.y)
+        if not item:
+            return "break"
+        if not self._set_context_from_ld_item(item):
             return "break"
         self.ld_table.select_item(item)
-        self._context_ld_name = values[0]
-        self._context_ld_serial = values[1]
         self._rebuild_instance_group_menu()
         self.instance_context_menu.tk_popup(event.x_root, event.y_root)
         return "break"
@@ -1992,14 +2240,12 @@ class LDManagerApp(
                     self.emulator._build_serial_mapping()
                     snapshot = dict(self.emulator.name_to_serial)
                     status_cache = {}
-                    account_cache = {}
                     for name in snapshot:
                         try:
                             status_cache[name] = "Active" if self.emulator.is_ld_running(name) else "Inactive"
                         except Exception:
                             status_cache[name] = self._ld_status_cache.get(name, "Inactive")
-                        account = self.account_manager.get_device_account(name)
-                        account_cache[name] = account.get("username", "No account") if account else "No account"
+                    account_cache = self._build_ld_account_cache(snapshot)
                     self.root.after_idle(
                         lambda data=snapshot, statuses=status_cache, accounts=account_cache:
                         self._sync_emulator_table(data, statuses, accounts)
@@ -2334,7 +2580,7 @@ Recent Items:
             self.emulator._build_serial_mapping()
             snapshot = dict(self.emulator.name_to_serial)
             status_cache = {name: self._ld_status_cache.get(name, "Inactive") for name in snapshot}
-            account_cache = {name: self._ld_account_cache.get(name, "No account") for name in snapshot}
+            account_cache = self._build_ld_account_cache(snapshot)
             self._fleet_load_state = "ready"
             self._fleet_error_message = ""
             self._sync_emulator_table(snapshot, status_cache, account_cache, force=True)
