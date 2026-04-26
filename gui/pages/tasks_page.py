@@ -59,7 +59,6 @@ class TasksPageMixin:
         self._build_tasks_hero(body)
         self._build_task_type_panel(body)
         self._build_settings_row(body)
-        self._build_maintenance_panel(body)
 
         self._refresh_tasks_summary()
         self._bind_summary_traces()
@@ -68,29 +67,30 @@ class TasksPageMixin:
     # Hero banner
 
     def _build_tasks_hero(self, parent):
-        shell = tk.Frame(parent, bg=self.palette["surface_alt"], highlightthickness=0, bd=0)
-        shell.pack(fill="x", pady=(0, 14))
+        # Outer wrapper — hosts the hero shell plus a thin cyan accent line beneath.
+        wrapper = tk.Frame(parent, bg=self.palette["surface"])
+        wrapper.pack(fill="x", pady=(0, 14))
+
+        shell = tk.Frame(wrapper, bg=self.palette["surface_alt"], highlightthickness=0, bd=0)
+        shell.pack(fill="x")
 
         tk.Frame(shell, bg=_TASKS_PRIMARY, width=5).pack(side="left", fill="y")
 
         inner = tk.Frame(shell, bg=self.palette["surface_alt"], padx=22, pady=20)
         inner.pack(side="left", fill="both", expand=True)
 
-        # Top row: live task title (left) + status chip (right)
-        top_row = tk.Frame(inner, bg=self.palette["surface_alt"])
-        top_row.pack(fill="x")
-
-        self._tasks_hero_title = tk.Label(
-            top_row,
-            text=self._task_display_name(),
+        # Eyebrow label: small cyan tag above the title
+        eyebrow_row = tk.Frame(inner, bg=self.palette["surface_alt"])
+        eyebrow_row.pack(fill="x")
+        tk.Label(
+            eyebrow_row,
+            text="◆ AUTOMATION WORKSPACE",
             bg=self.palette["surface_alt"],
-            fg=self.palette["text"],
-            font=(self.display_font, 18, "bold"),
-        )
-        self._tasks_hero_title.pack(side="left", anchor="w")
-
+            fg=_TASKS_PRIMARY,
+            font=(self.mono_font, 9, "bold"),
+        ).pack(side="left")
         self._tasks_status_chip = tk.Label(
-            top_row,
+            eyebrow_row,
             text="● READY",
             bg=self.palette["surface_alt"],
             fg="#10B981",
@@ -100,15 +100,50 @@ class TasksPageMixin:
         )
         self._tasks_status_chip.pack(side="right", anchor="ne")
 
-        # Subtitle line beneath the title (status · devices · duration)
-        self._tasks_hero_subtitle = tk.Label(
-            inner,
-            text="Ready · — devices · — run",
+        # Title row: live task name (large, accent-colored)
+        title_row = tk.Frame(inner, bg=self.palette["surface_alt"])
+        title_row.pack(fill="x", pady=(6, 0))
+        self._tasks_hero_title = tk.Label(
+            title_row,
+            text=self._task_display_name(),
             bg=self.palette["surface_alt"],
-            fg=self.palette["muted"],
-            font=(self.mono_font, 10),
+            fg=_TASKS_PRIMARY,
+            font=(self.display_font, 20, "bold"),
         )
-        self._tasks_hero_subtitle.pack(anchor="w", pady=(6, 14))
+        self._tasks_hero_title.pack(side="left", anchor="w")
+
+        # Subtitle row — three colored segments separated by muted dots
+        subtitle_row = tk.Frame(inner, bg=self.palette["surface_alt"])
+        subtitle_row.pack(anchor="w", pady=(8, 14))
+
+        def _seg(text, color):
+            lbl = tk.Label(
+                subtitle_row,
+                text=text,
+                bg=self.palette["surface_alt"],
+                fg=color,
+                font=(self.mono_font, 10, "bold"),
+            )
+            lbl.pack(side="left")
+            return lbl
+
+        def _sep():
+            tk.Label(
+                subtitle_row,
+                text="·",
+                bg=self.palette["surface_alt"],
+                fg=self.palette["muted"],
+                font=(self.mono_font, 10),
+            ).pack(side="left", padx=8)
+
+        self._hero_status_seg = _seg("Ready", "#10B981")
+        _sep()
+        self._hero_devices_seg = _seg("— devices", _TASKS_PRIMARY)
+        _sep()
+        self._hero_ending_seg = _seg("— run", _TASKS_WARNING)
+
+        # Thin cyan accent line below the hero — the "dynamic" rail of the page
+        tk.Frame(wrapper, bg=_TASKS_PRIMARY, height=2).pack(fill="x", pady=(0, 0))
 
         # Run / Pause / Stop controls live in the top bar — keeping them off the
         # Tasks page so this surface stays focused on configuration.
@@ -323,40 +358,6 @@ class TasksPageMixin:
     # Templates panel
 
     # ─────────────────────────────────────────────────────────────────── #
-    # Maintenance footer
-
-    def _build_maintenance_panel(self, parent):
-        card = self._create_card_section(
-            parent,
-            "Maintenance",
-            "Snapshot the current setup or jump into deeper settings.",
-        )
-        row = tb.Frame(card, style="CardInner.TFrame")
-        row.pack(fill="x", padx=4, pady=(2, 6))
-
-        actions = [
-            ("Create Backup", self.create_backup),
-            ("Restore Backup", self.restore_backup),
-            ("Settings", self.show_settings_dialog),
-        ]
-        for index, (text, command) in enumerate(actions):
-            btn = self.create_color_button(
-                row,
-                text=text,
-                command=command,
-                base_color=self.palette["surface"],
-                hover_color=self.palette["border_alt"],
-                text_color=self.palette["muted"],
-                padx=10,
-                pady=6,
-                font=(self.mono_font, 9, "bold"),
-            )
-            btn.grid(row=0, column=index, padx=(0 if index == 0 else 8, 0), sticky="ew")
-            row.grid_columnconfigure(index, weight=1)
-
-        # Keep legacy reference for state management consumers
-        self.backup_button = None  # No longer toggled; left for compatibility
-
     # ─────────────────────────────────────────────────────────────────── #
     # Compatibility wrappers (kept so older call sites keep working)
 
@@ -416,12 +417,21 @@ class TasksPageMixin:
         self._sync_task_tile_selection()
         self._refresh_tasks_summary()
 
+    def _add_active_task_accent(self, card):
+        """Add a thin accent stripe at the top of an Active Task card body so
+        the panel visibly recolors when the user switches tasks."""
+        accent = self.TASK_TYPE_META.get(
+            self.task_type_var.get(), ("", "", _TASKS_PRIMARY, "")
+        )[2]
+        tk.Frame(card, bg=accent, height=2).pack(fill="x", pady=(0, 8))
+
     def create_reels_task_settings(self, parent):
         card = self._create_card_section(
             parent,
             f"Active Task — {self._task_display_name()}",
             "Posting controls for page rotation and reels workflow.",
         )
+        self._add_active_task_accent(card)
         grid = self._create_settings_grid(card)
 
         self._add_spinbox_setting(grid, 0, 0, "Post Pages", self.page_per_account, 1, 20)
@@ -435,6 +445,7 @@ class TasksPageMixin:
             f"Active Task — {self._task_display_name()}",
             "Registration controls for account creation loops.",
         )
+        self._add_active_task_accent(card)
         grid = self._create_settings_grid(card)
 
         self._add_spinbox_setting(grid, 0, 0, "Accounts per LD", self.accounts_per_ld, 1, 20)
@@ -447,6 +458,7 @@ class TasksPageMixin:
             f"Active Task — {self._task_display_name()}",
             "Time-bounded browsing — runs for the duration set below, then stops.",
         )
+        self._add_active_task_accent(card)
         grid = self._create_settings_grid(card)
         self._add_spinbox_setting(grid, 0, 0, "Task Duration (min)", self.task_duration, 1, 240)
         tb.Label(
@@ -461,6 +473,7 @@ class TasksPageMixin:
             f"Active Task — {self._task_display_name()}",
             "This task ends automatically when its flow completes.",
         )
+        self._add_active_task_accent(card)
         grid = self._create_settings_grid(card)
         self._add_empty_task_settings_note(grid)
 
@@ -470,6 +483,7 @@ class TasksPageMixin:
             f"Active Task — {self._task_display_name()}",
             "Minimal controls for engagement tasks.",
         )
+        self._add_active_task_accent(card)
         grid = self._create_settings_grid(card)
         self._add_empty_task_settings_note(grid)
 
@@ -479,32 +493,21 @@ class TasksPageMixin:
             "Common Settings",
             "Shared runtime, launch, and shutdown controls.",
         )
-        grid = self._create_settings_grid(card)
 
-        # Run timing
-        self._add_section_header(grid, 0, "R U N   T I M I N G")
-        self._add_spinbox_setting(grid, 1, 0, "Parallel Devices", self.parallel_ld, 1, 10)
-        self._add_spinbox_setting(grid, 1, 1, "Boot Delay (sec)", self.boot_delay, 1, 60)
+        run_box = self._create_group_box(card, "RUN  TIMING", _TASKS_PRIMARY)
+        run_grid = self._create_settings_grid(run_box)
+        self._add_spinbox_setting(run_grid, 0, 0, "Parallel Devices", self.parallel_ld, 1, 10)
+        self._add_spinbox_setting(run_grid, 1, 0, "Boot Delay (sec)", self.boot_delay, 1, 60)
 
-        # Launch options
-        self._add_section_header(grid, 2, "L A U N C H   O P T I O N S")
-        self._add_toggle_setting(grid, 3, 0, "Start Devices Simultaneously", self.start_same_time)
-        self._add_toggle_setting(grid, 3, 1, "Auto Arrange LD", self.auto_arrange_ld)
+        launch_box = self._create_group_box(card, "LAUNCH  OPTIONS", _TASKS_WARNING)
+        launch_grid = self._create_settings_grid(launch_box)
+        self._add_toggle_setting(launch_grid, 0, 0, "Start Devices Simultaneously", self.start_same_time)
+        self._add_toggle_setting(launch_grid, 1, 0, "Auto Arrange LD", self.auto_arrange_ld)
 
-        # Danger zone — visually contained in a bordered frame
-        self._add_section_header(grid, 4, "⚠  D A N G E R   Z O N E", color=_TASKS_DANGER)
-        danger_frame = tk.Frame(
-            grid,
-            bg=self.palette["surface"],
-            highlightbackground=_TASKS_DANGER,
-            highlightthickness=1,
-            bd=0,
-            padx=8,
-            pady=4,
-        )
-        danger_frame.grid(row=5, column=0, columnspan=4, padx=8, pady=(2, 8), sticky="ew")
+        danger_box = self._create_group_box(card, "DANGER  ZONE", _TASKS_DANGER)
+        danger_grid = self._create_settings_grid(danger_box)
         self._add_toggle_setting(
-            danger_frame,
+            danger_grid,
             0,
             0,
             "Auto Shutdown PC After Task",
@@ -512,14 +515,80 @@ class TasksPageMixin:
             bootstyle="danger-round-toggle",
         )
 
-    def _add_section_header(self, parent, row, text, color=None):
-        tk.Label(
+    def _create_group_box(self, parent, title, color):
+        section = tk.Frame(
             parent,
+            bg=self.palette["surface"],
+            bd=0,
+            padx=8,
+            pady=6,
+        )
+        section.pack(fill="x", padx=8, pady=(8, 6))
+
+        header = tk.Frame(section, bg=self.palette["surface"])
+        header.pack(fill="x", pady=(0, 6))
+
+        tk.Frame(header, bg=color, width=3, height=14).pack(side="left", padx=(0, 8))
+
+        title_box = tk.Frame(
+            header,
+            bg=self.palette["surface"],
+            highlightbackground=color,
+            highlightthickness=1,
+            bd=0,
+            padx=8,
+            pady=3,
+        )
+        title_box.pack(side="left")
+
+        title_label = tk.Label(
+            title_box,
+            text=title,
+            bg=self.palette["surface"],
+            fg=color,
+            font=(self.mono_font, 9, "bold"),
+        )
+        title_label.pack(side="left")
+        title_label.configure(fg=color)
+
+        content = tk.Frame(section, bg=self.palette["surface"], padx=12)
+        content.pack(fill="x")
+        return content
+
+    def _add_section_header(self, parent, row, text, color=None):
+        accent = color or _TASKS_PRIMARY
+        bg = self.palette["surface"]
+        wrap = tk.Frame(parent, bg=bg)
+        wrap.grid(row=row, column=0, columnspan=4, padx=8, pady=(12, 4), sticky="ew")
+
+        # Tiny colored bar on the left
+        tk.Frame(wrap, bg=accent, width=3, height=14).pack(side="left", padx=(0, 8))
+        label_box = tk.Frame(
+            wrap,
+            bg=bg,
+            highlightbackground=accent,
+            highlightthickness=1,
+            bd=0,
+            padx=8,
+            pady=3,
+        )
+        label_box.pack(side="left", anchor="w")
+
+        text_label = tk.Label(
+            label_box,
             text=text,
-            bg=self.palette["surface_alt"],
-            fg=color or self.palette["muted"],
-            font=(self.mono_font, 8, "bold"),
-        ).grid(row=row, column=0, columnspan=4, padx=8, pady=(10, 4), sticky="w")
+            bg=bg,
+            fg=accent,
+            foreground=accent,
+            activeforeground=accent,
+            font=(self.mono_font, 9, "bold"),
+        )
+        text_label.pack(side="left", anchor="center")
+        text_label.configure(fg=accent, foreground=accent)
+
+        # Thin trailing line that fades into the section
+        line = tk.Frame(wrap, bg=accent, height=1)
+        line.pack(side="left", fill="x", expand=True, padx=(10, 0), pady=(7, 0))
 
     # ─────────────────────────────────────────────────────────────────── #
     # Helpers
@@ -604,11 +673,14 @@ class TasksPageMixin:
 
     def _refresh_tasks_summary(self):
         title_lbl = getattr(self, "_tasks_hero_title", None)
-        subtitle_lbl = getattr(self, "_tasks_hero_subtitle", None)
-        if title_lbl is None or subtitle_lbl is None:
+        if title_lbl is None:
             return
 
-        title_lbl.configure(text=self._task_display_name())
+        # The big hero title takes the active task's accent so the page
+        # visibly recolors when the user picks a different task tile.
+        task_type = self.task_type_var.get()
+        accent = self.TASK_TYPE_META.get(task_type, ("", "", _TASKS_PRIMARY, ""))[2]
+        title_lbl.configure(text=self._task_display_name(), fg=accent)
 
         try:
             devices = int(self.parallel_ld.get())
@@ -616,18 +688,32 @@ class TasksPageMixin:
         except Exception:
             devices_text = "— devices"
 
-        task_type = self.task_type_var.get()
         if task_type == "scroll":
             try:
                 mins = int(self.task_duration.get())
                 ending_text = f"{mins} min run" if mins < 60 else f"{mins/60:.1f}h run"
             except Exception:
                 ending_text = "— run"
+            ending_color = _TASKS_WARNING
         else:
             ending_text = "ends on flow"
+            ending_color = "#10B981"
 
+        # Status segment color follows the live status word.
         status_word = getattr(self, "_tasks_status_word", "Ready")
-        subtitle_lbl.configure(text=f"{status_word} · {devices_text} · {ending_text}")
+        status_color = {
+            "Ready":   "#10B981",
+            "Running": _TASKS_PRIMARY,
+            "Paused":  _TASKS_WARNING,
+            "Stopped": _TASKS_DANGER,
+        }.get(status_word, "#10B981")
+
+        if hasattr(self, "_hero_status_seg"):
+            self._hero_status_seg.configure(text=status_word, fg=status_color)
+        if hasattr(self, "_hero_devices_seg"):
+            self._hero_devices_seg.configure(text=devices_text, fg=_TASKS_PRIMARY)
+        if hasattr(self, "_hero_ending_seg"):
+            self._hero_ending_seg.configure(text=ending_text, fg=ending_color)
 
     def set_tasks_status(self, status):
         """Update the hero status chip ('ready', 'running', 'paused', 'stopped')."""

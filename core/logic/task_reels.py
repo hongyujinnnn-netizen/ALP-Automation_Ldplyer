@@ -388,7 +388,7 @@ class ReelsTaskHandler(BaseTaskHandler):
         time.sleep(5)
         self.end_to_accoutn_profile(d, name)  
         
-        time.sleep(5)
+        time.sleep(6)
         if clear_cache:
             self.clear_app_cache(d, name)
         
@@ -420,7 +420,7 @@ class ReelsTaskHandler(BaseTaskHandler):
             return False
 
         time.sleep(4)
-        if not self.back_to_account_profile(d):
+        if not self.back_to_account_profile(d, name):
             self.log(f"Failed to switch back to profile on {name}")
             self.push_runtime_state(
                 name,
@@ -2066,31 +2066,24 @@ class ReelsTaskHandler(BaseTaskHandler):
             self.log(f"Error clicking Page-1: {e}")
             return False
 
-    def back_to_account_profile(self, d, timeout=3):
+    def back_to_account_profile(self, d, instance_name=None, timeout=3):
         """
-        Tap the main account/profile card without using account name.
-        Works even when account name changes.
+        Tap the main account/profile card using the Facebook account name from dashboard.
         """
 
         try:
-            # 1) Best selector: profile button usually contains this stable phrase
-            stable_selectors = [
-                {"descriptionContains": "see your profile"},
-                {"descriptionContains": "your profile picture"},
-            ]
+            if isinstance(instance_name, (int, float)) and timeout == 3:
+                timeout = instance_name
+                instance_name = None
 
-            for sel in stable_selectors:
-                obj = d(**sel)
-                if obj.exists(timeout=timeout):
-                    obj.click()
-                    self.log(f"Tapped account profile using selector: {sel}")
-                    return True
-
-            # 2) XPath without account name
+            account_name = self._get_dashboard_account_name(instance_name)
             xpaths = [
-                '//android.widget.Button[contains(@content-desc,"see your profile")]',
-                '//android.widget.ImageView[contains(@content-desc,"your profile picture")]',
+                '//android.widget.Button[contains(@content-desc,"switch into your profile")]'
             ]
+
+            if account_name:
+                switch_desc = self._xpath_literal(f"{account_name}, switch into your profile")
+                xpaths.insert(0, f"//android.widget.Button[@content-desc={switch_desc}]")
 
             for xp in xpaths:
                 obj = d.xpath(xp)
@@ -2225,6 +2218,43 @@ class ReelsTaskHandler(BaseTaskHandler):
         except Exception as exc:
             self.log(f"Failed to read dashboard pages for {instance_name}: {exc}")
         return []
+
+    def _get_dashboard_account_name(self, instance_name):
+        if not instance_name:
+            return ""
+
+        try:
+            paths = get_app_paths()
+            path = paths.config_dir / "dashboard_instances.json"
+            if not path.exists():
+                return ""
+
+            data = json.loads(path.read_text(encoding="utf-8")) or {}
+            for instance in data.get("instances") or []:
+                if str(instance.get("name") or "").strip() != str(instance_name).strip():
+                    continue
+                account = instance.get("account") or {}
+                return str(account.get("name") or "").strip()
+        except Exception as exc:
+            self.log(f"Failed to read dashboard account for {instance_name}: {exc}")
+        return ""
+
+    @staticmethod
+    def _xpath_literal(value):
+        text = str(value)
+        if '"' not in text:
+            return f'"{text}"'
+        if "'" not in text:
+            return f"'{text}'"
+
+        pieces = []
+        parts = text.split('"')
+        for index, part in enumerate(parts):
+            if part:
+                pieces.append(f'"{part}"')
+            if index < len(parts) - 1:
+                pieces.append("'\"'")
+        return "concat(" + ", ".join(pieces) + ")"
 
     def _page_names_from_dashboard(self, pages):
         page_names = []

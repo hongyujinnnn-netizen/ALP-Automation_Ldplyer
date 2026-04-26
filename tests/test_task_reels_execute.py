@@ -25,6 +25,48 @@ def build_test_paths(root: Path) -> AppPaths:
 
 
 class TestReelsExecutePageLoop(unittest.TestCase):
+    def test_back_to_account_profile_uses_dashboard_switch_profile_content_desc(self):
+        logs = []
+        emulator = Mock()
+        pause_event = Mock()
+        handler = ReelsTaskHandler(
+            emulator,
+            lambda message, level="INFO": logs.append(message),
+            pause_event,
+            lambda: True,
+        )
+
+        clicked = Mock()
+        clicked.exists = True
+        device = Mock()
+        device.xpath.return_value = clicked
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            paths = build_test_paths(Path(tmp_dir))
+            paths.ensure_runtime_dirs()
+            (paths.config_dir / "dashboard_instances.json").write_text(
+                json.dumps(
+                    {
+                        "instances": [
+                            {
+                                "name": "US - 01",
+                                "account": {"name": "Osaka Chuii"},
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch("core.logic.task_reels.get_app_paths", return_value=paths):
+                result = handler.back_to_account_profile(device, "US - 01")
+
+        self.assertTrue(result)
+        device.xpath.assert_called_with(
+            '//android.widget.Button[@content-desc="Osaka Chuii, switch into your profile"]'
+        )
+        clicked.click.assert_called_once()
+
     def test_detected_pages_update_dashboard_account_and_pages(self):
         logs = []
         emulator = Mock()
