@@ -775,6 +775,8 @@ class LDManagerApp(
 
     def _handle_task_type_change(self):
         self._update_header_chips()
+        if hasattr(self, "render_task_settings"):
+            self.render_task_settings()
 
     def _on_automation_state(self, state: AutomationState) -> None:
         """Apply UI effects for an AutomationController state transition.
@@ -794,11 +796,15 @@ class LDManagerApp(
                 self.pause_button.config(text="Pause")
             self._set_system_status("Running")
             self._update_header_chips(mode_text="Running")
+            if hasattr(self, "set_top_action_state"):
+                self.set_top_action_state("running")
         elif state is AutomationState.PAUSED:
             if hasattr(self, "pause_button"):
                 self.pause_button.config(text="Resume")
             self._set_system_status("Paused")
             self._update_header_chips(mode_text="Paused")
+            if hasattr(self, "set_top_action_state"):
+                self.set_top_action_state("paused")
         elif state is AutomationState.IDLE:
             if hasattr(self, "start_button"):
                 self.start_button.config(state="normal")
@@ -807,6 +813,8 @@ class LDManagerApp(
                 self.pause_button.config(text="Pause")
             self._set_system_status("Idle")
             self._update_header_chips(mode_text="Idle")
+            if hasattr(self, "set_top_action_state"):
+                self.set_top_action_state("idle")
 
     def _set_system_status(self, status):
         label = status_label(status)
@@ -895,7 +903,7 @@ class LDManagerApp(
             width=14
         )
         self.group_filter_combo.pack(side="left", padx=(6, 12))
-        self.group_filter_combo.bind("<<ComboboxSelected>>", lambda _e: self._render_ld_table())
+        self.group_filter_combo.bind("<<ComboboxSelected>>", lambda _e: self._set_ld_group_filter(self.ld_group_filter_var.get()))
 
         tb.Label(filter_frame, text="Sort", style="Subtitle.TLabel").pack(side="left")
         sort_combo = tb.Combobox(
@@ -1249,20 +1257,100 @@ class LDManagerApp(
             self.group_filter_combo.configure(values=group_values)
         current_filter = self.ld_group_filter_var.get().strip() or "All Groups"
         if current_filter not in group_values:
-            self.ld_group_filter_var.set("All Groups")
+            current_filter = "All Groups"
+            self.ld_group_filter_var.set(current_filter)
+
+        assigned_total = sum(len(members) for members in self._ld_groups.values())
+        snapshot_total = len(getattr(self, "_ld_snapshot", {}) or {})
+        ungrouped_total = max(0, snapshot_total - assigned_total)
 
         if hasattr(self, "device_group_list"):
-            selected_group = self._get_active_group_name()
-            self.device_group_list.delete(0, "end")
-            for group_name in group_names:
-                count = len(self._ld_groups.get(group_name, []))
-                self.device_group_list.insert("end", f"{group_name}  ({count})")
-            if selected_group in group_names:
-                index = group_names.index(selected_group)
-                self.device_group_list.selection_set(index)
+            tree = self.device_group_list
+            selected_group = current_filter if current_filter in self._ld_groups else None
+            query = ""
+            if hasattr(self, "device_group_search_var"):
+                query = (self.device_group_search_var.get() or "").strip().lower()
+
+            self._suppress_group_filter_sync = True
+            try:
+                for item in tree.get_children():
+                    tree.delete(item)
+
+                visible_count = 0
+                for idx, group_name in enumerate(group_names):
+                    if query and query not in group_name.lower():
+                        continue
+                    count = len(self._ld_groups.get(group_name, []))
+                    share_pct = (count / snapshot_total * 100) if snapshot_total else 0
+                    tags = ["even_row" if idx % 2 == 0 else "odd_row"]
+                    if count == 0:
+                        tags.append("group_empty")
+                    if group_name == selected_group:
+                        tags.append("group_active")
+                    try:
+                        tree.insert(
+                            "",
+                            "end",
+                            iid=group_name,
+                            values=(group_name, str(count), f"{share_pct:.0f}%"),
+                            tags=tuple(tags),
+                        )
+                    except Exception:
+                        pass
+                    visible_count += 1
+
+                if selected_group and selected_group in group_names:
+                    try:
+                        if tree.exists(selected_group):
+                            tree.selection_set(selected_group)
+                            tree.see(selected_group)
+                    except Exception:
+                        pass
+                else:
+                    selected_items = tree.selection()
+                    if selected_items:
+                        tree.selection_remove(selected_items)
+            except Exception:
+                visible_count = 0
+            try:
+                self.root.after_idle(lambda: setattr(self, "_suppress_group_filter_sync", False))
+            except Exception:
+                self._suppress_group_filter_sync = False
+
+            if hasattr(self, "device_group_empty"):
+                empty_widget = self.device_group_empty
+                try:
+                    if visible_count == 0:
+                        if not empty_widget.winfo_ismapped():
+                            empty_widget.pack(fill="x", pady=(8, 0))
+                        if not group_names:
+                            empty_widget.configure(text="No groups yet — click Create to add one.")
+                        else:
+                            empty_widget.configure(text="No groups match your search.")
+                    else:
+                        empty_widget.pack_forget()
+                except Exception:
+                    pass
+
+        if hasattr(self, "device_group_total_chip"):
+            self.device_group_total_chip.set_status(
+                "info", text=f"{len(group_names)} group{'s' if len(group_names) != 1 else ''}"
+            )
+        if hasattr(self, "device_group_assigned_chip"):
+            self.device_group_assigned_chip.set_status(
+                "success", text=f"{assigned_total} assigned"
+            )
+        if hasattr(self, "device_group_unassigned_chip"):
+            self.device_group_unassigned_chip.set_status(
+                "muted", text=f"{ungrouped_total} ungrouped"
+            )
         if hasattr(self, "device_group_summary"):
-            assigned = sum(len(members) for members in self._ld_groups.values())
-            self.device_group_summary.config(text=f"{len(group_names)} groups  |  {assigned} assigned")
+            try:
+                self.device_group_summary.config(
+                    text=f"{len(group_names)} groups  |  {assigned_total} assigned"
+                )
+            except Exception:
+                pass
 
     def _extract_group_name(self, display_text):
         if not display_text:
@@ -1270,20 +1358,70 @@ class LDManagerApp(
         return str(display_text).rsplit("  (", 1)[0].strip()
 
     def _get_active_group_name(self):
-        if hasattr(self, "device_group_list"):
-            selection = self.device_group_list.curselection()
-            if selection:
-                return self._extract_group_name(self.device_group_list.get(selection[0]))
         current_filter = self.ld_group_filter_var.get().strip()
-        if current_filter not in ("", "All Groups", "Ungrouped"):
+        if current_filter in getattr(self, "_ld_groups", {}):
+            return current_filter
+        if current_filter in ("All Groups", "Ungrouped"):
+            return None
+        if hasattr(self, "device_group_list"):
+            tree = self.device_group_list
+            try:
+                sel = tree.selection()
+                if sel:
+                    return str(sel[0])
+            except Exception:
+                pass
+        if current_filter:
             return current_filter
         return None
 
-    def _sync_group_filter_from_list(self):
-        group_name = self._get_active_group_name()
-        if group_name:
-            self.ld_group_filter_var.set(group_name)
+    def _set_ld_group_filter(self, group_filter, render=True):
+        group_filter = (group_filter or "All Groups").strip() or "All Groups"
+        group_names = set(getattr(self, "_ld_groups", {}) or {})
+        if group_filter not in ("All Groups", "Ungrouped") and group_filter not in group_names:
+            group_filter = "All Groups"
+
+        self.ld_group_filter_var.set(group_filter)
+        if hasattr(self, "device_group_list"):
+            tree = self.device_group_list
+            self._suppress_group_filter_sync = True
+            try:
+                if group_filter in group_names and tree.exists(group_filter):
+                    if tree.selection() != (group_filter,):
+                        tree.selection_set(group_filter)
+                    tree.see(group_filter)
+                else:
+                    selected_items = tree.selection()
+                    if selected_items:
+                        tree.selection_remove(selected_items)
+            except Exception:
+                pass
+            try:
+                self.root.after_idle(lambda: setattr(self, "_suppress_group_filter_sync", False))
+            except Exception:
+                self._suppress_group_filter_sync = False
+
+        if render:
             self._render_ld_table()
+
+    def _sync_group_filter_from_list(self):
+        if getattr(self, "_suppress_group_filter_sync", False):
+            return
+        group_name = None
+        if hasattr(self, "device_group_list"):
+            try:
+                selected = self.device_group_list.selection()
+                if selected:
+                    group_name = str(selected[0])
+            except Exception:
+                group_name = None
+        if not group_name:
+            group_name = self._get_active_group_name()
+        if not group_name:
+            return
+        if self.ld_group_filter_var.get().strip() == group_name:
+            return
+        self._set_ld_group_filter(group_name)
 
     def create_ld_group(self):
         group_name = simpledialog.askstring("Create Group", "Group name:", parent=self.root)
@@ -2517,9 +2655,8 @@ Recent Items:
         self.ld_search_var.set("")
         self.ld_status_filter_var.set("All")
         self.ld_account_filter_var.set("All")
-        self.ld_group_filter_var.set("All Groups")
         self.ld_sort_var.set("Status")
-        self._render_ld_table()
+        self._set_ld_group_filter("All Groups")
         self.log("Device filters cleared", "INFO")
 
     def select_by_status(self, target_status):

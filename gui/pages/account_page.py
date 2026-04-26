@@ -3,7 +3,6 @@ from tkinter import filedialog, messagebox as MessageBox
 
 import ttkbootstrap as tb
 
-from gui.components.cards import MetricCard
 from gui.components.scrollable_frame import ScrollableFrame
 from gui.components.state_views import StateView
 from gui.components.status import (
@@ -16,6 +15,26 @@ from gui.components.status import (
     status_table_text,
     status_tag,
 )
+
+
+class _AccountOverviewItem:
+    """Tiny shim that mimics MetricCard.set(value, subtitle=...) for the
+    compact overview strip — only the value is displayed; subtitle is ignored.
+
+    Stores the accent color so it can be re-asserted on every refresh; some
+    ttk themes try to repaint tk widgets on theme changes and we want the
+    colored count to stay visible regardless.
+    """
+
+    __slots__ = ("_label", "_color")
+
+    def __init__(self, label, color):
+        self._label = label
+        self._color = color
+
+    def set(self, value, subtitle=None):
+        if self._label.winfo_exists():
+            self._label.configure(text=str(value), foreground=self._color)
 
 
 class AccountDialogMixin:
@@ -68,15 +87,6 @@ class AccountDialogMixin:
         scroller.pack(fill="both", expand=True, padx=2)
         body = scroller.body
 
-        # Hero metric row
-        hero = self._create_card_section(
-            body,
-            "Account Overview",
-            "Live, idle, and unhealthy account counts across the entire fleet.",
-            pady=(0, 12),
-        )
-        self._build_account_hero(hero)
-
         # Filters
         filters = self._create_card_section(
             body,
@@ -92,9 +102,12 @@ class AccountDialogMixin:
             "Accounts",
             "Right click a row for quick edit, delete, and info actions.",
             expand=True,
-            pady=(0, 12),
+            pady=(0, 8),
         )
         self._build_account_table(list_card)
+
+        # Compact overview strip — right-aligned beneath the account list
+        self._build_account_overview_strip(body)
 
         # Actions footer
         actions = self._create_card_section(
@@ -106,28 +119,59 @@ class AccountDialogMixin:
         self._build_account_actions(actions, embedded=embedded)
 
     # ─────────────────────────────────────────────────────────────────── #
-    # Hero metrics
+    # Compact overview strip
 
-    def _build_account_hero(self, parent):
-        row = tb.Frame(parent, style="CardInner.TFrame")
-        row.pack(fill="x")
-        self._acct_metric_cards = {}
+    def _build_account_overview_strip(self, parent):
+        """Tiny right-aligned summary line beneath the account list.
+
+        Replaces the old Account Overview metric-card hero. Each entry is a
+        colored dot + label + count, separated by thin dividers.
+        """
+        strip = tb.Frame(parent, style="CardInner.TFrame")
+        strip.pack(fill="x", pady=(0, 8))
+
+        right = tb.Frame(strip, style="CardInner.TFrame")
+        right.pack(side="right")
+
+        # (key, label, accent hex from palette, bootstyle for tb.Label fallback)
         specs = [
-            ("active", "Live", self.palette["success"], "Online / in-use accounts"),
-            ("idle", "Idle", self.palette.get("muted", "#64748B"), "Ready, not currently used"),
-            ("novery", "No Verify", self.palette["warning"], "Unverified accounts"),
-            ("dead", "Dead", self.palette["danger"], "Flagged or unusable"),
-            ("total", "Total", self.palette["primary"], "All accounts tracked"),
+            ("active", "Live",      self.palette["success"],                    "success"),
+            ("idle",   "Idle",      self.palette.get("muted", "#64748B"),       "secondary"),
+            ("novery", "No Verify", self.palette["warning"],                    "warning"),
+            ("dead",   "Dead",      self.palette["danger"],                     "danger"),
+            ("total",  "Total",     self.palette["primary"],                    "info"),
         ]
-        for idx, (key, label, accent, subtitle) in enumerate(specs):
-            card = MetricCard(row, label, "0", subtitle, accent=accent, palette=self.palette)
-            card.pack(
-                side="left",
-                fill="both",
-                expand=True,
-                padx=(0, 8 if idx < len(specs) - 1 else 0),
-            )
-            self._acct_metric_cards[key] = card
+
+        bg_color = self.palette["surface"]
+        muted = self.palette.get("muted", "#64748B")
+
+        self._acct_metric_cards = {}
+        for idx, (key, label, accent, _bootstyle) in enumerate(specs):
+            if idx > 0:
+                divider = tk.Label(
+                    right,
+                    text="·",
+                    font=(self.mono_font, 9),
+                )
+                divider.configure(bg=bg_color, fg=muted)
+                divider.pack(side="left", padx=4)
+
+            item = tk.Frame(right, bg=bg_color)
+            item.pack(side="left")
+
+            dot = tk.Label(item, text="●", font=(self.mono_font, 9))
+            dot.configure(bg=bg_color, fg=accent)
+            dot.pack(side="left")
+
+            name_lbl = tk.Label(item, text=label, font=(self.mono_font, 9, "bold"))
+            name_lbl.configure(bg=bg_color, fg=accent)
+            name_lbl.pack(side="left", padx=(4, 4))
+
+            value_lbl = tk.Label(item, text="0", font=(self.mono_font, 10, "bold"))
+            value_lbl.configure(bg=bg_color, fg=accent)
+            value_lbl.pack(side="left")
+
+            self._acct_metric_cards[key] = _AccountOverviewItem(value_lbl, accent)
 
     # ─────────────────────────────────────────────────────────────────── #
     # Filters

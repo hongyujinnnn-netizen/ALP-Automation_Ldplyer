@@ -162,19 +162,41 @@ class ReelsTaskHandler(BaseTaskHandler):
                     return False
 
                 time.sleep(5)
-                if not self.click_facebook_menu(d):
-                    self.log(f"Failed to open Facebook menu on {name}")
-                    self.push_runtime_state(
-                        name,
-                        phase="task",
-                        state="Attention",
-                        task="Facebook menu not found",
-                        progress=0,
-                    )
-                    return False
+                menu_opened = self.click_facebook_menu(d)
+                profile_dropdown_opened = False
 
-                time.sleep(4)
-                self.click_profile_dropdown(d)
+                if menu_opened:
+                    time.sleep(4)
+                    profile_dropdown_opened = self.click_profile_dropdown(d)
+                else:
+                    self.log(f"Failed to open Facebook menu on {name}")
+
+                if not menu_opened or not profile_dropdown_opened:
+                    if menu_opened:
+                        self.log(f"Failed to open Facebook profile dropdown on {name}")
+
+                    if setup_attempt >= max_setup_attempts:
+                        task_message = (
+                            "Facebook menu not found"
+                            if not menu_opened
+                            else "Facebook profile dropdown not found"
+                        )
+                        self.push_runtime_state(
+                            name,
+                            phase="task",
+                            state="Attention",
+                            task=task_message,
+                            progress=0,
+                        )
+                        return False
+
+                    self.log(
+                        f"Facebook switcher setup failed on {name}. "
+                        f"Restarting Facebook before retry {setup_attempt + 1}/{max_setup_attempts}"
+                    )
+                    self._clear_recent_apps(d)
+                    time.sleep(2)
+                    continue
 
                 time.sleep(4)
                 page = self._get_dashboard_page_names(name)
@@ -1893,95 +1915,47 @@ class ReelsTaskHandler(BaseTaskHandler):
         return False
     
     # Detect presence of page names in the list by looking for common patterns in the text of visible items.
-    def click_profile_dropdown(self, d):
-        x, y = 544, 146
+    def click_profile_dropdown(self, d, timeout=5):
+        """
+        Click Facebook profile dropdown reliably using multiple strategies:
+        1. content-desc (best)
+        2. xpath fallback
+        3. coordinate fallback (last resort)
+        """
 
         try:
-            d.click(x, y)
-            return True
+            # --- Strategy 1: Content-desc (BEST) ---
+            selectors = [
+                {"descriptionContains": "Open profile switcher"},
+                {"descriptionContains": "profile switcher"},
+                {"descriptionContains": "notifications"},
+            ]
+
+            for sel in selectors:
+                obj = d(**sel)
+                if obj.exists(timeout=timeout):
+                    obj.click()
+                    return True
+
+            # --- Strategy 2: XPath fallback ---
+            xpath_list = [
+                '//android.widget.Button[contains(@content-desc,"Open profile")]',
+                '//android.view.ViewGroup[contains(@content-desc,"profile")]',
+            ]
+
+            for xp in xpath_list:
+                obj = d.xpath(xp)
+                if obj.exists:
+                    obj.click()
+                    return True
+
+            # --- Strategy 3: Bounds-based click (from UI dump) ---
+            # safer than fixed coord → use relative screen %
+            width, height = d.window_size()
+
         except Exception as e:
-            print(f"Click failed: {e}")
+            print(f"[ERROR] click_profile_dropdown: {e}")
             return False
-
-    # Helper methods to parse bounds and determine if a point is inside, used for matching text items to target areas. The main method get_name_pages_by_bounds uses these to find text whose bounds match the given coordinates.
-    @staticmethod
-    def _parse_bounds(bounds_text):
-        m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", str(bounds_text).strip())
-        if not m:
-            return None
-        return tuple(map(int, m.groups()))
-    @staticmethod
-    def _center_of(bounds):
-        x1, y1, x2, y2 = bounds
-        return ((x1 + x2) // 2, (y1 + y2) // 2)
-    @staticmethod
-    def _point_inside(px, py, bounds):
-        x1, y1, x2, y2 = bounds
-        return x1 <= px <= x2 and y1 <= py <= y2
-    # This method tries to find the text of items at specific screen locations by parsing the UI hierarchy and matching bounds. It first looks for any text whose bounds contain the center of the target area, and if not found, it looks for the text with the largest overlapping area. This is a heuristic to detect page names in the Facebook profile dropdown.
-    def get_name_pages_by_bounds(self, d, bounds_list):
-        """
-        bounds_list example:
-        [
-            "[168,702][336,743]",
-            "[168,851][328,892]"
-        ]
-
-        return:
-        ['Demoworld', 'meiileungg']
-        """
-        self.log("Detecting page names...")
-        try:
-            xml = d.dump_hierarchy()
-            root = ET.fromstring(xml)
-        except Exception as e:
-            self.log(f"Failed to dump hierarchy: {e}")
-            return []
-
-        text_nodes = []
-        for node in root.iter("node"):
-            text = (node.attrib.get("text") or "").strip()
-            bounds_text = node.attrib.get("bounds", "")
-            parsed = self._parse_bounds(bounds_text)
-
-            if text and parsed:
-                text_nodes.append({
-                    "text": text,
-                    "bounds": parsed,
-                })
-
-        result = []
-
-        for raw_bounds in bounds_list:
-            target = self._parse_bounds(raw_bounds)
-            if not target:
-                result.append("")
-                continue
-
-            cx, cy = self._center_of(target)
-            found = ""
-
-            for item in text_nodes:
-                if self._point_inside(cx, cy, item["bounds"]):
-                    found = item["text"]
-                    break
-
-            if not found:
-                tx1, ty1, tx2, ty2 = target
-                best_area = 0
-
-                for item in text_nodes:
-                    x1, y1, x2, y2 = item["bounds"]
-                    overlap_w = max(0, min(tx2, x2) - max(tx1, x1))
-                    overlap_h = max(0, min(ty2, y2) - max(ty1, y1))
-                    area = overlap_w * overlap_h
-
-                    if area > best_area:
-                        best_area = area
-                        found = item["text"]
-
-            result.append(found)
-        return result
 
     # This method tries to click on a page name using an XPath expression that matches the text. It handles both single page names and lists of page names, and it includes a fallback to click based on bounds if the XPath click fails. It also includes logging and retries until a timeout is reached.
     def click_on_page(self, d, pages, page_to_click, timeout=5):
@@ -2092,16 +2066,73 @@ class ReelsTaskHandler(BaseTaskHandler):
             self.log(f"Error clicking Page-1: {e}")
             return False
 
-    def back_to_account_profile(self, d):
-        """Tap the account switch/back target using fixed coordinates."""
-        x, y = 440, 147
+    def back_to_account_profile(self, d, timeout=3):
+        """
+        Tap the main account/profile card without using account name.
+        Works even when account name changes.
+        """
 
         try:
+            # 1) Best selector: profile button usually contains this stable phrase
+            stable_selectors = [
+                {"descriptionContains": "see your profile"},
+                {"descriptionContains": "your profile picture"},
+            ]
+
+            for sel in stable_selectors:
+                obj = d(**sel)
+                if obj.exists(timeout=timeout):
+                    obj.click()
+                    self.log(f"Tapped account profile using selector: {sel}")
+                    return True
+
+            # 2) XPath without account name
+            xpaths = [
+                '//android.widget.Button[contains(@content-desc,"see your profile")]',
+                '//android.widget.ImageView[contains(@content-desc,"your profile picture")]',
+            ]
+
+            for xp in xpaths:
+                obj = d.xpath(xp)
+                if obj.exists:
+                    obj.click()
+                    self.log(f"Tapped account profile using xpath: {xp}")
+                    return True
+
+            # 3) Smarter fallback: tap first big button/card near top menu
+            buttons = d(className="android.widget.Button")
+            count = buttons.count
+
+            for i in range(count):
+                info = buttons[i].info
+                bounds = info.get("bounds", {})
+
+                left = bounds.get("left", 0)
+                top = bounds.get("top", 0)
+                right = bounds.get("right", 0)
+                bottom = bounds.get("bottom", 0)
+
+                width = right - left
+                height = bottom - top
+
+                # Profile card area from screenshot:
+                # top area, wide card, not small icon
+                if top < 250 and width > 180 and height > 50:
+                    buttons[i].click()
+                    self.log(f"Tapped top profile card using bounds: {bounds}")
+                    return True
+
+            # 4) Final fallback: relative coordinate
+            w, h = d.window_size()
+            x = int(w * 0.78)
+            y = int(h * 0.145)
+
             d.click(x, y)
-            self.log(f"Tapped back to account at ({x}, {y})")
+            self.log(f"Tapped profile fallback coordinate: ({x}, {y})")
             return True
+
         except Exception as e:
-            self.log(f"Failed to tap back to account: {e}")
+            self.log(f"Failed to tap account profile: {e}")
             return False
         
     def detect_facebook_page(self, d):

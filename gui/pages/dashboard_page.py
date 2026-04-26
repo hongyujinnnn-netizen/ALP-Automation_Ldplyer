@@ -15,7 +15,12 @@ from core.paths import get_app_paths
 from gui.components.cards import FeedCard, MetricCard
 from gui.components.scrollable_frame import ScrollableFrame
 from gui.components.state_views import StateView
-from gui.components.status import StatusPill
+from gui.components.status import (
+    StatusPill,
+    configure_status_tree_tags,
+    status_table_text,
+    status_tag,
+)
 from gui.gradient_progress import GradientProgressBar
 
 
@@ -225,7 +230,7 @@ class DashboardDialogMixin:
             bootstyle="secondary",
         ).pack(side="left", fill="x", expand=True)
 
-        columns = ("name", "status", "pages")
+        columns = ("name", "status", "account", "pages")
         tree = tb.Treeview(
             card,
             columns=columns,
@@ -234,12 +239,16 @@ class DashboardDialogMixin:
             style="Custom.Treeview",
             selectmode="browse",
         )
-        tree.heading("name", text="Instance", anchor="w")
+        tree.heading("name", text="LD Instance", anchor="w")
         tree.heading("status", text="State", anchor="w")
+        tree.heading("account", text="Account", anchor="w")
         tree.heading("pages", text="Pages", anchor="e")
-        tree.column("name", width=180, anchor="w")
-        tree.column("status", width=100, anchor="w")
+        tree.column("name", width=170, anchor="w")
+        tree.column("status", width=120, anchor="w")
+        tree.column("account", width=150, anchor="w")
         tree.column("pages", width=60, anchor="e")
+
+        configure_status_tree_tags(tree, self.palette, include_zebra=True)
 
         scroll = tb.Scrollbar(card, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
         scroll.pack(side="right", fill="y")
@@ -297,11 +306,14 @@ class DashboardDialogMixin:
         meta = tb.Frame(profile, style="CardInner.TFrame")
         meta.pack(side="left", fill="x", expand=True, padx=14)
 
+        ld_name = instance.get("name") or "Unnamed"
+        fb_name = (acc.get("name") or "").strip() or "— Not set"
+
         name_row = tb.Frame(meta, style="CardInner.TFrame")
         name_row.pack(anchor="w", fill="x")
         tk.Label(
             name_row,
-            text=acc.get("name") or instance.get("name") or "Unnamed",
+            text=ld_name,
             bg=self.palette["surface"],
             fg=self.palette["text"],
             font=(self.display_font, 16, "bold"),
@@ -316,6 +328,21 @@ class DashboardDialogMixin:
             padx=8,
             pady=3,
         ).pack(side="left", padx=10)
+
+        fb_row = tb.Frame(meta, style="CardInner.TFrame")
+        fb_row.pack(anchor="w", fill="x", pady=(4, 0))
+        tb.Label(
+            fb_row,
+            text="FACEBOOK",
+            style="MetricLabel.TLabel",
+        ).pack(side="left")
+        tk.Label(
+            fb_row,
+            text=fb_name,
+            bg=self.palette["surface"],
+            fg=self.palette["primary"],
+            font=(self.display_font, 11, "bold"),
+        ).pack(side="left", padx=(8, 0))
 
         tb.Label(
             meta,
@@ -762,18 +789,32 @@ class DashboardDialogMixin:
         device_names = self._db_device_names()
         by_name = {str(i.get("name") or ""): i for i in self._db_instances()}
 
+        row_idx = 0
         for name in device_names:
             if query and query not in name.lower():
                 continue
             inst = by_name.get(name) or {}
-            pages = self._db_account_pages(inst.get("account") or {})
+            acc = inst.get("account") or {}
+            pages = self._db_account_pages(acc)
             status = self._db_device_status(name)
+            account_label = (
+                str(acc.get("name") or acc.get("uid") or acc.get("mail") or "").strip()
+                or "— No account"
+            )
+            zebra = "even_row" if row_idx % 2 == 0 else "odd_row"
             tree.insert(
                 "",
                 "end",
                 iid=name,
-                values=(name, status, str(len(pages))),
+                values=(
+                    name,
+                    status_table_text(status),
+                    account_label,
+                    str(len(pages)),
+                ),
+                tags=(status_tag(status), zebra),
             )
+            row_idx += 1
 
         if self._db_widget_exists(getattr(self, "_db_list_count", None)):
             count = len(device_names)

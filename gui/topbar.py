@@ -67,9 +67,71 @@ class TopBarMixin:
         actions = tb.Frame(top_bar, style="Topbar.TFrame")
         actions.pack(side="right")
         tb.Button(actions, text="⟳ Refresh", bootstyle="outline-info", command=self.refresh_all, width=10).pack(side="left", padx=4)
-        tb.Button(actions, text="Stop All", bootstyle="danger", command=self.stop_automation, width=10).pack(side="left", padx=4)
-        tb.Button(actions, text="▶ Start Automation", bootstyle="info", command=self.start_automation, width=16).pack(side="left", padx=4)
+        self.top_stop_button = tb.Button(
+            actions,
+            text="Stop All",
+            bootstyle="danger",
+            command=self.stop_automation,
+            width=10,
+        )
+        self.top_stop_button.pack(side="left", padx=4)
+
+        # Single action button that morphs between Start / Pause / Resume.
+        self._top_action_mode = "start"
+        self.top_action_button = tb.Button(
+            actions,
+            text="▶ Start Automation",
+            bootstyle="info",
+            command=self._on_top_action_clicked,
+            width=18,
+        )
+        self.top_action_button.pack(side="left", padx=4)
+        self.set_top_action_state("idle")
         self._update_header_chips()
+
+    def _on_top_action_clicked(self):
+        """Dispatch the morphing top-bar action button based on current mode."""
+        mode = getattr(self, "_top_action_mode", "start")
+        if mode == "pause" or mode == "resume":
+            self.toggle_pause()
+        else:
+            self.start_automation()
+
+    def set_top_action_state(self, state):
+        """Update the morphing action button to reflect the automation state.
+
+        Accepts: 'idle' / 'running' / 'paused' (case-insensitive). Anything
+        else falls back to the idle 'Start Automation' look.
+        """
+        button = getattr(self, "top_action_button", None)
+        if button is None:
+            return
+
+        key = str(state).lower() if state is not None else "idle"
+        # Normalise common aliases coming from AutomationState / status words.
+        alias = {
+            "automationstate.running": "running",
+            "automationstate.paused": "paused",
+            "automationstate.idle": "idle",
+            "stopped": "idle",
+            "ready": "idle",
+        }
+        key = alias.get(key, key)
+
+        if key == "running":
+            self._top_action_mode = "pause"
+            button.configure(text="⏸ Pause Automation", bootstyle="warning")
+        elif key == "paused":
+            self._top_action_mode = "resume"
+            button.configure(text="▶ Resume Automation", bootstyle="success")
+        else:
+            self._top_action_mode = "start"
+            button.configure(text="▶ Start Automation", bootstyle="info")
+
+        # Stop is meaningful only while something is running or paused.
+        stop_btn = getattr(self, "top_stop_button", None)
+        if stop_btn is not None:
+            stop_btn.configure(state="normal" if key in ("running", "paused") else "disabled")
 
     def _update_header_chips(self, mode_text=None):
         selected = 0

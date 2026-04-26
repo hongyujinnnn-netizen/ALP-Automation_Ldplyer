@@ -23,14 +23,6 @@ class DevicesPageMixin:
         shell = tb.Frame(scroller.body, style="CardInner.TFrame", padding=(0, 0, 0, 0))
         shell.pack(fill="both", expand=True)
 
-        top = self._create_card_section(
-            shell,
-            "Device Fleet",
-            "All LD instances, group controls, runtime state, and quick actions in one place.",
-            pady=(0, 12),
-        )
-        self._build_devices_hero(top)
-
         lower = tk.PanedWindow(shell, orient=tk.HORIZONTAL, sashwidth=6, bg=self.palette["surface"])
         lower.pack(fill="both", expand=True)
 
@@ -177,40 +169,116 @@ class DevicesPageMixin:
             pady=(0, 12),
         )
 
-        self.device_group_summary = tk.Label(
-            card,
-            text="0 groups  |  0 assigned",
-            bg=self.palette["surface"],
-            fg=self.palette["muted"],
-            font=(self.mono_font, 9),
+        # ── Summary chips row ────────────────────────────────────────── #
+        chip_row = tb.Frame(card, style="CardInner.TFrame")
+        chip_row.pack(fill="x", pady=(0, 10))
+        self.device_group_total_chip = StatusPill(
+            chip_row, "info", palette=self.palette,
+            text="0 groups", font=(self.mono_font, 9), padx=10, pady=3,
         )
-        self.device_group_summary.pack(anchor="w", pady=(0, 8))
+        self.device_group_total_chip.pack(side="left", padx=(0, 6))
+        self.device_group_assigned_chip = StatusPill(
+            chip_row, "success", palette=self.palette,
+            text="0 assigned", font=(self.mono_font, 9), padx=10, pady=3,
+        )
+        self.device_group_assigned_chip.pack(side="left", padx=(0, 6))
+        self.device_group_unassigned_chip = StatusPill(
+            chip_row, "muted", palette=self.palette,
+            text="0 ungrouped", font=(self.mono_font, 9), padx=10, pady=3,
+        )
+        self.device_group_unassigned_chip.pack(side="left")
 
-        self.device_group_list = tk.Listbox(
-            card,
+        # Hidden legacy summary label kept for compatibility with existing callers.
+        self.device_group_summary = tk.Label(card, text="", bg=self.palette["surface"])
+
+        # ── Search + quick filters ───────────────────────────────────── #
+        search_row = tb.Frame(card, style="CardInner.TFrame")
+        search_row.pack(fill="x", pady=(0, 8))
+        tb.Label(search_row, text="SEARCH", style="MetricLabel.TLabel").pack(side="left", padx=(0, 8))
+        self.device_group_search_var = tk.StringVar()
+        self.device_group_search_var.trace_add("write", lambda *_: self._refresh_group_ui())
+        tb.Entry(
+            search_row,
+            textvariable=self.device_group_search_var,
+            bootstyle="secondary",
+        ).pack(side="left", fill="x", expand=True)
+
+        quick_row = tb.Frame(card, style="CardInner.TFrame")
+        quick_row.pack(fill="x", pady=(0, 8))
+        tb.Button(
+            quick_row, text="All", bootstyle="outline-info", width=8,
+            command=lambda: self._set_ld_group_filter("All Groups"),
+        ).pack(side="left", padx=(0, 6))
+        tb.Button(
+            quick_row, text="Ungrouped", bootstyle="outline-warning", width=11,
+            command=lambda: self._set_ld_group_filter("Ungrouped"),
+        ).pack(side="left")
+
+        # ── Group table (Treeview replaces Listbox) ──────────────────── #
+        list_holder = tb.Frame(card, style="CardInner.TFrame")
+        list_holder.pack(fill="both", expand=True)
+
+        columns = ("name", "members", "share")
+        tree = tb.Treeview(
+            list_holder,
+            columns=columns,
+            show="headings",
             height=7,
-            bg="#030508",
-            fg="#c4b5fd",
-            selectbackground=self.palette["surface_alt"],
-            selectforeground=self.palette["text"],
-            relief="flat",
-            highlightthickness=0,
-            font=(self.mono_font, 10),
-            activestyle="none",
+            style="Custom.Treeview",
+            selectmode="browse",
         )
-        self.device_group_list.pack(fill="x", expand=False)
-        self.device_group_list.bind("<<ListboxSelect>>", lambda _e: self._sync_group_filter_from_list())
+        tree.heading("name", text="Group", anchor="w")
+        tree.heading("members", text="LDs", anchor="e")
+        tree.heading("share", text="Share", anchor="e")
+        tree.column("name", width=160, anchor="w")
+        tree.column("members", width=55, anchor="e")
+        tree.column("share", width=70, anchor="e")
 
-        actions = tb.Frame(card, style="CardInner.TFrame")
-        actions.pack(fill="x", pady=(10, 0))
-        tb.Button(actions, text="Create", bootstyle="outline-primary", command=self.create_ld_group, width=10).pack(side="left", padx=(0, 6))
-        tb.Button(actions, text="Rename", bootstyle="outline-secondary", command=self.rename_selected_ld_group, width=10).pack(side="left", padx=(0, 6))
-        tb.Button(actions, text="Delete", bootstyle="outline-danger", command=self.delete_selected_ld_group, width=10).pack(side="left")
+        configure_status_tree_tags(tree, self.palette, include_zebra=True)
+        tree.tag_configure("group_empty", foreground=self.palette["muted"])
+        tree.tag_configure("group_active", foreground=self.palette["primary"])
 
-        actions2 = tb.Frame(card, style="CardInner.TFrame")
-        actions2.pack(fill="x", pady=(8, 0))
-        tb.Button(actions2, text="Assign Selected", bootstyle="info", command=self.assign_selected_to_group, width=16).pack(side="left", padx=(0, 6))
-        tb.Button(actions2, text="Select Group", bootstyle="success", command=self.select_active_group_devices, width=14).pack(side="left")
+        scroll = tb.Scrollbar(list_holder, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
+        scroll.pack(side="right", fill="y")
+        tree.configure(yscrollcommand=scroll.set)
+        tree.pack(side="left", fill="both", expand=True)
+        tree.bind("<<TreeviewSelect>>", lambda _e: self._sync_group_filter_from_list())
+
+        self.device_group_list = tree
+
+        # ── Empty state ──────────────────────────────────────────────── #
+        self.device_group_empty = tb.Label(
+            card,
+            text="No groups yet — click Create to add one.",
+            style="MetricSub.TLabel",
+        )
+
+        # ── Action buttons ───────────────────────────────────────────── #
+        primary_actions = tb.Frame(card, style="CardInner.TFrame")
+        primary_actions.pack(fill="x", pady=(10, 0))
+        tb.Button(
+            primary_actions, text="+ Create", bootstyle="primary",
+            command=self.create_ld_group, width=11,
+        ).pack(side="left", padx=(0, 6))
+        tb.Button(
+            primary_actions, text="Assign Selected", bootstyle="info",
+            command=self.assign_selected_to_group, width=16,
+        ).pack(side="left", padx=(0, 6))
+        tb.Button(
+            primary_actions, text="Select Group", bootstyle="success",
+            command=self.select_active_group_devices, width=14,
+        ).pack(side="left")
+
+        secondary_actions = tb.Frame(card, style="CardInner.TFrame")
+        secondary_actions.pack(fill="x", pady=(6, 0))
+        tb.Button(
+            secondary_actions, text="Rename", bootstyle="outline-secondary",
+            command=self.rename_selected_ld_group, width=10,
+        ).pack(side="left", padx=(0, 6))
+        tb.Button(
+            secondary_actions, text="Delete", bootstyle="outline-danger",
+            command=self.delete_selected_ld_group, width=10,
+        ).pack(side="left")
 
     def _device_page_rows(self):
         names = set(getattr(self, "_ld_snapshot", {}).keys())
