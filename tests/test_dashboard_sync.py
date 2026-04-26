@@ -1,8 +1,9 @@
 import json
+import threading
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from core.paths import AppPaths
 from gui.ld_manager_app import LDManagerApp
@@ -243,6 +244,284 @@ class TestDashboardLdSync(unittest.TestCase):
         app._prepare_ld_context_selection("i3")
 
         self.assertEqual(app.ld_table.checkboxes, {"i1": True, "i2": False, "i3": True})
+
+    def test_dashboard_checkbox_selection_tracks_visible_rows(self):
+        class FakeTree:
+            def __init__(self):
+                self.text = {"LD A": "", "LD B": ""}
+
+            def get_children(self):
+                return tuple(self.text)
+
+            def exists(self, item):
+                return item in self.text
+
+            def item(self, item, **kwargs):
+                if "text" in kwargs:
+                    self.text[item] = kwargs["text"]
+                return {"text": self.text[item]}
+
+        dashboard = self._dashboard()
+        dashboard._ld_snapshot = {"LD A": "emulator-5554", "LD B": "emulator-5556", "LD C": "emulator-5558"}
+        dashboard._db_tree = FakeTree()
+        dashboard._db_widget_exists = lambda widget: widget is not None
+        dashboard._db_update_checked_count = lambda: None
+
+        dashboard._db_set_checked_instances({"LD A", "LD C"})
+        dashboard._db_select_all_visible_instances()
+
+        self.assertEqual(dashboard._dashboard_checked, {"LD A", "LD B", "LD C"})
+        self.assertEqual(dashboard._db_tree.text["LD A"], "☑")
+        self.assertEqual(dashboard._db_tree.text["LD B"], "☑")
+
+    def test_dashboard_clear_checked_account_data_resets_only_checked_instances(self):
+        dashboard = self._dashboard()
+        dashboard._ld_snapshot = {"LD A": "emulator-5554", "LD B": "emulator-5556"}
+        dashboard._dashboard_checked = {"LD A"}
+        dashboard._dashboard_data = {
+            "instances": [
+                {
+                    "name": "LD A",
+                    "account": {
+                        "name": "Facebook A",
+                        "uid": "1001",
+                        "password": "pw",
+                        "twofa": "secret",
+                        "mail": "a@example.com",
+                        "pages": [{"name": "Page A"}],
+                    },
+                },
+                {
+                    "name": "LD B",
+                    "account": {"name": "Facebook B", "uid": None, "mail": None, "pages": [{"name": "Page B"}]},
+                },
+            ]
+        }
+        dashboard._db_save_all = lambda: None
+        dashboard._db_render_all = lambda: None
+        dashboard._db_status = lambda *_args, **_kwargs: None
+
+        with patch("gui.pages.dashboard_page.MessageBox.askyesno", return_value=True):
+            dashboard._db_clear_checked_account_data()
+
+        self.assertIsNone(dashboard._dashboard_data["instances"][0]["account"]["name"])
+        self.assertEqual(dashboard._dashboard_data["instances"][0]["account"]["pages"], [])
+        self.assertEqual(dashboard._dashboard_data["instances"][1]["account"]["name"], "Facebook B")
+
+    def test_dashboard_login_account_parser_accepts_uid_password_email_2fa(self):
+        dashboard = self._dashboard()
+
+        accounts = dashboard._db_parse_login_account_lines(
+            "100000000001,Password123,user@example.com,ABCD EFGH IJKL MNOP\n"
+        )
+
+        self.assertEqual(len(accounts), 1)
+        self.assertEqual(accounts[0]["uid"], "100000000001")
+        self.assertEqual(accounts[0]["password"], "Password123")
+        self.assertEqual(accounts[0]["email"], "user@example.com")
+        self.assertEqual(accounts[0]["twofa"], "ABCD EFGH IJKL MNOP")
+
+    def test_dashboard_assign_login_account_updates_instance_account_fields(self):
+        dashboard = self._dashboard()
+        instance = {
+            "name": "LD A",
+            "account": {
+                "name": None,
+                "uid": None,
+                "password": None,
+                "twofa": None,
+                "mail": None,
+                "pages": [{"name": "Page A"}],
+            },
+        }
+
+        dashboard._db_assign_login_account_to_instance(
+            instance,
+            {
+                "uid": "100000000001",
+                "password": "Password123",
+                "email": "user@example.com",
+                "twofa": "ABCD EFGH IJKL MNOP",
+            },
+        )
+
+        self.assertEqual(instance["account"]["name"], "user@example.com")
+        self.assertEqual(instance["account"]["uid"], "100000000001")
+        self.assertEqual(instance["account"]["password"], "Password123")
+        self.assertEqual(instance["account"]["mail"], "user@example.com")
+        self.assertEqual(instance["account"]["twofa"], "ABCD EFGH IJKL MNOP")
+        self.assertEqual(instance["account"]["pages"][0]["name"], "Page A")
+        self.assertIn("reels", instance["account"]["pages"][0])
+
+    def test_dashboard_login_accounts_save_to_accounts_login_json(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            paths = build_test_paths(Path(tmp_dir))
+            paths.ensure_runtime_dirs()
+            dashboard = self._dashboard()
+
+            with patch("gui.pages.dashboard_page.get_app_paths", return_value=paths):
+                dashboard._db_save_login_accounts(
+                    [
+                        {
+                            "uid": "100000000001",
+                            "password": "Password123",
+                            "email": "user@example.com",
+                            "twofa": "ABCD EFGH IJKL MNOP",
+                        }
+                    ]
+                )
+                saved = json.loads((paths.config_dir / "accounts_login.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            saved,
+            [
+                {
+                    "account_id": "100000000001",
+                    "uid": "100000000001",
+                    "password": "Password123",
+                    "email": "user@example.com",
+                    "twofa": "ABCD EFGH IJKL MNOP",
+                }
+            ],
+        )
+
+    def test_dashboard_login_account_checkbox_is_single_select(self):
+        class FakeTree:
+            def __init__(self):
+                self.text = {"acct-a": "", "acct-b": ""}
+                self.selected = None
+                self.focused = None
+
+            def get_children(self):
+                return tuple(self.text)
+
+            def exists(self, item):
+                return item in self.text
+
+            def item(self, item, **kwargs):
+                if "text" in kwargs:
+                    self.text[item] = kwargs["text"]
+                return {"text": self.text[item]}
+
+            def selection_set(self, item):
+                self.selected = item
+
+            def focus(self, item):
+                self.focused = item
+
+        dashboard = self._dashboard()
+        tree = FakeTree()
+
+        dashboard._db_toggle_login_account_checked(tree, "acct-a")
+        self.assertEqual(dashboard._db_login_checked_account_id, "acct-a")
+        self.assertEqual(tree.text, {"acct-a": "☑", "acct-b": "☐"})
+
+        dashboard._db_toggle_login_account_checked(tree, "acct-b")
+        self.assertEqual(dashboard._db_login_checked_account_id, "acct-b")
+        self.assertEqual(tree.text, {"acct-a": "☐", "acct-b": "☑"})
+
+        dashboard._db_toggle_login_account_checked(tree, "acct-b")
+        self.assertIsNone(dashboard._db_login_checked_account_id)
+        self.assertEqual(tree.text, {"acct-a": "☐", "acct-b": "☐"})
+
+    def test_dashboard_use_login_account_starts_login_task_with_selected_credentials(self):
+        class FakeThread:
+            def __init__(self, target, daemon=False):
+                self.target = target
+                self.daemon = daemon
+
+            def start(self):
+                self.target()
+
+        class FakeAutomationController:
+            def __init__(self, event):
+                self.event = event
+
+            def start(self):
+                self.event.set()
+
+        dashboard = self._dashboard()
+        dashboard.emulator = Mock()
+        dashboard.pause_event = Mock()
+        dashboard.running_event = threading.Event()
+        dashboard.automation_controller = FakeAutomationController(dashboard.running_event)
+        dashboard.update_device_runtime_state = Mock()
+        dashboard.stop_automation = Mock(side_effect=lambda confirm=False: dashboard.running_event.clear())
+        dashboard.log = Mock()
+
+        handler = Mock()
+        handler.execute.return_value = True
+
+        with patch("gui.pages.dashboard_page.threading.Thread", FakeThread), patch(
+            "core.logic.login_account.LoginAccountTaskHandler",
+            return_value=handler,
+        ):
+            dashboard._db_start_login_account_task(
+                {"name": "LD A"},
+                {
+                    "uid": "100000000001",
+                    "password": "Password123",
+                    "email": "user@example.com",
+                    "twofa": "ABCD EFGH IJKL MNOP",
+                },
+            )
+
+        handler.execute.assert_called_once()
+        args, kwargs = handler.execute.call_args
+        self.assertEqual(args[0], "LD A")
+        self.assertEqual(kwargs["identifier"], "100000000001")
+        self.assertEqual(kwargs["identifier_label"], "uid")
+        self.assertEqual(kwargs["email"], "user@example.com")
+        self.assertEqual(kwargs["password"], "Password123")
+        self.assertEqual(kwargs["twofa"], "ABCD EFGH IJKL MNOP")
+        self.assertEqual(kwargs["twofa_secret"], "ABCD EFGH IJKL MNOP")
+        self.assertTrue(kwargs["verify_2fa"])
+        dashboard.stop_automation.assert_called_once_with(confirm=False)
+
+    def test_dashboard_login_task_uses_email_when_uid_is_missing(self):
+        class FakeThread:
+            def __init__(self, target, daemon=False):
+                self.target = target
+
+            def start(self):
+                self.target()
+
+        class FakeAutomationController:
+            def __init__(self, event):
+                self.event = event
+
+            def start(self):
+                self.event.set()
+
+        dashboard = self._dashboard()
+        dashboard.emulator = Mock()
+        dashboard.pause_event = Mock()
+        dashboard.running_event = threading.Event()
+        dashboard.automation_controller = FakeAutomationController(dashboard.running_event)
+        dashboard.update_device_runtime_state = Mock()
+        dashboard.stop_automation = Mock(side_effect=lambda confirm=False: dashboard.running_event.clear())
+        dashboard.log = Mock()
+
+        handler = Mock()
+        handler.execute.return_value = True
+
+        with patch("gui.pages.dashboard_page.threading.Thread", FakeThread), patch(
+            "core.logic.login_account.LoginAccountTaskHandler",
+            return_value=handler,
+        ):
+            dashboard._db_start_login_account_task(
+                {"name": "LD A"},
+                {
+                    "uid": "",
+                    "password": "Password123",
+                    "email": "user@example.com",
+                    "twofa": "",
+                },
+            )
+
+        _, kwargs = handler.execute.call_args
+        self.assertEqual(kwargs["identifier"], "user@example.com")
+        self.assertEqual(kwargs["identifier_label"], "email")
 
 
 if __name__ == "__main__":

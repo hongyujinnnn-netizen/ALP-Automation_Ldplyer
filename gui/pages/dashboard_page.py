@@ -6,8 +6,9 @@ Persists to config/dashboard_instances.json.
 """
 
 import json
+import threading
 import tkinter as tk
-from tkinter import messagebox as MessageBox
+from tkinter import filedialog, messagebox as MessageBox
 
 import ttkbootstrap as tb
 
@@ -45,6 +46,7 @@ class DashboardDialogMixin:
         self._dashboard_load_data()
         self._db_clear_widget_refs()
         self._dashboard_selected = None
+        self._dashboard_checked = set()
         self._dashboard_dirty = False
         self._db_sync_from_devices()
         self._db_build_surface(tab, embedded=True)
@@ -78,6 +80,7 @@ class DashboardDialogMixin:
         win.configure(bg=self.palette["surface"])
         self._dashboard_dialog = win
         self._dashboard_selected = None
+        self._dashboard_checked = set()
         self._dashboard_dirty = False
 
         self._db_sync_from_devices()
@@ -211,6 +214,16 @@ class DashboardDialogMixin:
             pady=3,
         )
         self._db_list_count.pack(side="left")
+        self._db_checked_count = StatusPill(
+            header,
+            "muted",
+            palette=self.palette,
+            text="0 selected",
+            font=(self.mono_font, 9),
+            padx=10,
+            pady=3,
+        )
+        self._db_checked_count.pack(side="left", padx=(6, 0))
         tb.Button(
             header,
             text="Sync Devices",
@@ -234,15 +247,17 @@ class DashboardDialogMixin:
         tree = tb.Treeview(
             card,
             columns=columns,
-            show="headings",
+            show="tree headings",
             height=14,
             style="Custom.Treeview",
             selectmode="browse",
         )
+        tree.heading("#0", text="", anchor="center")
         tree.heading("name", text="LD Instance", anchor="w")
         tree.heading("status", text="State", anchor="w")
         tree.heading("account", text="Account", anchor="w")
         tree.heading("pages", text="Pages", anchor="e")
+        tree.column("#0", width=42, minwidth=42, stretch=False, anchor="center")
         tree.column("name", width=170, anchor="w")
         tree.column("status", width=120, anchor="w")
         tree.column("account", width=150, anchor="w")
@@ -254,8 +269,13 @@ class DashboardDialogMixin:
         scroll.pack(side="right", fill="y")
         tree.configure(yscrollcommand=scroll.set)
         tree.pack(fill="both", expand=True)
+        tree.bind("<Button-1>", self._db_on_tree_click, add="+")
+        tree.bind("<Button-3>", self._db_show_instance_context_menu, add="+")
+        tree.bind("<Control-a>", self._db_select_all_visible_instances)
+        tree.bind("<Control-A>", self._db_select_all_visible_instances)
         tree.bind("<<TreeviewSelect>>", self._db_on_select_instance)
         self._db_tree = tree
+        self._db_context_menu = self._db_build_instance_context_menu(tree)
 
     # ─────────────────────────────────────────────────────────────────── #
     # Detail panel
@@ -541,7 +561,10 @@ class DashboardDialogMixin:
         self._db_status_label = None
         self._db_kpi_cards = {}
         self._db_list_count = None
+        self._db_checked_count = None
         self._db_tree = None
+        self._db_context_menu = None
+        self._db_login_checked_account_id = None
         self._db_detail_host = None
 
     def _db_message_parent(self):
@@ -563,6 +586,11 @@ class DashboardDialogMixin:
         paths = get_app_paths()
         paths.ensure_runtime_dirs()
         return paths.config_dir / "dashboard_instances.json"
+
+    def _db_login_accounts_path(self):
+        paths = get_app_paths()
+        paths.ensure_runtime_dirs()
+        return paths.config_dir / "accounts_login.json"
 
     def _dashboard_load_data(self):
         path = self._db_data_path()
@@ -713,6 +741,18 @@ class DashboardDialogMixin:
                 return inst
         return None
 
+    def _db_instances_by_name(self):
+        return {str(i.get("name") or ""): i for i in self._db_instances() if i.get("name")}
+
+    def _db_checked_names(self):
+        checked = getattr(self, "_dashboard_checked", set())
+        device_names = set(self._db_device_names())
+        return [name for name in self._db_device_names() if name in checked and name in device_names]
+
+    def _db_checked_instances(self):
+        by_name = self._db_instances_by_name()
+        return [by_name[name] for name in self._db_checked_names() if name in by_name]
+
     def _db_default_reels_config(self):
         return {
             "enabled": False,
@@ -787,7 +827,8 @@ class DashboardDialogMixin:
 
         query = (self._db_search_var.get() or "").strip().lower() if hasattr(self, "_db_search_var") else ""
         device_names = self._db_device_names()
-        by_name = {str(i.get("name") or ""): i for i in self._db_instances()}
+        self._dashboard_checked = set(getattr(self, "_dashboard_checked", set())) & set(device_names)
+        by_name = self._db_instances_by_name()
 
         row_idx = 0
         for name in device_names:
@@ -806,6 +847,7 @@ class DashboardDialogMixin:
                 "",
                 "end",
                 iid=name,
+                text="☑" if name in self._dashboard_checked else "☐",
                 values=(
                     name,
                     status_table_text(status),
@@ -817,11 +859,12 @@ class DashboardDialogMixin:
             row_idx += 1
 
         if self._db_widget_exists(getattr(self, "_db_list_count", None)):
-            count = len(device_names)
+            count = len(tree.get_children())
             self._db_list_count.set_status(
                 "info",
                 text=f"{count} instance{'s' if count != 1 else ''}",
             )
+        self._db_update_checked_count()
 
         if self._dashboard_selected and tree.exists(self._dashboard_selected):
             tree.selection_set(self._dashboard_selected)
@@ -839,6 +882,668 @@ class DashboardDialogMixin:
             self._db_render_instance(inst)
         else:
             self._db_render_empty_detail()
+
+    def _db_update_checked_count(self):
+        pill = getattr(self, "_db_checked_count", None)
+        if not self._db_widget_exists(pill):
+            return
+        count = len(self._db_checked_names())
+        pill.set_status(
+            "success" if count else "muted",
+            text=f"{count} selected",
+        )
+
+    def _db_on_tree_click(self, event):
+        tree = getattr(self, "_db_tree", None)
+        if not self._db_widget_exists(tree):
+            return None
+        item = tree.identify_row(event.y)
+        region = tree.identify_region(event.x, event.y)
+        column = tree.identify_column(event.x)
+        if not item:
+            return None
+        if region == "tree" or column == "#0":
+            self._db_toggle_instance_checked(item)
+            tree.selection_set(item)
+            self._dashboard_selected = str(item)
+            self._db_on_select_instance()
+            return "break"
+        return None
+
+    def _db_toggle_instance_checked(self, name, checked=None):
+        checked_names = getattr(self, "_dashboard_checked", set())
+        if checked is None:
+            checked = name not in checked_names
+        if checked:
+            checked_names.add(name)
+        else:
+            checked_names.discard(name)
+        self._dashboard_checked = checked_names
+        tree = getattr(self, "_db_tree", None)
+        if self._db_widget_exists(tree) and tree.exists(name):
+            tree.item(name, text="☑" if checked else "☐")
+        self._db_update_checked_count()
+
+    def _db_set_checked_instances(self, names):
+        self._dashboard_checked = set(names or []) & set(self._db_device_names())
+        tree = getattr(self, "_db_tree", None)
+        if self._db_widget_exists(tree):
+            for item in tree.get_children():
+                tree.item(item, text="☑" if item in self._dashboard_checked else "☐")
+        self._db_update_checked_count()
+
+    def _db_select_all_visible_instances(self, _event=None):
+        tree = getattr(self, "_db_tree", None)
+        if not self._db_widget_exists(tree):
+            return "break"
+        self._db_set_checked_instances(set(getattr(self, "_dashboard_checked", set())) | set(tree.get_children()))
+        return "break"
+
+    def _db_clear_checked_instances(self):
+        self._db_set_checked_instances(set())
+
+    def _db_prepare_context_selection(self, item):
+        if not item:
+            return
+        if item not in getattr(self, "_dashboard_checked", set()):
+            self._db_set_checked_instances({item})
+        tree = getattr(self, "_db_tree", None)
+        if self._db_widget_exists(tree) and tree.exists(item):
+            tree.selection_set(item)
+            self._dashboard_selected = str(item)
+            self._db_on_select_instance()
+
+    def _db_build_instance_context_menu(self, parent):
+        menu = tk.Menu(
+            parent,
+            tearoff=0,
+            bg=self.palette.get("context_bg", "#343A40"),
+            fg=self.palette.get("context_fg", "white"),
+        )
+        menu.add_command(label="Edit Account", command=self._db_edit_checked_account)
+        menu.add_command(label="Add Page", command=self._db_add_page_to_checked)
+        menu.add_command(label="Login", command=self._db_open_login_account_dialog)
+        menu.add_separator()
+        menu.add_command(label="Clear Account Data", command=self._db_clear_checked_account_data)
+        menu.add_command(label="Remove Dashboard Data", command=self._db_delete_checked_dashboard_data)
+        menu.add_separator()
+        menu.add_command(label="Copy Instance Names", command=self._db_copy_checked_names)
+        menu.add_command(label="Select All Visible", command=self._db_select_all_visible_instances)
+        menu.add_command(label="Clear Selection", command=self._db_clear_checked_instances)
+        return menu
+
+    def _db_show_instance_context_menu(self, event):
+        tree = getattr(self, "_db_tree", None)
+        menu = getattr(self, "_db_context_menu", None)
+        if not self._db_widget_exists(tree) or menu is None:
+            return "break"
+        item = tree.identify_row(event.y)
+        if item:
+            self._db_prepare_context_selection(item)
+        if self._db_checked_names():
+            menu.post(event.x_root, event.y_root)
+        return "break"
+
+    def _db_edit_checked_account(self):
+        names = self._db_checked_names()
+        if len(names) > 1:
+            MessageBox.showinfo(
+                "Edit Account",
+                "Edit works on one LD instance at a time. Keep only one checkbox selected.",
+                parent=self._db_message_parent(),
+            )
+            return
+        if names:
+            self._dashboard_selected = names[0]
+        self._db_edit_account()
+
+    def _db_add_page_to_checked(self):
+        names = self._db_checked_names()
+        if len(names) > 1:
+            MessageBox.showinfo(
+                "Add Page",
+                "Add Page works on one LD instance at a time. Keep only one checkbox selected.",
+                parent=self._db_message_parent(),
+            )
+            return
+        if names:
+            self._dashboard_selected = names[0]
+        self._db_add_page()
+
+    def _db_open_login_account_dialog(self):
+        names = self._db_checked_names()
+        if len(names) > 1:
+            MessageBox.showinfo(
+                "Login",
+                "Login setup works on one LD instance at a time. Keep only one checkbox selected.",
+                parent=self._db_message_parent(),
+            )
+            return
+        if names:
+            self._dashboard_selected = names[0]
+        inst = self._db_selected_instance()
+        if not inst:
+            MessageBox.showinfo("Login", "Select an instance first.", parent=self._db_message_parent())
+            return
+
+        win = self._db_modal(f"Login Account · {inst.get('name')}", 920, 640)
+        shell = tb.Frame(win, style="Card.TFrame", padding=18)
+        shell.pack(fill="both", expand=True)
+
+        head = tb.Frame(shell, style="CardInner.TFrame")
+        head.pack(fill="x", pady=(0, 12))
+        tb.Label(head, text="Login Account", style="SectionTitle.TLabel").pack(anchor="w")
+        tb.Label(
+            head,
+            text=f"Choose or import credentials for LD Instance · {inst.get('name')}",
+            style="Subtitle.TLabel",
+        ).pack(anchor="w", pady=(2, 0))
+
+        cols = ("uid", "email", "password", "twofa")
+        self._db_login_checked_account_id = None
+        tree = tb.Treeview(shell, columns=cols, show="tree headings", height=13, style="Custom.Treeview")
+        tree.heading("#0", text="", anchor="center")
+        tree.column("#0", width=42, minwidth=42, stretch=False, anchor="center")
+        for col, width, title in (
+            ("uid", 180, "UID"),
+            ("email", 220, "Email"),
+            ("password", 150, "Password"),
+            ("twofa", 260, "2FA"),
+        ):
+            tree.heading(col, text=title, anchor="w")
+            tree.column(col, width=width, anchor="w")
+        configure_status_tree_tags(tree, self.palette, include_zebra=True)
+
+        scroll = tb.Scrollbar(shell, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
+        scroll.pack(side="right", fill="y")
+        tree.configure(yscrollcommand=scroll.set)
+        tree.pack(fill="both", expand=True)
+        tree.bind("<Button-1>", lambda event: self._db_on_login_account_click(event, tree), add="+")
+
+        def refresh(select_id=None):
+            for item in tree.get_children():
+                tree.delete(item)
+            for idx, account in enumerate(self._db_login_accounts()):
+                account_id = str(account.get("account_id") or self._db_account_row_id(account))
+                tree.insert(
+                    "",
+                    "end",
+                    iid=account_id,
+                    text="☑" if account_id == self._db_login_checked_account_id else "☐",
+                    values=(
+                        str(account.get("uid") or ""),
+                        str(account.get("email") or ""),
+                        "••••••••" if account.get("password") else "",
+                        str(account.get("twofa") or ""),
+                    ),
+                    tags=("even_row" if idx % 2 == 0 else "odd_row",),
+                )
+            if select_id and tree.exists(select_id):
+                tree.selection_set(select_id)
+                tree.focus(select_id)
+                self._db_set_login_account_checked(tree, select_id)
+
+        def selected_account():
+            account_id = getattr(self, "_db_login_checked_account_id", None)
+            if not account_id:
+                MessageBox.showinfo("Login Account", "Check an account first.", parent=win)
+                return None
+            return self._db_get_login_account(str(account_id))
+
+        def use_selected():
+            account = selected_account()
+            if not account:
+                return
+            self._db_assign_login_account_to_instance(inst, account)
+            self._db_mark_dirty()
+            self._db_save_all()
+            self._db_render_all()
+            self._db_status(f"Login account assigned to {inst.get('name')}", self.palette["success"])
+            win.destroy()
+            self._db_start_login_account_task(inst, account)
+
+        footer = tb.Frame(win, style="CardInner.TFrame", padding=(18, 12))
+        footer.pack(fill="x", side="bottom")
+        tb.Button(footer, text="Import Text", bootstyle="info-outline", command=lambda: self._db_import_login_accounts_text(refresh, win), width=13).pack(side="left")
+        tb.Button(footer, text="Import File", bootstyle="info-outline", command=lambda: self._db_import_login_accounts_file(refresh, win), width=12).pack(side="left", padx=(6, 0))
+        tb.Button(footer, text="Add Account", bootstyle="success-outline", command=lambda: self._db_add_login_account(refresh, win), width=13).pack(side="left", padx=(6, 0))
+        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(side="right")
+        tb.Button(footer, text="Use Account", bootstyle="primary", command=use_selected, width=12).pack(side="right", padx=(0, 6))
+
+        refresh()
+
+    def _db_login_accounts(self):
+        try:
+            path = self._db_login_accounts_path()
+            if not path.exists():
+                return []
+            loaded = json.loads(path.read_text(encoding="utf-8")) or []
+            if not isinstance(loaded, list):
+                return []
+            return [self._db_normalize_login_account(row) for row in loaded if isinstance(row, dict)]
+        except Exception as exc:
+            try:
+                self.log(f"Failed to load login accounts: {exc}", "ERROR")
+            except Exception:
+                pass
+            return []
+
+    def _db_account_row_id(self, account):
+        return str(
+            account.get("account_id")
+            or account.get("uid")
+            or account.get("email")
+            or "account"
+        )
+
+    def _db_get_login_account(self, account_id):
+        for account in self._db_login_accounts():
+            if self._db_account_row_id(account) == account_id:
+                return account
+        return {}
+
+    def _db_set_login_account_checked(self, tree, account_id):
+        account_id = str(account_id or "")
+        self._db_login_checked_account_id = account_id or None
+        for item in tree.get_children():
+            tree.item(item, text="☑" if item == self._db_login_checked_account_id else "☐")
+        if self._db_login_checked_account_id and tree.exists(self._db_login_checked_account_id):
+            tree.selection_set(self._db_login_checked_account_id)
+            tree.focus(self._db_login_checked_account_id)
+
+    def _db_toggle_login_account_checked(self, tree, account_id):
+        account_id = str(account_id or "")
+        if getattr(self, "_db_login_checked_account_id", None) == account_id:
+            self._db_set_login_account_checked(tree, "")
+        else:
+            self._db_set_login_account_checked(tree, account_id)
+
+    def _db_on_login_account_click(self, event, tree):
+        item = tree.identify_row(event.y)
+        if not item:
+            return None
+        region = tree.identify_region(event.x, event.y)
+        column = tree.identify_column(event.x)
+        if region == "tree" or column == "#0":
+            self._db_toggle_login_account_checked(tree, item)
+            return "break"
+        return None
+
+    def _db_assign_login_account_to_instance(self, instance, account):
+        acc = instance.setdefault("account", {})
+        pages = self._db_account_pages(acc)
+        acc.update(
+            {
+                "name": str(account.get("email") or account.get("uid") or "").strip() or None,
+                "uid": str(account.get("uid") or "").strip() or None,
+                "password": str(account.get("password") or "").strip() or None,
+                "twofa": str(account.get("twofa") or account.get("2fa") or "").strip() or None,
+                "mail": str(account.get("email") or "").strip() or None,
+                "pages": pages,
+            }
+        )
+
+    def _db_start_login_account_task(self, instance, account):
+        ld_name = str((instance or {}).get("name") or "").strip()
+        if not ld_name:
+            MessageBox.showwarning("Login Account", "LD instance name is missing.", parent=self._db_message_parent())
+            return
+
+        if getattr(self, "running_event", None) is not None and self.running_event.is_set():
+            MessageBox.showwarning(
+                "Login Account",
+                "Automation is already running. Stop it before starting a login task.",
+                parent=self._db_message_parent(),
+            )
+            return
+
+        uid = str(account.get("uid") or "").strip()
+        email = str(account.get("email") or "").strip()
+        identifier = uid or email
+        password = str(account.get("password") or "").strip()
+        if not identifier or not password:
+            MessageBox.showwarning(
+                "Login Account",
+                "Selected account needs UID/email and password.",
+                parent=self._db_message_parent(),
+            )
+            return
+
+        try:
+            from core.logic.login_account import LoginAccountTaskHandler
+        except Exception as exc:
+            MessageBox.showerror("Login Account", f"Login task is not available: {exc}", parent=self._db_message_parent())
+            return
+
+        try:
+            if hasattr(self, "automation_controller"):
+                self.automation_controller.start()
+            elif getattr(self, "running_event", None) is not None:
+                self.running_event.set()
+            if hasattr(self, "status_task_lbl"):
+                self.status_task_lbl.set_status("Running", text="Tasks: 1 active")
+            self.update_device_runtime_state(
+                ld_name,
+                {
+                    "phase": "login",
+                    "state": "Running",
+                    "task": "Facebook login",
+                    "progress": 10,
+                },
+            )
+        except Exception:
+            pass
+
+        handler = LoginAccountTaskHandler(
+            self.emulator,
+            self.log,
+            self.pause_event,
+            lambda: self.running_event.is_set(),
+        )
+        handler.blocked_countries = [
+            code.strip().upper()
+            for code in self._db_var_value("blocked_countries", "").split(",")
+            if code.strip()
+        ]
+        handler.auto_arrange_ld = bool(self._db_var_value("auto_arrange_ld", False))
+        handler.state_callback = self.update_device_runtime_state
+
+        payload = {
+            "identifier": identifier,
+            "identifier_label": "uid" if uid else "email",
+            "email": email,
+            "password": password,
+            "twofa": str(account.get("twofa") or "").strip(),
+            "twofa_secret": str(account.get("twofa") or "").strip(),
+            "clear_before_login": True,
+            "verify_2fa": bool(account.get("twofa")) or bool(self._db_var_value("verify_account", True)),
+        }
+
+        def worker():
+            success = False
+            try:
+                self.log(f"Starting login task for {ld_name}", "INFO")
+                duration = int(self._db_var_value("task_duration", 5)) * 60
+                success = bool(handler.execute(ld_name, duration=duration, **payload))
+                self.log(
+                    f"Login task {'completed' if success else 'failed'} for {ld_name}",
+                    "SUCCESS" if success else "ERROR",
+                )
+                self.update_device_runtime_state(
+                    ld_name,
+                    {
+                        "phase": "login",
+                        "state": "Completed" if success else "Attention",
+                        "task": "Facebook login",
+                        "progress": 100 if success else 0,
+                    },
+                )
+            except Exception as exc:
+                self.log(f"Login task error for {ld_name}: {exc}", "ERROR")
+                self.update_device_runtime_state(
+                    ld_name,
+                    {
+                        "phase": "login",
+                        "state": "Attention",
+                        "task": "Login error",
+                        "progress": 0,
+                    },
+                )
+            finally:
+                try:
+                    if hasattr(self, "performance_monitor"):
+                        self.performance_monitor.end_task_timer(success)
+                except Exception:
+                    pass
+                try:
+                    self.stop_automation(confirm=False)
+                except Exception:
+                    if getattr(self, "running_event", None) is not None:
+                        self.running_event.clear()
+
+        try:
+            if hasattr(self, "performance_monitor"):
+                self.performance_monitor.start_task_timer("dashboard_login_account")
+        except Exception:
+            pass
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _db_var_value(self, attr_name, default=None):
+        value = getattr(self, attr_name, default)
+        if hasattr(value, "get"):
+            try:
+                return value.get()
+            except Exception:
+                return default
+        return value
+
+    def _db_parse_login_account_lines(self, text):
+        accounts = []
+        for raw_line in str(text or "").splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.lower().startswith("uid,") or line.lower().startswith("facebook_uid,"):
+                continue
+            parts = [part.strip() for part in line.split(",")]
+            if len(parts) < 4:
+                continue
+            uid, password, email, twofa = parts[:4]
+            if not (uid or email) or not password:
+                continue
+            accounts.append(
+                self._db_normalize_login_account(
+                    {
+                        "uid": uid,
+                        "password": password,
+                        "email": email,
+                        "twofa": twofa,
+                    }
+                )
+            )
+        return accounts
+
+    def _db_normalize_login_account(self, account):
+        uid = str(account.get("uid") or account.get("facebook_uid") or "").strip()
+        email = str(account.get("email") or account.get("mail") or "").strip()
+        password = str(account.get("password") or "").strip()
+        twofa = str(account.get("twofa") or account.get("2fa") or "").strip()
+        account_id = str(account.get("account_id") or uid or email).strip()
+        return {
+            "account_id": account_id,
+            "uid": uid,
+            "password": password,
+            "email": email,
+            "twofa": twofa,
+        }
+
+    def _db_save_login_accounts(self, accounts):
+        existing_accounts = self._db_login_accounts()
+        by_key = {}
+        for account in existing_accounts:
+            key = self._db_login_account_key(account)
+            if key:
+                by_key[key] = account
+
+        saved = []
+        for account in accounts:
+            clean = self._db_normalize_login_account(account)
+            if not (clean["uid"] or clean["email"]) or not clean["password"]:
+                continue
+            key = self._db_login_account_key(clean)
+            by_key[key] = clean
+            saved.append(clean)
+
+        records = sorted(by_key.values(), key=lambda row: (row.get("email") or "", row.get("uid") or ""))
+        self._db_login_accounts_path().write_text(
+            json.dumps(records, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        return saved
+
+    def _db_login_account_key(self, account):
+        uid = str(account.get("uid") or "").strip()
+        email = str(account.get("email") or "").strip()
+        return uid or email
+
+    def _db_import_login_accounts_text(self, refresh, parent):
+        win = self._db_modal("Import Login Accounts", 640, 420)
+        if parent is not None:
+            try:
+                win.transient(parent)
+            except Exception:
+                pass
+        body = tb.Frame(win, style="Card.TFrame", padding=18)
+        body.pack(fill="both", expand=True)
+        tb.Label(body, text="Import Login Accounts", style="SectionTitle.TLabel").pack(anchor="w")
+        tb.Label(body, text="Format: UID,Password,email,2fa", style="Subtitle.TLabel").pack(anchor="w", pady=(2, 10))
+        text = tk.Text(
+            body,
+            height=10,
+            bg=self.palette["surface_alt"],
+            fg=self.palette["text"],
+            insertbackground=self.palette["primary"],
+            relief="flat",
+            font=(self.mono_font, 10),
+            wrap="none",
+            highlightthickness=1,
+            highlightbackground=self.palette["border"],
+        )
+        text.pack(fill="both", expand=True)
+        text.insert("1.0", "UID,Password,email@example.com,2FA SECRET")
+
+        def commit():
+            accounts = self._db_parse_login_account_lines(text.get("1.0", "end"))
+            if not accounts:
+                MessageBox.showwarning("Import Login Accounts", "No valid account lines found.", parent=win)
+                return
+            saved = self._db_save_login_accounts(accounts)
+            refresh(str(saved[-1].get("account_id") or "") if saved else None)
+            self._db_status(f"Imported {len(saved)} login account(s)", self.palette["success"])
+            win.destroy()
+
+        footer = tb.Frame(win, style="CardInner.TFrame", padding=(18, 12))
+        footer.pack(fill="x", side="bottom")
+        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(side="left")
+        tb.Button(footer, text="Import", bootstyle="primary", command=commit, width=10).pack(side="right")
+
+    def _db_import_login_accounts_file(self, refresh, parent):
+        file_path = filedialog.askopenfilename(
+            parent=parent,
+            title="Import Login Accounts",
+            filetypes=[("Text / CSV", "*.txt *.csv"), ("All Files", "*.*")],
+        )
+        if not file_path:
+            return
+        try:
+            text = open(file_path, "r", encoding="utf-8-sig").read()
+        except OSError as exc:
+            MessageBox.showerror("Import Login Accounts", str(exc), parent=parent)
+            return
+        accounts = self._db_parse_login_account_lines(text)
+        if not accounts:
+            MessageBox.showwarning("Import Login Accounts", "No valid account lines found.", parent=parent)
+            return
+        saved = self._db_save_login_accounts(accounts)
+        refresh(str(saved[-1].get("account_id") or "") if saved else None)
+        self._db_status(f"Imported {len(saved)} login account(s)", self.palette["success"])
+
+    def _db_add_login_account(self, refresh, parent):
+        win = self._db_modal("Add Login Account", 540, 420)
+        if parent is not None:
+            try:
+                win.transient(parent)
+            except Exception:
+                pass
+        form = tb.Frame(win, style="Card.TFrame", padding=22)
+        form.pack(fill="both", expand=True)
+        tb.Label(form, text="Add Login Account", style="SectionTitle.TLabel").grid(row=0, column=0, columnspan=2, sticky="w")
+        tb.Label(form, text="Credentials used by the Login task.", style="Subtitle.TLabel").grid(row=1, column=0, columnspan=2, sticky="w", pady=(2, 14))
+
+        vars_map = {
+            "uid": tk.StringVar(),
+            "password": tk.StringVar(),
+            "email": tk.StringVar(),
+            "twofa": tk.StringVar(),
+            "name": tk.StringVar(),
+        }
+        fields = [
+            ("UID", "uid", False),
+            ("Password", "password", True),
+            ("Email", "email", False),
+            ("2FA", "twofa", False),
+            ("Name", "name", False),
+        ]
+        for row, (label, key, secret) in enumerate(fields, start=2):
+            tb.Label(form, text=label.upper(), style="MetricLabel.TLabel").grid(row=row, column=0, sticky="w", padx=(0, 16), pady=8)
+            tb.Entry(form, textvariable=vars_map[key], bootstyle="secondary", show="*" if secret else "").grid(row=row, column=1, sticky="ew", pady=8, ipady=3)
+        form.columnconfigure(1, weight=1)
+
+        def commit():
+            payload = {key: var.get().strip() for key, var in vars_map.items()}
+            if not (payload["uid"] or payload["email"]) or not payload["password"]:
+                MessageBox.showwarning("Add Login Account", "UID or email plus password is required.", parent=win)
+                return
+            saved = self._db_save_login_accounts([payload])
+            refresh(str(saved[-1].get("account_id") or "") if saved else None)
+            self._db_status("Login account added", self.palette["success"])
+            win.destroy()
+
+        footer = tb.Frame(win, style="CardInner.TFrame", padding=(18, 12))
+        footer.pack(fill="x", side="bottom")
+        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(side="left")
+        tb.Button(footer, text="Save", bootstyle="primary", command=commit, width=10).pack(side="right")
+
+    def _db_clear_checked_account_data(self):
+        instances = self._db_checked_instances()
+        if not instances:
+            MessageBox.showinfo("Clear Account Data", "Select one or more instances first.", parent=self._db_message_parent())
+            return
+        label = f"{len(instances)} selected instance{'s' if len(instances) != 1 else ''}"
+        if not MessageBox.askyesno(
+            "Clear Account Data",
+            f"Clear Facebook account and page data for {label}?",
+            parent=self._db_message_parent(),
+        ):
+            return
+        for inst in instances:
+            inst["account"] = self._db_blank_instance(inst.get("name") or "")["account"]
+        self._db_mark_dirty()
+        self._db_save_all()
+        self._db_render_all()
+
+    def _db_delete_checked_dashboard_data(self):
+        names = set(self._db_checked_names())
+        if not names:
+            MessageBox.showinfo("Remove Dashboard Data", "Select one or more instances first.", parent=self._db_message_parent())
+            return
+        if not MessageBox.askyesno(
+            "Remove Dashboard Data",
+            f"Remove saved dashboard data for {len(names)} selected instance(s)?\n\nThe LDPlayer instances are not deleted.",
+            parent=self._db_message_parent(),
+        ):
+            return
+        self._dashboard_data["instances"] = [
+            inst for inst in self._db_instances() if inst.get("name") not in names
+        ]
+        if self._dashboard_selected in names:
+            self._dashboard_selected = None
+        self._db_clear_checked_instances()
+        self._db_mark_dirty()
+        self._db_save_all()
+        self._db_sync_from_devices()
+        self._db_render_all()
+
+    def _db_copy_checked_names(self):
+        names = self._db_checked_names()
+        if not names:
+            return
+        parent = self._db_message_parent()
+        if parent is None:
+            return
+        parent.clipboard_clear()
+        parent.clipboard_append("\n".join(names))
+        self._db_status(f"Copied {len(names)} instance name(s)", self.palette["success"])
 
     # ─────────────────────────────────────────────────────────────────── #
     # Editors
