@@ -79,6 +79,9 @@ from gui.dialogs.perf_dialog import PerformanceDialogMixin
 from gui.pages.dashboard_page import DashboardDialogMixin
 
 
+_DEV_EMULATOR_NAMES = ("US - clone", "US - 01", "US - 02", "US - 03", "US - 04", "US - 05")
+
+
 class LDManagerApp(
     SidebarMixin,
     TopBarMixin,
@@ -290,6 +293,60 @@ class LDManagerApp(
         section.pack(fill="both", expand=expand, pady=pady)
         section.body.section_card = section
         return section.body
+
+    def _dashboard_snapshot_from_json(self):
+        """Return LD names saved by the dashboard persistence file."""
+        try:
+            path = self.paths.config_dir / "dashboard_instances.json"
+            if not path.exists():
+                return {}
+            data = json.loads(path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            return {}
+
+        if isinstance(data, list):
+            instances = data
+        elif isinstance(data, dict):
+            instances = data.get("instances") or []
+        else:
+            instances = []
+
+        snapshot = {}
+        for raw in instances:
+            if isinstance(raw, dict):
+                name = str(raw.get("name") or "").strip()
+                serial = str(
+                    raw.get("serial")
+                    or raw.get("adb_serial")
+                    or raw.get("device_serial")
+                    or ""
+                ).strip()
+            else:
+                name = str(raw or "").strip()
+                serial = ""
+            if name and name not in snapshot:
+                snapshot[name] = serial
+        return snapshot
+
+    def _is_dev_emulator_snapshot(self, snapshot):
+        names = set((snapshot or {}).keys())
+        return bool(names) and names == set(_DEV_EMULATOR_NAMES)
+
+    def _snapshot_with_dashboard_fallback(self, snapshot):
+        snapshot = dict(snapshot or {})
+        dashboard_snapshot = self._dashboard_snapshot_from_json()
+        if not dashboard_snapshot:
+            return snapshot
+        if snapshot and not self._is_dev_emulator_snapshot(snapshot):
+            return snapshot
+
+        try:
+            mapping = self.emulator.name_to_serial
+            mapping.clear()
+            mapping.update(dashboard_snapshot)
+        except Exception:
+            pass
+        return dashboard_snapshot
 
     def setup_enhanced_ui(self):
         self.create_enhanced_menu_bar()
@@ -1058,6 +1115,8 @@ class LDManagerApp(
         self.instance_context_menu.add_command(label="Start", command=self._context_start_instance)
         self.instance_context_menu.add_command(label="Stop", command=self._context_stop_instance)
         self.instance_context_menu.add_command(label="Restart", command=self._context_restart_instance)
+        self.instance_context_menu.add_command(label="Rename...", command=self._context_rename_instance)
+        self.instance_context_menu.add_command(label="Delete...", command=self._context_delete_instance)
         self.instance_context_menu.add_separator()
         self.instance_group_menu = tk.Menu(self.instance_context_menu, tearoff=0)
         self.instance_context_menu.add_cascade(label="Groups", menu=self.instance_group_menu)
@@ -2034,6 +2093,143 @@ class LDManagerApp(
             return
         threading.Thread(target=lambda: self._run_single_instance_action(name, "restart"), daemon=True).start()
 
+    def _context_rename_instance(self):
+        old_name = self._context_ld_name
+        if not old_name:
+            return
+
+        new_name = simpledialog.askstring(
+            "Rename LD Instance",
+            f"New name for '{old_name}':",
+            initialvalue=old_name,
+            parent=self.root,
+        )
+        if new_name is None:
+            return
+        new_name = new_name.strip()
+        if not new_name or new_name == old_name:
+            return
+
+        # Reject characters that LDPlayer titles cannot contain.
+        forbidden = set('\\/:*?"<>|')
+        if any(ch in forbidden for ch in new_name):
+            MessageBox.showwarning(
+                "Rename LD Instance",
+                'Name cannot contain any of: \\ / : * ? " < > |',
+                parent=self.root,
+            )
+            return
+
+        if new_name in self.emulator.name_to_serial:
+            MessageBox.showwarning(
+                "Rename LD Instance",
+                f"An instance named '{new_name}' already exists.",
+                parent=self.root,
+            )
+            return
+
+        def worker():
+            try:
+                if not self.emulator.rename_ld(old_name, new_name):
+                    self.log(f"Failed to rename LD '{old_name}' to '{new_name}'", "ERROR")
+                    return
+                self.log(f"Renamed LD '{old_name}' to '{new_name}'", "SUCCESS")
+                # Refresh the device table so the row reflects the new name.
+                try:
+                    self.root.after(0, self.populate_ld_table)
+                except Exception:
+                    pass
+            except Exception as exc:
+                self.log(f"Rename error for '{old_name}': {exc}", "ERROR")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _context_delete_instance(self):
+        target_names = self._context_target_ld_names()
+        if not target_names:
+            return
+        if self.running_event.is_set():
+            MessageBox.showwarning(
+                "Delete LD Instance",
+                "Stop automation before deleting LD instances.",
+                parent=self.root,
+            )
+            return
+
+        if len(target_names) == 1:
+            prompt = f"Permanently delete LD instance '{target_names[0]}'?\n\nThis cannot be undone."
+        else:
+            preview = ", ".join(target_names[:5])
+            if len(target_names) > 5:
+                preview += f", ... (+{len(target_names) - 5} more)"
+            prompt = (
+                f"Permanently delete {len(target_names)} LD instances?\n\n"
+                f"{preview}\n\nThis cannot be undone."
+            )
+        if not MessageBox.askyesno("Delete LD Instance", prompt, parent=self.root):
+            return
+
+        def worker():
+            removed = []
+            failed = []
+            for name in target_names:
+                try:
+                    # Stop first; ignore failures (instance may already be off).
+                    try:
+                        self.emulator.quit_ld(name)
+                    except Exception:
+                        pass
+                    if self.emulator.remove_ld(name):
+                        removed.append(name)
+                    else:
+                        failed.append(name)
+                except Exception as exc:
+                    failed.append(name)
+                    self.log(f"Delete error for '{name}': {exc}", "ERROR")
+
+            if removed:
+                self._purge_ld_references(removed)
+                self.log(f"Deleted LD: {', '.join(removed)}", "SUCCESS")
+            if failed:
+                self.log(f"Failed to delete LD: {', '.join(failed)}", "ERROR")
+            try:
+                self.root.after(0, self.populate_ld_table)
+            except Exception:
+                pass
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _purge_ld_references(self, names):
+        """Drop deleted LDs from in-memory caches and groups."""
+        names_set = set(names)
+        try:
+            for cache_attr in (
+                "_ld_snapshot",
+                "_device_runtime_state",
+                "_ld_account_cache",
+                "_ld_status_cache",
+            ):
+                cache = getattr(self, cache_attr, None)
+                if isinstance(cache, dict):
+                    for name in names_set:
+                        cache.pop(name, None)
+            checked = getattr(self, "_ld_checked_names", None)
+            if isinstance(checked, set):
+                checked.difference_update(names_set)
+            groups = getattr(self, "_ld_groups", None)
+            if isinstance(groups, dict):
+                for group_name, members in list(groups.items()):
+                    pruned = [m for m in members if m not in names_set]
+                    if len(pruned) != len(members):
+                        groups[group_name] = pruned
+            if hasattr(self, "save_settings"):
+                try:
+                    self.save_settings()
+                except Exception:
+                    pass
+        except Exception as exc:
+            self.log(f"Error purging deleted LD references: {exc}", "ERROR")
+
     def _context_run_automation(self):
         name = self._context_ld_name
         if not name:
@@ -2379,9 +2575,12 @@ class LDManagerApp(
             while not self._status_refresh_event.is_set():
                 try:
                     self.emulator._build_serial_mapping()
-                    snapshot = dict(self.emulator.name_to_serial)
+                    snapshot = self._snapshot_with_dashboard_fallback(dict(self.emulator.name_to_serial))
                     status_cache = {}
-                    for name in snapshot:
+                    for name, serial in snapshot.items():
+                        if not serial:
+                            status_cache[name] = "Inactive"
+                            continue
                         try:
                             status_cache[name] = "Active" if self.emulator.is_ld_running(name) else "Inactive"
                         except Exception:
@@ -2718,7 +2917,7 @@ Recent Items:
         """Populate LD table with current emulators"""
         try:
             self.emulator._build_serial_mapping()
-            snapshot = dict(self.emulator.name_to_serial)
+            snapshot = self._snapshot_with_dashboard_fallback(dict(self.emulator.name_to_serial))
             status_cache = {name: self._ld_status_cache.get(name, "Inactive") for name in snapshot}
             account_cache = self._build_ld_account_cache(snapshot)
             self._fleet_load_state = "ready"

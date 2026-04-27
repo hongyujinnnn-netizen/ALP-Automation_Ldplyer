@@ -512,6 +512,73 @@ class ControlEmulator:
             print(f"Error quitting LD '{name}': {e}")
             return False
     
+    def rename_ld(self, old_name, new_name):
+        """Rename an LDPlayer instance via dnconsole.
+
+        Returns True on success. Updates ``name_to_serial`` so existing
+        serial lookups continue to work after the rename.
+        """
+        if not new_name or old_name == new_name:
+            return False
+        try:
+            dnconsole_path = os.path.join(self.ld_dir, "dnconsole.exe")
+            if not os.path.exists(dnconsole_path):
+                print(f"dnconsole.exe not found; cannot rename LD '{old_name}'")
+                return False
+
+            result = subprocess.run(
+                [dnconsole_path, "rename", "--name", old_name, "--title", new_name],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=10,
+            )
+            if result.returncode != 0:
+                print(f"Failed to rename LD '{old_name}' -> '{new_name}': {result.stderr}")
+                return False
+
+            # Migrate the serial mapping so callers can keep using the new name.
+            serial = self.name_to_serial.pop(old_name, None)
+            if serial is not None:
+                self.name_to_serial[new_name] = serial
+            print(f"LD '{old_name}' renamed to '{new_name}'")
+            return True
+        except Exception as e:
+            print(f"Error renaming LD '{old_name}' -> '{new_name}': {e}")
+            return False
+
+    def remove_ld(self, name):
+        """Delete an LDPlayer instance via dnconsole.
+
+        Returns True on success. Cleans up ``name_to_serial`` so stale serial
+        lookups don't linger after deletion.
+        """
+        if not name:
+            return False
+        try:
+            dnconsole_path = os.path.join(self.ld_dir, "dnconsole.exe")
+            if not os.path.exists(dnconsole_path):
+                print(f"dnconsole.exe not found; cannot remove LD '{name}'")
+                return False
+
+            result = subprocess.run(
+                [dnconsole_path, "remove", "--name", name],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=15,
+            )
+            if result.returncode != 0:
+                print(f"Failed to remove LD '{name}': {result.stderr}")
+                return False
+
+            self.name_to_serial.pop(name, None)
+            print(f"LD '{name}' removed")
+            return True
+        except Exception as e:
+            print(f"Error removing LD '{name}': {e}")
+            return False
+
     def open_facebook(self, name):
         """Open Facebook on the specified LDPlayer"""
         serial = self.name_to_serial.get(name)

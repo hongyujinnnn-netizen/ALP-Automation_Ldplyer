@@ -23,6 +23,7 @@ from gui.components.status import (
     status_table_text,
     status_tag,
 )
+from gui.checkbox_treeview import build_checkbox_image_set
 from gui.gradient_progress import GradientProgressBar
 
 
@@ -567,6 +568,50 @@ class DashboardDialogMixin:
         except tk.TclError:
             return False
 
+    def _db_get_checkbox_images(self):
+        """Lazily build (and cache) the shared checkbox PhotoImage set."""
+        images = getattr(self, "_db_checkbox_images", None)
+        if not images:
+            images = build_checkbox_image_set(getattr(self, "palette", None))
+            self._db_checkbox_images = images
+        return images
+
+    def _db_apply_check_visual(self, tree, item, checked):
+        """Render a tree row's checkbox column using the shared image set.
+
+        Also applies a subtle ``row_checked`` tag tint so checked rows pop the
+        same way the Devices fleet table does. Falls back to Unicode glyphs
+        when PhotoImage construction is unavailable.
+        """
+        if not self._db_widget_exists(tree) or not tree.exists(item):
+            return
+        self._db_ensure_check_row_tag(tree)
+        images = self._db_get_checkbox_images()
+        image = images.get("checked" if checked else "unchecked")
+        if image is not None:
+            tree.item(item, image=image, text="")
+        else:
+            tree.item(item, image="", text="☑" if checked else "☐")
+        tags = [t for t in tree.item(item, "tags") if t != "row_checked"]
+        if checked:
+            tags.append("row_checked")
+        tree.item(item, tags=tags)
+
+    def _db_ensure_check_row_tag(self, tree):
+        if getattr(tree, "_db_row_checked_configured", False):
+            return
+        try:
+            from gui.checkbox_treeview import _blend  # local import keeps top-level imports tidy
+            tint = _blend(
+                self.palette.get("success", "#10B981"),
+                self.palette.get("surface", "#0E1118"),
+                0.12,
+            )
+            tree.tag_configure("row_checked", background=tint, foreground=self.palette.get("text", "#E2E8F0"))
+            tree._db_row_checked_configured = True
+        except Exception:
+            pass
+
     def _db_clear_widget_refs(self):
         self._db_status_label = None
         self._db_kpi_cards = {}
@@ -612,8 +657,38 @@ class DashboardDialogMixin:
             return
         try:
             loaded = json.loads(path.read_text(encoding="utf-8")) or {}
-            if "instances" not in loaded:
+            if isinstance(loaded, list):
+                loaded = {"instances": loaded}
+            if not isinstance(loaded, dict):
                 loaded = {"instances": []}
+
+            normalized = []
+            for raw in loaded.get("instances") or []:
+                if isinstance(raw, dict):
+                    item = dict(raw)
+                    name = str(item.get("name") or "").strip()
+                else:
+                    item = {}
+                    name = str(raw or "").strip()
+                if not name:
+                    continue
+
+                account = item.get("account") if isinstance(item.get("account"), dict) else {}
+                account = dict(account or {})
+                account.setdefault("name", None)
+                account.setdefault("uid", None)
+                account.setdefault("password", None)
+                account.setdefault("twofa", None)
+                account.setdefault("mail", None)
+                account.setdefault("pages", [])
+
+                item["name"] = name
+                item["account"] = account
+                if "serial" in item:
+                    item["serial"] = str(item.get("serial") or "").strip()
+                normalized.append(item)
+
+            loaded["instances"] = normalized
             self._dashboard_data = loaded
         except Exception as exc:
             self._dashboard_data = {"instances": []}
@@ -646,9 +721,10 @@ class DashboardDialogMixin:
     def _db_instances(self):
         return self._dashboard_data.setdefault("instances", [])
 
-    def _db_blank_instance(self, name):
+    def _db_blank_instance(self, name, serial=""):
         return {
             "name": name,
+            "serial": str(serial or "").strip(),
             "account": {
                 "name": None,
                 "uid": None,
@@ -662,19 +738,26 @@ class DashboardDialogMixin:
     def _db_device_names(self):
         snapshot = getattr(self, "_ld_snapshot", None) or {}
         try:
-            return list(snapshot.keys())
+            names = list(snapshot.keys())
+            if names:
+                return names
         except Exception:
-            return []
+            pass
+        return [str(i.get("name") or "") for i in self._db_instances() if i.get("name")]
 
     def _db_sync_from_devices(self):
         insts = self._db_instances()
         by_name = {str(i.get("name") or ""): i for i in insts if i.get("name")}
+        snapshot = getattr(self, "_ld_snapshot", None) or {}
         changed = False
         for name in self._db_device_names():
             if name not in by_name:
-                entry = self._db_blank_instance(name)
+                entry = self._db_blank_instance(name, snapshot.get(name, ""))
                 insts.append(entry)
                 by_name[name] = entry
+                changed = True
+            elif snapshot.get(name) and by_name[name].get("serial") != snapshot.get(name):
+                by_name[name]["serial"] = snapshot.get(name)
                 changed = True
         if changed:
             self._db_mark_dirty()
@@ -709,9 +792,10 @@ class DashboardDialogMixin:
 
             entry = by_name.pop(old_name, None)
             if entry is None:
-                entry = self._db_blank_instance(matching_new)
+                entry = self._db_blank_instance(matching_new, new_snapshot.get(matching_new, ""))
                 insts.append(entry)
             entry["name"] = matching_new
+            entry["serial"] = new_snapshot.get(matching_new, "")
             by_name[matching_new] = entry
             added_names.discard(matching_new)
             changed = True
@@ -734,9 +818,12 @@ class DashboardDialogMixin:
 
         for name in sorted(new_snapshot):
             if name not in by_name:
-                entry = self._db_blank_instance(name)
+                entry = self._db_blank_instance(name, new_snapshot.get(name, ""))
                 insts.append(entry)
                 by_name[name] = entry
+                changed = True
+            elif by_name[name].get("serial") != new_snapshot.get(name, ""):
+                by_name[name]["serial"] = new_snapshot.get(name, "")
                 changed = True
 
         if changed:
@@ -874,7 +961,6 @@ class DashboardDialogMixin:
                 "",
                 "end",
                 iid=name,
-                text="☑" if name in self._dashboard_checked else "☐",
                 values=(
                     name,
                     status_table_text(status),
@@ -883,6 +969,7 @@ class DashboardDialogMixin:
                 ),
                 tags=(status_tag(status), zebra),
             )
+            self._db_apply_check_visual(tree, name, name in self._dashboard_checked)
             row_idx += 1
 
         if self._db_widget_exists(getattr(self, "_db_list_count", None)):
@@ -1042,7 +1129,7 @@ class DashboardDialogMixin:
         self._dashboard_checked = checked_names
         tree = getattr(self, "_db_tree", None)
         if self._db_widget_exists(tree) and tree.exists(name):
-            tree.item(name, text="☑" if checked else "☐")
+            self._db_apply_check_visual(tree, name, checked)
         self._db_update_checked_count()
 
     def _db_set_checked_instances(self, names):
@@ -1050,7 +1137,7 @@ class DashboardDialogMixin:
         tree = getattr(self, "_db_tree", None)
         if self._db_widget_exists(tree):
             for item in tree.get_children():
-                tree.item(item, text="☑" if item in self._dashboard_checked else "☐")
+                self._db_apply_check_visual(tree, item, item in self._dashboard_checked)
         self._db_update_checked_count()
 
     def _db_select_all_visible_instances(self, _event=None):
@@ -1200,7 +1287,6 @@ class DashboardDialogMixin:
                     "",
                     "end",
                     iid=account_id,
-                    text="☑" if account_id in self._db_login_checked_account_ids else "☐",
                     values=(
                         str(account.get("name") or ""),
                         str(account.get("uid") or ""),
@@ -1209,6 +1295,9 @@ class DashboardDialogMixin:
                         str(account.get("twofa") or ""),
                     ),
                     tags=("even_row" if idx % 2 == 0 else "odd_row",),
+                )
+                self._db_apply_check_visual(
+                    tree, account_id, account_id in self._db_login_checked_account_ids
                 )
             if select_id and tree.exists(select_id):
                 tree.selection_set(select_id)
@@ -1334,7 +1423,7 @@ class DashboardDialogMixin:
         self._db_login_checked_account_ids = checked_ids
         self._db_sync_login_account_primary_id(tree)
         for item in tree.get_children():
-            tree.item(item, text="☑" if item in self._db_login_checked_account_ids else "☐")
+            self._db_apply_check_visual(tree, item, item in self._db_login_checked_account_ids)
         first_id = getattr(self, "_db_login_checked_account_id", None)
         if first_id and tree.exists(first_id):
             try:
@@ -1363,7 +1452,7 @@ class DashboardDialogMixin:
             checked_ids.discard(account_id)
         self._db_login_checked_account_ids = checked_ids
         if self._db_widget_exists(tree) and tree.exists(account_id):
-            tree.item(account_id, text="☑" if checked else "☐")
+            self._db_apply_check_visual(tree, account_id, checked)
         self._db_sync_login_account_primary_id(tree)
 
     def _db_checked_login_account_ids(self, tree=None):
@@ -1444,9 +1533,16 @@ class DashboardDialogMixin:
     def _db_assign_login_account_to_instance(self, instance, account):
         acc = instance.setdefault("account", {})
         pages = self._db_account_pages(acc)
+        # Prefer the Facebook display name (e.g. "Christopher M. Luu") so the
+        # dashboard surfaces the human name; fall back to email/uid only if
+        # the display name is missing on the source record.
         acc.update(
             {
-                "name": str(account.get("email") or account.get("uid") or "").strip() or None,
+                "name": (
+                    str(account.get("name") or "").strip()
+                    or str(account.get("email") or account.get("uid") or "").strip()
+                    or None
+                ),
                 "uid": str(account.get("uid") or "").strip() or None,
                 "password": str(account.get("password") or "").strip() or None,
                 "twofa": str(account.get("twofa") or account.get("2fa") or "").strip() or None,
@@ -1523,6 +1619,7 @@ class DashboardDialogMixin:
         payload = {
             "identifier": identifier,
             "identifier_label": "uid" if uid else "email",
+            "account_name": str(account.get("name") or "").strip(),
             "email": email,
             "password": password,
             "twofa": str(account.get("twofa") or "").strip(),
@@ -1541,8 +1638,27 @@ class DashboardDialogMixin:
                     f"Login task {'completed' if success else 'failed'} for {ld_name}",
                     "SUCCESS" if success else "ERROR",
                 )
+
+                # If the handler renamed the LD instance to the Facebook
+                # display name, sync the dashboard JSON so the persisted
+                # instance entry matches what dnconsole now reports.
+                new_ld_name = getattr(handler, "last_renamed_to", "") or ""
+                if success and new_ld_name and new_ld_name != ld_name:
+                    try:
+                        instance["name"] = new_ld_name
+                        self._db_write_data()
+                        self._db_status(
+                            f"Renamed instance → {new_ld_name}",
+                            self.palette["success"],
+                        )
+                    except Exception as exc:
+                        self.log(
+                            f"Failed to persist renamed instance for {ld_name}: {exc}",
+                            "WARNING",
+                        )
+
                 self.update_device_runtime_state(
-                    ld_name,
+                    new_ld_name or ld_name,
                     {
                         "phase": "login",
                         "state": "Completed" if success else "Attention",

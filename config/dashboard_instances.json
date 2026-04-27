@@ -2,6 +2,7 @@
   "instances": [
     {
       "name": "Aisha Jacobson",
+      "serial": "emulator-5566",
       "account": {
         "name": null,
         "uid": null,
@@ -13,6 +14,7 @@
     },
     {
       "name": "Barbara Henriksen",
+      "serial": "emulator-5564",
       "account": {
         "name": null,
         "uid": null,
@@ -24,6 +26,19 @@
     },
     {
       "name": "Bunty juyer",
+      "serial": "emulator-5568",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Christopher M. Luu",
+      "serial": "emulator-5600",
       "account": {
         "name": null,
         "uid": null,
@@ -35,6 +50,7 @@
     },
     {
       "name": "Chuii KonPa",
+      "serial": "emulator-5572",
       "account": {
         "name": null,
         "uid": null,
@@ -46,6 +62,7 @@
     },
     {
       "name": "Denhaza Morizhiko",
+      "serial": "emulator-5562",
       "account": {
         "name": null,
         "uid": null,
@@ -57,6 +74,91 @@
     },
     {
       "name": "Denn Kainu",
+      "serial": "emulator-5570",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Estelle B. Rose",
+      "serial": "emulator-5578",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "James Hopkins",
+      "serial": "emulator-5582",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "James Roberts",
+      "serial": "emulator-5594",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Jason L. Mickle",
+      "serial": "emulator-5604",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Jea Jonh Son",
+      "serial": "emulator-5576",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Jeck Lusika",
+      "serial": "emulator-5586",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Jenn Anozy",
+      "serial": "emulator-5592",
       "account": {
         "name": null,
         "uid": null,
@@ -68,6 +170,31 @@
     },
     {
       "name": "LD - Clone",
+      "serial": "emulator-5554",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Mark Marguez",
+      "serial": "emulator-5588",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Mary T. Butler",
+      "serial": "emulator-5584",
       "account": {
         "name": null,
         "uid": null,
@@ -79,42 +206,67 @@
     },
     {
       "name": "Osaka Chuii",
+      "serial": "emulator-5558",
       "account": {
-        "name": "Osaka Chuii",
+        "name": null,
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": [
-          {
-            "name": "Azúcar Morena Bakery",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          },
-          {
-            "name": "TheBushman Prank",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          }
-        ]
+        "pages": []
+      }
+    },
+    {
+      "name": "Patrick R. Mcnutt",
+      "serial": "emulator-5598",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Pauline J. Flores",
+      "serial": "emulator-5580",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Ray Jamary",
+      "serial": "emulator-5574",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
       }
     },
     {
       "name": "Rixzz Oza",
+      "serial": "emulator-5560",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Roger J. Medley",
+      "serial": "emulator-5602",
       "account": {
         "name": null,
         "uid": null,
@@ -126,6 +278,7 @@
     },
     {
       "name": "Ryu S. Kennedy",
+      "serial": "emulator-5556",
       "account": {
         "name": "Leon S. Kennedy",
         "uid": null,
@@ -173,7 +326,8 @@
       }
     },
     {
-      "name": "Ray Jamary",
+      "name": "Shayne P. Ledesma",
+      "serial": "emulator-5590",
       "account": {
         "name": null,
         "uid": null,
@@ -184,117 +338,8 @@
       }
     },
     {
-      "name": "Jea Jonh Son",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "Estelle B. Rose",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "Pauline J. Flores",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "LD - Clone-14",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "LD - Clone-15",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "LD - Clone-16",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "LD - Clone-17",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "LD - Clone-18",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "LD - Clone-19",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "LD - Clone-20",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "LD - Clone-21",
+      "name": "Timo Wanun",
+      "serial": "emulator-5596",
       "account": {
         "name": null,
         "uid": null,

@@ -36,6 +36,7 @@ class LoginAccountTaskHandler(RegAccountTaskHandler):
             self.log(f"Login skipped for {name}: missing identifier or password")
             return False
 
+        account_name = str(kwargs.get("account_name") or "").strip()
         verify_2fa = bool(kwargs.get("verify_2fa", True))
         twofa_email = (kwargs.get("twofa_email") or "").strip()
         twofa_secret = (
@@ -46,15 +47,10 @@ class LoginAccountTaskHandler(RegAccountTaskHandler):
         )
         twofa_secret = str(twofa_secret or "").strip()
 
-        serial = self.emulator.name_to_serial.get(name, name)
-        if not serial:
-            self.log(f"No serial found for {name}")
-            return False
-
-        if not self._ensure_adb_connection(serial):
-            self.log(f"Failed to connect to device {serial}")
-            return False
-
+        # Start the LD instance first so the serial mapping is populated
+        # before we try to connect ADB. Running the login task on a stopped
+        # LD previously failed because the serial lookup fell back to the
+        # friendly name and ADB connect could not resolve it.
         if not self.emulator.is_ld_running(name):
             if not self.emulator.start_ld(name):
                 self.log(f"Failed to start LD: {name}")
@@ -68,6 +64,15 @@ class LoginAccountTaskHandler(RegAccountTaskHandler):
 
         if not self.ensure_device_ready(name, timeout=60):
             self.log(f"Device is not ready for login task: {name}")
+            return False
+
+        serial = self.emulator.name_to_serial.get(name)
+        if not serial:
+            self.log(f"No serial found for {name}")
+            return False
+
+        if not self._ensure_adb_connection(serial):
+            self.log(f"Failed to connect to device {serial}")
             return False
 
         blocked_countries = getattr(self, "blocked_countries", None)
@@ -150,11 +155,18 @@ class LoginAccountTaskHandler(RegAccountTaskHandler):
         time.sleep(4)
         self._handle_skip_notifications_prompt(d)
         time.sleep(4)
-        # Confirm we landed on the feed
-        if not self._is_logged_in(d):
-            self.log(f"Could not confirm logged-in state for {name}")
+
+        sucess = self._check_sucessful_login(d, name)
+        if not sucess:
+            self.log(f"Login flow did not complete successfully for {name}")
             return False
-  
+
+        self.log(f"Login flow completed successfully for {name}")
+
+        # Rename the LD instance to the Facebook profile name so the logged
+        # account is easy to identify in the device list.
+        self._rename_ld_to_facebook_name(d, name, creds, account_name=account_name)
+
         return True
 
     # ------------------------------------------------------------------
@@ -474,6 +486,138 @@ class LoginAccountTaskHandler(RegAccountTaskHandler):
             return "Ok"
 
         return "Unknown"
+
+    def _rename_ld_to_facebook_name(self, d, name, creds, account_name=""):
+        """Rename the LDPlayer instance to the logged-in Facebook profile name.
+
+        Resolution order:
+          1. Profile name read from the Facebook app (most accurate)
+          2. ``account_name`` from the saved account record (e.g. "Patrick R. Mcnutt")
+          3. Credential identifier as last-resort fallback (uid/email/phone)
+        """
+        try:
+            fb_name = self._extract_facebook_profile_name(d)
+        except Exception as exc:
+            self.log(f"Could not read Facebook profile name on {name}: {exc}")
+            fb_name = None
+
+        candidate = (fb_name or "").strip()
+        if not candidate:
+            candidate = (account_name or "").strip()
+        if not candidate:
+            candidate = (getattr(creds, "identifier", "") or "").strip()
+
+        new_name = self._sanitize_ld_name(candidate)
+        if not new_name or new_name == name:
+            return False
+
+        # Avoid colliding with another LD that already has this name.
+        existing = set(getattr(self.emulator, "name_to_serial", {}).keys())
+        if new_name in existing:
+            new_name = self._unique_ld_name(new_name, existing)
+
+        rename_fn = getattr(self.emulator, "rename_ld", None)
+        if not callable(rename_fn):
+            self.log("Emulator does not support rename; skipping LD rename")
+            return False
+
+        if rename_fn(name, new_name):
+            self.log(f"Renamed LD '{name}' to '{new_name}'")
+            # Expose the new name so the caller (dashboard worker) can sync
+            # its persisted instance record after the task completes.
+            self.last_renamed_to = new_name
+            return True
+        self.log(f"Failed to rename LD '{name}' to '{new_name}'")
+        return False
+
+    def _extract_facebook_profile_name(self, d):
+        """Best-effort extraction of the logged-in account's display name.
+
+        Tries the bookmarks/menu tab where the profile name is typically a
+        large header item. Falls back to None if nothing matches.
+        """
+        # Open the Menu/bookmarks tab where the profile entry lives.
+        tab_selectors = [
+            {"descriptionMatches": r"(?i)^menu$"},
+            {"descriptionContains": "Menu"},
+            {"resourceIdMatches": r".*(tab_bar_menu|tab_menu|menu_tab).*"},
+        ]
+        for sel in tab_selectors:
+            try:
+                node = d(**sel)
+                if node.exists:
+                    node.click()
+                    time.sleep(2.5)
+                    break
+            except Exception:
+                continue
+
+        # Profile entry on the Menu screen is typically a button whose
+        # contentDescription is "<Name>, profile" or just "<Name>".
+        candidates = [
+            {"resourceIdMatches": r".*profile_switcher.*"},
+            {"resourceIdMatches": r".*(menu_profile|profile_name|profile_entry).*"},
+            {"descriptionMatches": r"(?i).+,\s*profile"},
+        ]
+        for sel in candidates:
+            try:
+                matches = d(**sel)
+                count = int(getattr(matches, "count", 0) or (1 if matches.exists else 0))
+                for idx in range(min(count, 5)):
+                    node = matches[idx] if count > 1 else matches
+                    info = node.info or {}
+                    text = (info.get("text") or "").strip()
+                    desc = (info.get("contentDescription") or "").strip()
+                    name = text or desc
+                    if not name:
+                        continue
+                    # Strip trailing ", profile" / ", button" suffixes.
+                    for suffix in (", profile", ", button", " profile", " button"):
+                        if name.lower().endswith(suffix):
+                            name = name[: -len(suffix)].rstrip(", ").strip()
+                    if name and len(name) <= 64:
+                        return name
+            except Exception:
+                continue
+
+        return None
+
+    @staticmethod
+    def _sanitize_ld_name(raw):
+        """Return a name safe for use as an LDPlayer instance title."""
+        if not raw:
+            return ""
+        # LDPlayer titles cannot contain path/quote characters.
+        forbidden = '\\/:*?"<>|'
+        cleaned = "".join(ch for ch in str(raw) if ch not in forbidden).strip()
+        # Collapse internal whitespace.
+        cleaned = " ".join(cleaned.split())
+        return cleaned[:48]
+
+    @staticmethod
+    def _unique_ld_name(base, existing):
+        if base not in existing:
+            return base
+        for i in range(2, 100):
+            candidate = f"{base} ({i})"
+            if candidate not in existing:
+                return candidate
+        return f"{base} ({int(time.time())})"
+
+    def _check_sucessful_login(self, d, name, timeout=10):
+        """Confirm a successful login by detecting the Facebook home indicator.
+
+        The Facebook home feed exposes an element with
+        contentDescription="Facebook logo" (//android.view.View[@content-desc="Facebook logo"]).
+        Seeing it is a strong signal we landed on the feed.
+        """
+        try:
+            if d(description="Facebook logo").wait(timeout=timeout):
+                self.log(f"Login confirmed via Facebook logo on {name}")
+                return True
+        except Exception as exc:
+            self.log(f"Facebook logo detection failed for {name}: {exc}")
+        return False
 
     def _is_logged_in_xml(self, xml_lower):
         markers = (

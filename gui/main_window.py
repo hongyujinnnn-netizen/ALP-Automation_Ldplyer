@@ -246,6 +246,7 @@ class MainWindow:
                         payload = {
                             "identifier": identifier,
                             "identifier_label": identifier_label,
+                            "account_name": str(account.get("name") or "").strip(),
                             "email": str(account.get("email") or "").strip(),
                             "password": str(account.get("password") or "").strip(),
                             "twofa": twofa_secret,

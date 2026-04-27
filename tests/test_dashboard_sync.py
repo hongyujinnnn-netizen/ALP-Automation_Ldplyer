@@ -185,6 +185,66 @@ class TestDashboardLdSync(unittest.TestCase):
         self.assertEqual(merged["LD A"], "Facebook A")
         self.assertEqual(merged["LD B"], "Fallback B")
 
+    def test_dashboard_lists_saved_json_instances_without_live_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            paths = build_test_paths(Path(tmp_dir))
+            paths.ensure_runtime_dirs()
+            (paths.config_dir / "dashboard_instances.json").write_text(
+                json.dumps(
+                    {
+                        "instances": [
+                            {"name": "LD Saved A", "serial": "emulator-5554", "account": {"name": "Facebook A"}},
+                            {"name": "LD Saved B", "account": {"mail": "b@example.com"}},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            dashboard = self._dashboard()
+            dashboard._ld_snapshot = {}
+
+            with patch("gui.pages.dashboard_page.get_app_paths", return_value=paths):
+                dashboard._dashboard_load_data()
+
+        self.assertEqual(dashboard._db_device_names(), ["LD Saved A", "LD Saved B"])
+        self.assertEqual(dashboard._dashboard_data["instances"][0]["serial"], "emulator-5554")
+        self.assertEqual(dashboard._dashboard_data["instances"][1]["account"]["mail"], "b@example.com")
+
+    def test_emulator_table_uses_dashboard_json_instead_of_dev_fallback_instances(self):
+        class FakeEmulator:
+            def __init__(self):
+                self.name_to_serial = {
+                    "US - clone": "127.0.0.1:5555",
+                    "US - 01": "127.0.0.1:5557",
+                    "US - 02": "127.0.0.1:5559",
+                    "US - 03": "127.0.0.1:5561",
+                    "US - 04": "127.0.0.1:5563",
+                    "US - 05": "127.0.0.1:5565",
+                }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            paths = build_test_paths(Path(tmp_dir))
+            paths.ensure_runtime_dirs()
+            (paths.config_dir / "dashboard_instances.json").write_text(
+                json.dumps(
+                    {
+                        "instances": [
+                            {"name": "LD Saved A", "serial": "emulator-5554"},
+                            {"name": "LD Saved B"},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            app = LDManagerApp.__new__(LDManagerApp)
+            app.paths = paths
+            app.emulator = FakeEmulator()
+
+            snapshot = app._snapshot_with_dashboard_fallback(dict(app.emulator.name_to_serial))
+
+        self.assertEqual(snapshot, {"LD Saved A": "emulator-5554", "LD Saved B": ""})
+        self.assertEqual(app.emulator.name_to_serial, snapshot)
+
     def test_ld_drag_toggle_selects_each_visited_row_once(self):
         class FakeTable:
             def __init__(self):
