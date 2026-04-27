@@ -97,7 +97,7 @@ class LoginAccountTaskHandler(RegAccountTaskHandler):
         if not self._run_login_steps_with_retry(d, name, creds):
             return False
 
-        time.sleep(8)
+        time.sleep(10)
 
         login_status = self._detect_login_status(d)
         self.log(f"Detected login status for {name}: {login_status}")
@@ -127,27 +127,34 @@ class LoginAccountTaskHandler(RegAccountTaskHandler):
             login_status = self._detect_login_status(d)
             self.log(f"Post-OTP login status for {name}: {login_status}")
 
-        if login_status == "Checkpoint" or self.detect_human_confirm_screen(d) == "Dead":
+        if login_status == "Otp2":
+            if self.handle_facebook_2fa(d):
+                handled_2fa = self.handle_2fa(d, twofa_secret=twofa_secret)
+                time.sleep(5)
+                if not handled_2fa:
+                    self.log(f"Failed to submit Facebook 2FA code for {name}")
+                    return False
+            else:    
+                self.log(f"Failed to handle Facebook 2FA for {name}")
+                return False
+        
+        if login_status == "Checkpoint":
             self.log(f"Login blocked by checkpoint/human-verify for {name}")
             return False
-
+        
+        if login_status == "SussaveLogininfo" :
+            self.log(f"Login is succeeded for {name}, status: {login_status}")
+            
+        time.sleep(2)
         self._handle_save_login_info_prompt(d)
         time.sleep(4)
-
+        self._handle_skip_notifications_prompt(d)
+        time.sleep(4)
         # Confirm we landed on the feed
         if not self._is_logged_in(d):
             self.log(f"Could not confirm logged-in state for {name}")
             return False
-
-        facebook_uid = ""
-        try:
-            facebook_uid = self.check_uid_account(d, before_ids=before_ids)
-        except Exception as exc:
-            self.log(f"UID lookup after login failed for {name}: {exc}")
-
-        self._save_logged_account(name, serial, creds, facebook_uid=facebook_uid)
-        self.push_runtime_state(name, state="Completed", task="Logged in", progress=100)
-        self.log(f"Login complete for {name} (uid={facebook_uid or 'unknown'})")
+  
         return True
 
     # ------------------------------------------------------------------
@@ -362,6 +369,61 @@ class LoginAccountTaskHandler(RegAccountTaskHandler):
             required=False,
         )
 
+    def _handle_skip_notifications_prompt(self, d, max_skips=6):
+        """Click repeated post-login Skip/Not Now prompts until none remain."""
+        selectors = [
+            {"text": "Skip"},
+            {"text": "SKIP"},
+            {"text": "Skip for now"},
+            {"text": "Not Now"},
+            {"text": "Not now"},
+            {"text": "NOT NOW"},
+            {"text": "Maybe Later"},
+            {"text": "Maybe later"},
+            {"textContains": "Skip"},
+            {"textContains": "skip"},
+            {"textContains": "Not now"},
+            {"textContains": "not now"},
+            {"textContains": "Maybe later"},
+            {"description": "Skip"},
+            {"description": "Not Now"},
+            {"description": "Not now"},
+            {"descriptionContains": "Skip"},
+            {"descriptionContains": "skip"},
+            {"descriptionContains": "Not now"},
+            {"descriptionContains": "not now"},
+        ]
+
+        skipped = 0
+        for _ in range(max(1, int(max_skips))):
+            if self.check_paused():
+                break
+            if not self._click_prompt_selector(d, selectors, timeout=2):
+                break
+            skipped += 1
+            time.sleep(1.5)
+
+        if skipped:
+            self.log(f"Skipped {skipped} post-login prompt(s)")
+        return skipped
+
+    def _click_prompt_selector(self, d, selectors, timeout=2):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            for selector in selectors:
+                try:
+                    obj = d(**selector)
+                    exists = obj.exists
+                    if callable(exists):
+                        exists = exists(timeout=0.5)
+                    if exists:
+                        obj.click()
+                        return True
+                except Exception:
+                    continue
+            time.sleep(0.3)
+        return False
+
     # ------------------------------------------------------------------
     # State detection
     # ------------------------------------------------------------------
@@ -377,14 +439,27 @@ class LoginAccountTaskHandler(RegAccountTaskHandler):
             return "Unknown"
 
         if any(p in xml for p in (
-            "enter login code",
-            "two-factor authentication",
-            "enter the code",
-            "enter the confirmation code",
-            "we sent a code",
-            "approve from another device",
+            "Go to your authentication app",
+            "authentication app"
         )):
             return "Otp"
+        
+        if any(p in xml for p in (
+            "check your notifications on another device",
+            "we sent a notification to your other device",
+            "Waiting for approval on your other device",
+        )):
+            return "Otp2"
+        
+        # choose method screen
+        if any(p in xml for p in (
+            "choose a way to confirm",
+            "confirm it's you",
+            "notification on another device",
+            "authentication app",
+            "available confirmation methods",
+        )):
+            return "Otp2"
 
         if any(p in xml for p in (
             "wrong password",
@@ -394,6 +469,13 @@ class LoginAccountTaskHandler(RegAccountTaskHandler):
             "account not found",
         )):
             return "WrongPassword"
+        
+        if any(p in xml for p in (
+            "Save your login info?",
+            "We'll save the login info for",
+            "you restore."
+        )):
+            return "SussaveLogininfo"
 
         if any(p in xml for p in (
             "account suspended",
@@ -412,13 +494,12 @@ class LoginAccountTaskHandler(RegAccountTaskHandler):
 
     def _is_logged_in_xml(self, xml_lower):
         markers = (
-            "what's on your mind",
-            "whats on your mind",
-            "news feed",
-            "stories",
-            "marketplace",
-            "tab_feed",
-            "feed_tab",
+            "what's on your mind"
+            "news feed"
+            "stories"
+            "marketplace"
+            "tab_feed"
+            "feed_tab"
         )
         return any(m in xml_lower for m in markers)
 
@@ -552,3 +633,88 @@ class LoginAccountTaskHandler(RegAccountTaskHandler):
         existing.append(record)
         _atomic_write_json(account_file, existing)
         self.log(f"Saved logged account record for {creds.identifier}")
+
+    def handle_facebook_2fa(self, d, timeout=60):
+        def log(msg):
+            try:
+                self.log(msg)
+            except:
+                print(msg)
+
+        def click_if_exists(selector, timeout=2):
+            try:
+                obj = d(**selector)
+                if obj.exists(timeout=timeout):
+                    obj.click()
+                    time.sleep(1)
+                    return True
+            except:
+                pass
+            return False
+
+        def click_text_contains(text, timeout=2):
+            try:
+                obj = d(textContains=text)
+                if obj.exists(timeout=timeout):
+                    obj.click()
+                    time.sleep(1)
+                    log(f"Clicked: {text}")
+                    return True
+            except:
+                pass
+            return False
+
+        start = time.time()
+
+        while time.time() - start < timeout:
+            xml = ""
+            try:
+                xml = d.dump_hierarchy().lower()
+            except:
+                pass
+
+            # =========================
+            # STEP 1: Click "Try another way"
+            # =========================
+            if "check your notifications" in xml or "waiting for approval" in xml:
+                log("STEP 1: Found approval screen")
+
+                # click immediately (NO 15s delay)
+                d.swipe_ext("up", scale=0.5)
+                if click_text_contains("Try another way"):
+                    log("Clicked Try another way → moving to step 2")
+                    time.sleep(2)
+                    continue
+
+            # =========================
+            # STEP 2: Select Authentication app
+            # =========================
+            if "choose a way to confirm" in xml or "authentication app" in xml:
+                log("STEP 2: Found method selection screen")
+
+                # select Authentication app radio
+                if click_text_contains("authentication app"):
+                    log("Selected Authentication app")
+
+                    time.sleep(1)
+
+                    # =========================
+                    # STEP 3: Click Continue
+                    # =========================
+                    if click_if_exists({"text": "Continue"}):
+                        log("Clicked Continue")
+                        return "auth_app_selected"
+
+                    # fallback (important for FB UI)
+                    try:
+                        w, h = d.window_size()
+                        d.click(w // 2, int(h * 0.93))
+                        log("Fallback Continue click")
+                        return "auth_app_selected"
+                    except:
+                        pass
+
+            time.sleep(1)
+
+        log("2FA handling timeout")
+        return False

@@ -1,7 +1,40 @@
 {
   "instances": [
     {
-      "name": "LD - Clone",
+      "name": "Aisha Jacobson",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Barbara Henriksen",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Bunty juyer",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Chuii KonPa",
       "account": {
         "name": null,
         "uid": null,
@@ -14,29 +47,16 @@
     {
       "name": "Denhaza Morizhiko",
       "account": {
-        "name": "Denhaza Morizhiko",
+        "name": null,
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": [
-          {
-            "name": "Random Guys",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          }
-        ]
+        "pages": []
       }
     },
     {
-      "name": "LD - Clone-5",
+      "name": "Denn Kainu",
       "account": {
         "name": null,
         "uid": null,
@@ -47,7 +67,7 @@
       }
     },
     {
-      "name": "LD - Juii",
+      "name": "LD - Clone",
       "account": {
         "name": null,
         "uid": null,
@@ -60,37 +80,23 @@
     {
       "name": "Osaka Chuii",
       "account": {
-        "name": "Osaka Chuii",
+        "name": null,
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": [
-          {
-            "name": "Azúcar Morena Bakery",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          },
-          {
-            "name": "TheBushman Prank",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          }
-        ]
+        "pages": []
+      }
+    },
+    {
+      "name": "Rixzz Oza",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
       }
     },
     {
@@ -139,149 +145,6 @@
             }
           }
         ]
-      }
-    },
-    {
-      "name": "US - 01",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "US - 02",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "US - 03",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "US - 04",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "US - 05",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "US - clone",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "LD - Clone-3",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "LD - Clone-6",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "LD - Clone-7",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "LD - Clone-8",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "LD - Clone-9",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "LD - Test - Login",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "US - Test Login",
-      "account": {
-        "name": "AlexShawshiihio44@outlook.com",
-        "uid": "61554805365221",
-        "password": "Hong312005",
-        "twofa": "TAB2 RSPN AWXE OFIJ LS7I LEDA PLMY QHKW",
-        "mail": "AlexShawshiihio44@outlook.com",
-        "pages": []
       }
     }
   ]

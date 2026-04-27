@@ -87,6 +87,24 @@ class TestLoginAccountTaskHandler(unittest.TestCase):
         self.assertTrue(result)
         handler.enter_confirmation_code.assert_called_once()
 
+    def test_skip_notifications_prompt_clicks_until_no_skip_text(self):
+        handler = self._handler()
+        handler._click_prompt_selector = Mock(side_effect=[True, True, True, False])
+
+        skipped = handler._handle_skip_notifications_prompt(Mock(), max_skips=6)
+
+        self.assertEqual(skipped, 3)
+        self.assertEqual(handler._click_prompt_selector.call_count, 4)
+
+    def test_skip_notifications_prompt_stops_at_max_skips(self):
+        handler = self._handler()
+        handler._click_prompt_selector = Mock(return_value=True)
+
+        skipped = handler._handle_skip_notifications_prompt(Mock(), max_skips=5)
+
+        self.assertEqual(skipped, 5)
+        self.assertEqual(handler._click_prompt_selector.call_count, 5)
+
 
 if __name__ == "__main__":
     unittest.main()

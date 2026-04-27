@@ -30,7 +30,7 @@
     "email_timeout_seconds": 90,
     "email_poll_interval_seconds": 5,
     "email_mark_as_seen": false,
-    "theme_preset": "dark",
+    "theme_preset": "light",
     "accent_color": "cyan",
     "ui_density": "comfortable",
     "ui_scale": "normal",

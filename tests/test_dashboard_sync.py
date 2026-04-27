@@ -32,6 +32,7 @@ class TestDashboardLdSync(unittest.TestCase):
         dashboard._dashboard_data = {"instances": []}
         dashboard._dashboard_dirty = False
         dashboard._dashboard_selected = None
+        dashboard._db_login_checked_account_ids = set()
         dashboard._db_status_label = None
         dashboard.palette = {"success": "#00ff00", "warning": "#ffaa00"}
         return dashboard
@@ -89,6 +90,58 @@ class TestDashboardLdSync(unittest.TestCase):
         self.assertEqual([inst["name"] for inst in saved["instances"]], ["LD Renamed"])
         self.assertEqual(saved["instances"][0]["account"]["pages"], [{"name": "Page A"}])
         self.assertEqual(dashboard._dashboard_selected, "LD Renamed")
+
+    def test_deleted_ld_removes_dashboard_row(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            paths = build_test_paths(Path(tmp_dir))
+            paths.ensure_runtime_dirs()
+            dashboard_path = paths.config_dir / "dashboard_instances.json"
+            dashboard_path.write_text(
+                json.dumps(
+                    {
+                        "instances": [
+                            {
+                                "name": "LD A",
+                                "account": {
+                                    "name": "Facebook A",
+                                    "uid": None,
+                                    "password": None,
+                                    "twofa": None,
+                                    "mail": None,
+                                    "pages": [{"name": "Page A"}],
+                                },
+                            },
+                            {
+                                "name": "LD B",
+                                "account": {
+                                    "name": "Facebook B",
+                                    "uid": None,
+                                    "password": None,
+                                    "twofa": None,
+                                    "mail": None,
+                                    "pages": [{"name": "Page B"}],
+                                },
+                            },
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            dashboard = self._dashboard()
+            dashboard._dashboard_selected = "LD A"
+            dashboard._dashboard_checked = {"LD A", "LD B"}
+
+            with patch("gui.pages.dashboard_page.get_app_paths", return_value=paths):
+                changed = dashboard._db_sync_snapshot_changes(
+                    {"LD A": "emulator-5554", "LD B": "emulator-5556"},
+                    {"LD B": "emulator-5556"},
+                )
+                saved = json.loads(dashboard_path.read_text(encoding="utf-8"))
+
+        self.assertTrue(changed)
+        self.assertEqual([inst["name"] for inst in saved["instances"]], ["LD B"])
+        self.assertIsNone(dashboard._dashboard_selected)
+        self.assertEqual(dashboard._dashboard_checked, {"LD B"})
 
     def test_emulator_account_cache_prefers_dashboard_account_name(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -385,10 +438,30 @@ class TestDashboardLdSync(unittest.TestCase):
             ],
         )
 
-    def test_dashboard_login_account_checkbox_is_single_select(self):
+    def test_dashboard_delete_login_accounts_removes_selected_rows(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            paths = build_test_paths(Path(tmp_dir))
+            paths.ensure_runtime_dirs()
+            dashboard = self._dashboard()
+
+            with patch("gui.pages.dashboard_page.get_app_paths", return_value=paths):
+                dashboard._db_save_login_accounts(
+                    [
+                        {"uid": "1001", "password": "pw-a", "email": "a@example.com", "twofa": ""},
+                        {"uid": "1002", "password": "pw-b", "email": "b@example.com", "twofa": ""},
+                        {"uid": "1003", "password": "pw-c", "email": "c@example.com", "twofa": ""},
+                    ]
+                )
+                removed = dashboard._db_delete_login_accounts(["1001", "1003"])
+                saved = json.loads((paths.config_dir / "accounts_login.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(removed, 2)
+        self.assertEqual([account["uid"] for account in saved], ["1002"])
+
+    def test_dashboard_login_account_checkbox_supports_multi_select_and_first_checked(self):
         class FakeTree:
             def __init__(self):
-                self.text = {"acct-a": "", "acct-b": ""}
+                self.text = {"acct-a": "", "acct-b": "", "acct-c": ""}
                 self.selected = None
                 self.focused = None
 
@@ -414,15 +487,16 @@ class TestDashboardLdSync(unittest.TestCase):
 
         dashboard._db_toggle_login_account_checked(tree, "acct-a")
         self.assertEqual(dashboard._db_login_checked_account_id, "acct-a")
-        self.assertEqual(tree.text, {"acct-a": "☑", "acct-b": "☐"})
+        self.assertEqual(tree.text, {"acct-a": "☑", "acct-b": "☐", "acct-c": "☐"})
 
         dashboard._db_toggle_login_account_checked(tree, "acct-b")
+        self.assertEqual(dashboard._db_login_checked_account_id, "acct-a")
+        self.assertEqual(dashboard._db_checked_login_account_ids(tree), ["acct-a", "acct-b"])
+        self.assertEqual(tree.text, {"acct-a": "☑", "acct-b": "☑", "acct-c": "☐"})
+
+        dashboard._db_toggle_login_account_checked(tree, "acct-a")
         self.assertEqual(dashboard._db_login_checked_account_id, "acct-b")
-        self.assertEqual(tree.text, {"acct-a": "☐", "acct-b": "☑"})
-
-        dashboard._db_toggle_login_account_checked(tree, "acct-b")
-        self.assertIsNone(dashboard._db_login_checked_account_id)
-        self.assertEqual(tree.text, {"acct-a": "☐", "acct-b": "☐"})
+        self.assertEqual(tree.text, {"acct-a": "☐", "acct-b": "☑", "acct-c": "☐"})
 
     def test_dashboard_use_login_account_starts_login_task_with_selected_credentials(self):
         class FakeThread:

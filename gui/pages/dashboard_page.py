@@ -264,12 +264,21 @@ class DashboardDialogMixin:
         tree.column("pages", width=60, anchor="e")
 
         configure_status_tree_tags(tree, self.palette, include_zebra=True)
+        tree.tag_configure(
+            "hover",
+            background=self.palette.get("hover_bg", self.palette["surface_alt"]),
+        )
 
         scroll = tb.Scrollbar(card, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
         scroll.pack(side="right", fill="y")
         tree.configure(yscrollcommand=scroll.set)
         tree.pack(fill="both", expand=True)
+        self._db_tree_hover_item = None
         tree.bind("<Button-1>", self._db_on_tree_click, add="+")
+        tree.bind("<B1-Motion>", self._db_on_tree_drag, add="+")
+        tree.bind("<ButtonRelease-1>", self._db_end_tree_drag, add="+")
+        tree.bind("<Motion>", self._db_on_tree_hover, add="+")
+        tree.bind("<Leave>", self._db_on_tree_leave, add="+")
         tree.bind("<Button-3>", self._db_show_instance_context_menu, add="+")
         tree.bind("<Control-a>", self._db_select_all_visible_instances)
         tree.bind("<Control-A>", self._db_select_all_visible_instances)
@@ -565,6 +574,9 @@ class DashboardDialogMixin:
         self._db_tree = None
         self._db_context_menu = None
         self._db_login_checked_account_id = None
+        self._db_login_checked_account_ids = set()
+        self._db_instance_drag_select = None
+        self._db_login_drag_select = None
         self._db_detail_host = None
 
     def _db_message_parent(self):
@@ -704,6 +716,20 @@ class DashboardDialogMixin:
             changed = True
             if getattr(self, "_dashboard_selected", None) == old_name:
                 self._dashboard_selected = matching_new
+
+        if old_snapshot or new_snapshot:
+            stale_names = set(by_name) - set(new_snapshot)
+            if stale_names:
+                self._dashboard_data["instances"] = [
+                    inst for inst in insts if str(inst.get("name") or "") not in stale_names
+                ]
+                insts = self._db_instances()
+                by_name = {str(i.get("name") or ""): i for i in insts if i.get("name")}
+                changed = True
+                if getattr(self, "_dashboard_selected", None) in stale_names:
+                    self._dashboard_selected = None
+                if hasattr(self, "_dashboard_checked"):
+                    self._dashboard_checked = set(getattr(self, "_dashboard_checked", set())) - stale_names
 
         for name in sorted(new_snapshot):
             if name not in by_name:
@@ -902,6 +928,7 @@ class DashboardDialogMixin:
         column = tree.identify_column(event.x)
         if not item:
             return None
+        self._db_begin_tree_drag(item)
         if region == "tree" or column == "#0":
             self._db_toggle_instance_checked(item)
             tree.selection_set(item)
@@ -909,6 +936,99 @@ class DashboardDialogMixin:
             self._db_on_select_instance()
             return "break"
         return None
+
+    def _db_begin_tree_drag(self, item):
+        checked_names = getattr(self, "_dashboard_checked", set())
+        self._db_instance_drag_select = {
+            "checked": item not in checked_names,
+            "visited": {str(item)},
+            "start": str(item),
+            "last": str(item),
+        }
+
+    def _db_tree_items_between(self, tree, start_item, end_item):
+        if not self._db_widget_exists(tree) or not start_item or not end_item:
+            return []
+        items = list(tree.get_children())
+        start_item = str(start_item)
+        end_item = str(end_item)
+        if end_item not in items:
+            return []
+        if start_item not in items:
+            return [end_item]
+        s = items.index(start_item)
+        e = items.index(end_item)
+        if s > e:
+            s, e = e, s
+        return items[s:e + 1]
+
+    def _db_autoscroll_tree(self, tree, event, margin=18):
+        try:
+            height = tree.winfo_height()
+        except Exception:
+            return
+        if event.y < margin:
+            tree.yview_scroll(-1, "units")
+        elif event.y > max(margin, height - margin):
+            tree.yview_scroll(1, "units")
+
+    def _db_on_tree_drag(self, event):
+        tree = getattr(self, "_db_tree", None)
+        drag = getattr(self, "_db_instance_drag_select", None)
+        if not self._db_widget_exists(tree) or not drag:
+            return None
+        self._db_autoscroll_tree(tree, event)
+        item = tree.identify_row(event.y)
+        if not item:
+            return None
+        visited = drag.setdefault("visited", set())
+        checked = bool(drag.get("checked"))
+        last = drag.get("last") or drag.get("start")
+        for row_id in self._db_tree_items_between(tree, last, str(item)):
+            if row_id and row_id not in visited and tree.exists(row_id):
+                self._db_toggle_instance_checked(row_id, checked)
+                visited.add(row_id)
+        drag["last"] = str(item)
+        tree.selection_set(item)
+        self._dashboard_selected = str(item)
+        self._db_on_select_instance()
+        return "break"
+
+    def _db_end_tree_drag(self, _event=None):
+        self._db_instance_drag_select = None
+        return None
+
+    def _db_on_generic_tree_hover(self, event, tree, attr):
+        if not self._db_widget_exists(tree):
+            return None
+        item = tree.identify_row(event.y)
+        previous = getattr(self, attr, None)
+        if item == previous:
+            return None
+        if previous and tree.exists(previous):
+            tags = [t for t in tree.item(previous, "tags") if t != "hover"]
+            tree.item(previous, tags=tags)
+        if item and tree.exists(item):
+            tags = list(tree.item(item, "tags"))
+            if "hover" not in tags:
+                tags.append("hover")
+            tree.item(item, tags=tags)
+        setattr(self, attr, item if item else None)
+        return None
+
+    def _db_on_generic_tree_leave(self, tree, attr):
+        previous = getattr(self, attr, None)
+        if self._db_widget_exists(tree) and previous and tree.exists(previous):
+            tags = [t for t in tree.item(previous, "tags") if t != "hover"]
+            tree.item(previous, tags=tags)
+        setattr(self, attr, None)
+        return None
+
+    def _db_on_tree_hover(self, event):
+        return self._db_on_generic_tree_hover(event, getattr(self, "_db_tree", None), "_db_tree_hover_item")
+
+    def _db_on_tree_leave(self, _event=None):
+        return self._db_on_generic_tree_leave(getattr(self, "_db_tree", None), "_db_tree_hover_item")
 
     def _db_toggle_instance_checked(self, name, checked=None):
         checked_names = getattr(self, "_dashboard_checked", set())
@@ -1041,7 +1161,8 @@ class DashboardDialogMixin:
 
         cols = ("uid", "email", "password", "twofa")
         self._db_login_checked_account_id = None
-        tree = tb.Treeview(shell, columns=cols, show="tree headings", height=13, style="Custom.Treeview")
+        self._db_login_checked_account_ids = set()
+        tree = tb.Treeview(shell, columns=cols, show="tree headings", height=13, style="Custom.Treeview", selectmode="extended")
         tree.heading("#0", text="", anchor="center")
         tree.column("#0", width=42, minwidth=42, stretch=False, anchor="center")
         for col, width, title in (
@@ -1053,12 +1174,21 @@ class DashboardDialogMixin:
             tree.heading(col, text=title, anchor="w")
             tree.column(col, width=width, anchor="w")
         configure_status_tree_tags(tree, self.palette, include_zebra=True)
+        tree.tag_configure(
+            "hover",
+            background=self.palette.get("hover_bg", self.palette["surface_alt"]),
+        )
 
         scroll = tb.Scrollbar(shell, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
         scroll.pack(side="right", fill="y")
         tree.configure(yscrollcommand=scroll.set)
         tree.pack(fill="both", expand=True)
+        self._db_login_hover_item = None
         tree.bind("<Button-1>", lambda event: self._db_on_login_account_click(event, tree), add="+")
+        tree.bind("<B1-Motion>", lambda event: self._db_on_login_account_drag(event, tree), add="+")
+        tree.bind("<ButtonRelease-1>", lambda event: self._db_end_login_account_drag(event), add="+")
+        tree.bind("<Motion>", lambda event: self._db_on_generic_tree_hover(event, tree, "_db_login_hover_item"), add="+")
+        tree.bind("<Leave>", lambda event: self._db_on_generic_tree_leave(tree, "_db_login_hover_item"), add="+")
 
         def refresh(select_id=None):
             for item in tree.get_children():
@@ -1069,7 +1199,7 @@ class DashboardDialogMixin:
                     "",
                     "end",
                     iid=account_id,
-                    text="☑" if account_id == self._db_login_checked_account_id else "☐",
+                    text="☑" if account_id in self._db_login_checked_account_ids else "☐",
                     values=(
                         str(account.get("uid") or ""),
                         str(account.get("email") or ""),
@@ -1084,11 +1214,28 @@ class DashboardDialogMixin:
                 self._db_set_login_account_checked(tree, select_id)
 
         def selected_account():
-            account_id = getattr(self, "_db_login_checked_account_id", None)
+            account_id = self._db_first_checked_login_account_id(tree)
             if not account_id:
                 MessageBox.showinfo("Login Account", "Check an account first.", parent=win)
                 return None
             return self._db_get_login_account(str(account_id))
+
+        def delete_selected():
+            account_ids = self._db_checked_login_account_ids(tree)
+            if not account_ids:
+                MessageBox.showinfo("Delete Accounts", "Check one or more accounts first.", parent=win)
+                return
+            if not MessageBox.askyesno(
+                "Delete Accounts",
+                f"Delete {len(account_ids)} selected account(s) from the login list?",
+                parent=win,
+            ):
+                return
+            removed = self._db_delete_login_accounts(account_ids)
+            self._db_login_checked_account_ids.difference_update(account_ids)
+            self._db_sync_login_account_primary_id(tree)
+            refresh()
+            self._db_status(f"Deleted {removed} login account(s)", self.palette["success"])
 
         def use_selected():
             account = selected_account()
@@ -1107,6 +1254,7 @@ class DashboardDialogMixin:
         tb.Button(footer, text="Import Text", bootstyle="info-outline", command=lambda: self._db_import_login_accounts_text(refresh, win), width=13).pack(side="left")
         tb.Button(footer, text="Import File", bootstyle="info-outline", command=lambda: self._db_import_login_accounts_file(refresh, win), width=12).pack(side="left", padx=(6, 0))
         tb.Button(footer, text="Add Account", bootstyle="success-outline", command=lambda: self._db_add_login_account(refresh, win), width=13).pack(side="left", padx=(6, 0))
+        tb.Button(footer, text="Delete Selected", bootstyle="danger-outline", command=delete_selected, width=15).pack(side="left", padx=(6, 0))
         tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(side="right")
         tb.Button(footer, text="Use Account", bootstyle="primary", command=use_selected, width=12).pack(side="right", padx=(0, 6))
 
@@ -1143,31 +1291,120 @@ class DashboardDialogMixin:
         return {}
 
     def _db_set_login_account_checked(self, tree, account_id):
-        account_id = str(account_id or "")
-        self._db_login_checked_account_id = account_id or None
+        if isinstance(account_id, (set, list, tuple)):
+            checked_ids = {str(item) for item in account_id if str(item or "")}
+        else:
+            account_id = str(account_id or "")
+            checked_ids = {account_id} if account_id else set()
+        self._db_login_checked_account_ids = checked_ids
+        self._db_sync_login_account_primary_id(tree)
         for item in tree.get_children():
-            tree.item(item, text="☑" if item == self._db_login_checked_account_id else "☐")
-        if self._db_login_checked_account_id and tree.exists(self._db_login_checked_account_id):
-            tree.selection_set(self._db_login_checked_account_id)
-            tree.focus(self._db_login_checked_account_id)
+            tree.item(item, text="☑" if item in self._db_login_checked_account_ids else "☐")
+        first_id = getattr(self, "_db_login_checked_account_id", None)
+        if first_id and tree.exists(first_id):
+            try:
+                tree.selection_set(tuple(self._db_checked_login_account_ids(tree)))
+            except Exception:
+                tree.selection_set(first_id)
+            tree.focus(first_id)
 
     def _db_toggle_login_account_checked(self, tree, account_id):
         account_id = str(account_id or "")
-        if getattr(self, "_db_login_checked_account_id", None) == account_id:
-            self._db_set_login_account_checked(tree, "")
+        checked_ids = set(getattr(self, "_db_login_checked_account_ids", set()))
+        if account_id in checked_ids:
+            checked_ids.remove(account_id)
         else:
-            self._db_set_login_account_checked(tree, account_id)
+            checked_ids.add(account_id)
+        self._db_set_login_account_checked(tree, checked_ids)
+
+    def _db_set_login_account_item_checked(self, tree, account_id, checked):
+        account_id = str(account_id or "")
+        if not account_id:
+            return
+        checked_ids = set(getattr(self, "_db_login_checked_account_ids", set()))
+        if checked:
+            checked_ids.add(account_id)
+        else:
+            checked_ids.discard(account_id)
+        self._db_login_checked_account_ids = checked_ids
+        if self._db_widget_exists(tree) and tree.exists(account_id):
+            tree.item(account_id, text="☑" if checked else "☐")
+        self._db_sync_login_account_primary_id(tree)
+
+    def _db_checked_login_account_ids(self, tree=None):
+        checked_ids = set(getattr(self, "_db_login_checked_account_ids", set()))
+        if tree is not None:
+            return [item for item in tree.get_children() if item in checked_ids]
+        return sorted(checked_ids)
+
+    def _db_first_checked_login_account_id(self, tree=None):
+        checked_ids = self._db_checked_login_account_ids(tree)
+        return checked_ids[0] if checked_ids else None
+
+    def _db_sync_login_account_primary_id(self, tree=None):
+        self._db_login_checked_account_id = self._db_first_checked_login_account_id(tree)
+        return self._db_login_checked_account_id
 
     def _db_on_login_account_click(self, event, tree):
         item = tree.identify_row(event.y)
         if not item:
             return None
+        self._db_begin_login_account_drag(item)
         region = tree.identify_region(event.x, event.y)
         column = tree.identify_column(event.x)
         if region == "tree" or column == "#0":
             self._db_toggle_login_account_checked(tree, item)
             return "break"
         return None
+
+    def _db_begin_login_account_drag(self, item):
+        checked_ids = set(getattr(self, "_db_login_checked_account_ids", set()))
+        self._db_login_drag_select = {
+            "checked": str(item) not in checked_ids,
+            "visited": {str(item)},
+            "start": str(item),
+            "last": str(item),
+        }
+
+    def _db_on_login_account_drag(self, event, tree):
+        drag = getattr(self, "_db_login_drag_select", None)
+        if not self._db_widget_exists(tree) or not drag:
+            return None
+        self._db_autoscroll_tree(tree, event)
+        item = tree.identify_row(event.y)
+        if not item:
+            return None
+        visited = drag.setdefault("visited", set())
+        checked = bool(drag.get("checked"))
+        last = drag.get("last") or drag.get("start")
+        for row_id in self._db_tree_items_between(tree, last, str(item)):
+            if row_id and row_id not in visited and tree.exists(row_id):
+                self._db_set_login_account_item_checked(tree, row_id, checked)
+                visited.add(row_id)
+        drag["last"] = str(item)
+        tree.selection_set(tuple(self._db_checked_login_account_ids(tree)))
+        tree.focus(item)
+        return "break"
+
+    def _db_end_login_account_drag(self, _event=None):
+        self._db_login_drag_select = None
+        return None
+
+    def _db_delete_login_accounts(self, account_ids):
+        account_ids = {str(account_id) for account_id in account_ids if str(account_id or "")}
+        if not account_ids:
+            return 0
+        accounts = self._db_login_accounts()
+        kept = [
+            account for account in accounts
+            if str(account.get("account_id") or self._db_account_row_id(account)) not in account_ids
+        ]
+        removed = len(accounts) - len(kept)
+        self._db_login_accounts_path().write_text(
+            json.dumps(kept, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        return removed
 
     def _db_assign_login_account_to_instance(self, instance, account):
         acc = instance.setdefault("account", {})
