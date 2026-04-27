@@ -6,7 +6,6 @@ import time
 
 from core.task_base import BaseTaskHandler, U2_AVAILABLE, u2
 from utils.ip_guard import check_ld_ip_allowed
-
 class ScrollTaskHandler(BaseTaskHandler):
     """Handler for Facebook scrolling tasks"""
     def _restart_scroll_task(self, name, serial, remaining_duration, direction, intensity, restart_attempts):
@@ -116,6 +115,9 @@ class ScrollTaskHandler(BaseTaskHandler):
             return False
         self.log(f"Running scroll task on LD: {name}")
 
+        self.log(f"Checking skip notifications for {name}")
+        self._handle_skip_notifications_prompt(d)
+        time.sleep(4)
         # Configure scroll parameters based on intensity.
         # Durations are in milliseconds for the ADB swipe command.
         intensity_params = {
@@ -146,6 +148,11 @@ class ScrollTaskHandler(BaseTaskHandler):
         consecutive_failures = 0
         consecutive_timeouts = 0
         max_timeout_restarts = 1
+        like_count = 0
+        last_like_at = 0.0
+        random_like_enabled = bool(getattr(self, "random_like", True))
+        like_chance = float(getattr(self, "like_chance", 0.18)) if random_like_enabled else 0.0
+        like_min_gap = float(getattr(self, "like_min_gap_seconds", 12.0))
         
         try:
             while time.time() - start_time < duration:
@@ -213,6 +220,19 @@ class ScrollTaskHandler(BaseTaskHandler):
                         successful_swipes += 1
                         consecutive_failures = 0
                         consecutive_timeouts = 0
+
+                        now = time.time()
+                        if (
+                            like_chance > 0
+                            and random.random() < like_chance
+                            and (now - last_like_at) >= like_min_gap
+                        ):
+                            time.sleep(random.uniform(0.6, 1.4))
+                            if self._random_like_post(d):
+                                like_count += 1
+                                last_like_at = time.time()
+                                self.log(f"Liked a post on {name} (total likes: {like_count})")
+                                time.sleep(random.uniform(0.8, 1.8))
                     else:
                         failed_swipes += 1
                         consecutive_failures += 1
@@ -276,7 +296,10 @@ class ScrollTaskHandler(BaseTaskHandler):
 
                 time.sleep(delay)
                 
-            self.log(f"Completed scrolling on {name}: {successful_swipes} successful, {failed_swipes} failed swipes")
+            self.log(
+                f"Completed scrolling on {name}: {successful_swipes} successful, "
+                f"{failed_swipes} failed swipes, {like_count} like(s)"
+            )
             return True
             
         except Exception as e:
@@ -571,6 +594,145 @@ class ScrollTaskHandler(BaseTaskHandler):
 
         self.log("Could not confirm Home button after retries")
         return False
+    
+    def _handle_skip_notifications_prompt(self, d, max_skips=6):
+        """Click repeated post-login Skip/Not Now prompts until none remain."""
+        selectors = [
+            {"text": "Skip"},
+            {"text": "SKIP"},
+            {"text": "Skip for now"},
+            {"text": "Not Now"},
+            {"text": "Not now"},
+            {"text": "NOT NOW"},
+            {"text": "Maybe Later"},
+            {"text": "Maybe later"},
+            {"textContains": "Skip"},
+            {"textContains": "skip"},
+            {"textContains": "Not now"},
+            {"textContains": "not now"},
+            {"textContains": "Maybe later"},
+            {"description": "Skip"},
+            {"description": "Not Now"},
+            {"description": "Not now"},
+            {"descriptionContains": "Skip"},
+            {"descriptionContains": "skip"},
+            {"descriptionContains": "Not now"},
+            {"descriptionContains": "not now"},
+        ]
+
+        skipped = 0
+        for _ in range(max(1, int(max_skips))):
+            if self.check_paused():
+                break
+            if not self._click_prompt_selector(d, selectors, timeout=2):
+                break
+            skipped += 1
+            time.sleep(1.5)
+
+        if skipped:
+            self.log(f"Skipped {skipped} post-login prompt(s)")
+        return skipped
+
+    def _random_like_post(self, d):
+        """Click a Like button on a visible feed post.
+
+        Facebook's like button description varies across builds and locales
+        ("Like", "Like button", "Like, button", "Like, double tap and hold..."),
+        so we match loosely with *Contains* selectors and then filter by:
+          - already-liked state ("Remove like", "Liked", "Unlike", selected=True)
+          - vertical position (middle band of the screen)
+          - the candidate must be clickable.
+        Returns True on a successful click.
+        """
+        try:
+            _, h = d.window_size()
+        except Exception:
+            return False
+
+        top_band = int(h * 0.18)
+        bottom_band = int(h * 0.82)
+
+        liked_pattern = re.compile(r"(?i)(remove\s*like|\bliked\b|unlike|you\s+liked)")
+        like_pattern = re.compile(r"(?i)\blike\b")
+
+        candidate_selectors = [
+            {"descriptionContains": "Like"},
+            {"descriptionContains": "like"},
+            {"textContains": "Like"},
+            {"resourceIdMatches": r".*(feedback_like|like_button|ufi_.*like).*"},
+        ]
+
+        seen_bounds = set()
+
+        for selector in candidate_selectors:
+            try:
+                matches = d(**selector)
+            except Exception:
+                continue
+
+            try:
+                count = int(matches.count)
+            except Exception:
+                try:
+                    count = 1 if matches.exists else 0
+                except Exception:
+                    count = 0
+
+            if count <= 0:
+                continue
+
+            for idx in range(min(count, 12)):
+                try:
+                    node = matches[idx] if count > 1 else matches
+                    info = node.info
+                except Exception:
+                    continue
+
+                desc = (info.get("contentDescription") or "")
+                text = (info.get("text") or "")
+                blob = f"{desc} {text}".strip()
+
+                if not blob:
+                    continue
+                if liked_pattern.search(blob):
+                    continue
+                if not like_pattern.search(blob) and "like" not in (info.get("resourceName") or "").lower():
+                    continue
+                if info.get("selected"):
+                    continue
+                if not info.get("clickable", True):
+                    continue
+
+                bounds = info.get("bounds") or {}
+                top = bounds.get("top", 0)
+                bottom = bounds.get("bottom", 0)
+                left = bounds.get("left", 0)
+                right = bounds.get("right", 0)
+
+                if bottom <= top or right <= left:
+                    continue
+
+                key = (left, top, right, bottom)
+                if key in seen_bounds:
+                    continue
+                seen_bounds.add(key)
+
+                if bottom <= top_band or top >= bottom_band:
+                    continue
+
+                try:
+                    node.click()
+                    return True
+                except Exception:
+                    cx = (left + right) // 2
+                    cy = (top + bottom) // 2
+                    try:
+                        d.click(cx, cy)
+                        return True
+                    except Exception:
+                        continue
+
+        return False
 
 class EnhancedScrollTaskHandler(ScrollTaskHandler):
     """Enhanced scroll handler with error handling and randomization"""
@@ -586,4 +748,4 @@ class EnhancedScrollTaskHandler(ScrollTaskHandler):
     def execute(self, name, duration=900, direction="down", intensity="medium"):
         """Enhanced execute with error handling"""
         self.error_handler.reset_counters(name)
-        return super().execute(name, duration, direction, intensity)
+        return super().execute(name, duration, direction, intensity)    

@@ -255,10 +255,24 @@ class AccountDialogMixin:
             tree.heading(col, text=title, anchor="w")
             tree.column(col, width=width, anchor="w")
 
-        configure_status_tree_tags(tree, self.palette, include_zebra=True)
+        configure_status_tree_tags(tree, self.palette, include_zebra=False)
+        # Account list uses foreground-only highlighting: clear any backgrounds
+        # set by the shared helper and disable zebra striping on this tree.
+        # Multiple specs share the same tag (e.g. both "live" and "active" map
+        # to tag "active"); skip duplicates so earlier specs win — matching the
+        # de-dup behavior in configure_status_tree_tags.
+        from gui.components.status import STATUS_SPECS
+        configured_tags = set()
+        for spec in STATUS_SPECS.values():
+            if spec.tag in configured_tags:
+                continue
+            configured_tags.add(spec.tag)
+            tree.tag_configure(spec.tag, background="", foreground=status_color(spec.key, self.palette))
+        tree.tag_configure("odd_row", background="")
+        tree.tag_configure("even_row", background="")
         # Extra tags not covered by the shared helper.
         for key in ("live", "idle", "novery", "dead", "unknown"):
-            tree.tag_configure(key, foreground=status_color(key, self.palette))
+            tree.tag_configure(key, background="", foreground=status_color(key, self.palette))
 
         scrollbar = tb.Scrollbar(parent, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
         scrollbar.pack(side="right", fill="y")

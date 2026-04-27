@@ -77,6 +77,23 @@ class BaseTaskHandler(ABC):
             time.sleep(2)
         return False
 
+    def _click_prompt_selector(self, d, selectors, timeout=2):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            for selector in selectors:
+                try:
+                    obj = d(**selector)
+                    exists = obj.exists
+                    if callable(exists):
+                        exists = exists(timeout=0.5)
+                    if exists:
+                        obj.click()
+                        return True
+                except Exception:
+                    continue
+            time.sleep(0.3)
+        return False
+
     def auto_arrange_ld_windows(self):
         """Arrange LD windows when enabled in settings."""
         if not bool(getattr(self, "auto_arrange_ld", False)):

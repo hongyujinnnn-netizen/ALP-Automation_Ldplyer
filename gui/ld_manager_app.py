@@ -207,8 +207,10 @@ class LDManagerApp(
         self.auto_arrange_ld = tk.BooleanVar(value=False)
         self.auto_shutdown_pc = tk.BooleanVar(value=False)
         self.scroll_after_post = tk.BooleanVar(value=True)
+        self.random_like = tk.BooleanVar(value=True)
         self.clear_cache = tk.BooleanVar(value=True)
         self.verify_account = tk.BooleanVar(value=True)
+        self.verify_2fa = tk.BooleanVar(value=True)
         self.reg_contact_mode = tk.StringVar(value="random_phone")
         self.reg_contact_value = tk.StringVar(value="")
         self.reg_phone_prefix = tk.StringVar(value="+1")
@@ -1571,6 +1573,7 @@ class LDManagerApp(
                     "scroll": "Scroll Feed",
                     "reels": "Watch Reels",
                     "reg_account": "Register Account",
+                    "login": "Login Account",
                     "test_feature": "Test Feature",
                 }.get(self.task_type_var.get(), self.task_type_var.get().title())
                 progress_text = f"{random.randint(24, 96)}%"
@@ -2809,6 +2812,7 @@ Recent Items:
                     "scroll": "Scroll Feed",
                     "reels": "Watch Reels",
                     "reg_account": "Register Account",
+                    "login": "Login Account",
                     "test_feature": "Test Feature",
                 }.get(self.task_type_var.get(), self.task_type_var.get().title()),
                 "progress": 72,
@@ -2833,6 +2837,7 @@ Recent Items:
                         "scroll": "Scroll Feed",
                         "reels": "Watch Reels",
                         "reg_account": "Register Account",
+                        "login": "Login Account",
                         "test_feature": "Test Feature",
                     }.get(self.task_type_var.get(), self.task_type_var.get().title())
                 self.ld_table.item(
@@ -2863,6 +2868,21 @@ Recent Items:
         # Determine task type
         task_type = self.task_type_var.get()
 
+        accounts_pool = []
+        if task_type == "login":
+            try:
+                accounts_pool = list(self._db_login_accounts() or [])
+            except Exception as exc:
+                MessageBox.showerror("Login Account", f"Could not load accounts: {exc}")
+                return
+            if len(accounts_pool) < len(selected_ld_names):
+                MessageBox.showerror(
+                    "Login Account",
+                    f"Need at least {len(selected_ld_names)} accounts; only {len(accounts_pool)} available.\n"
+                    "Open 'Manage Accounts' on the Login task panel to import more.",
+                )
+                return
+
         handler_context = TaskHandlerContext(
             emulator=self.emulator,
             log=self.log,
@@ -2877,6 +2897,7 @@ Recent Items:
             state_callback=self.update_device_runtime_state,
             verify_account=bool(self.verify_account.get()),
             scroll_after_post=bool(self.scroll_after_post.get()),
+            random_like=bool(self.random_like.get()),
             clear_cache=bool(self.clear_cache.get()),
             reg_contact_mode=self.reg_contact_mode.get(),
             reg_contact_value=self.reg_contact_value.get(),
@@ -2921,6 +2942,8 @@ Recent Items:
             scroll_after_post=self.scroll_after_post.get(),
             clear_cache=self.clear_cache.get(),
             verify_account=self.verify_account.get(),
+            accounts_pool=accounts_pool,
+            verify_2fa=bool(self.verify_2fa.get()),
         )
 
         def automation_thread():

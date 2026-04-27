@@ -25,6 +25,8 @@ class TaskController:
         scroll_after_post: bool,
         clear_cache: bool,
         verify_account: bool,
+        accounts_pool: list[dict] | None = None,
+        verify_2fa: bool = True,
     ) -> TaskRunRequest:
         return TaskRunRequest(
             selected_ld_names=selected_ld_names,
@@ -41,6 +43,8 @@ class TaskController:
             scroll_after_post=scroll_after_post,
             clear_cache=clear_cache,
             verify_account=verify_account,
+            accounts_pool=list(accounts_pool or []),
+            verify_2fa=verify_2fa,
         )
 
     def create_runner(self, **kwargs) -> object:

@@ -30,6 +30,7 @@ class TasksPageMixin:
     TASK_TYPE_LABELS = {
         "scroll": "Facebook Active",
         "reg_account": "Register Account",
+        "login": "Login Account",
         "reels": "Post Reels",
         "test_feature": "Test Feature",
     }
@@ -461,6 +462,7 @@ class TasksPageMixin:
         self._add_active_task_accent(card)
         grid = self._create_settings_grid(card)
         self._add_spinbox_setting(grid, 0, 0, "Task Duration (min)", self.task_duration, 1, 240)
+        self._add_toggle_setting(grid, 0, 1, "Random Like Posts", self.random_like)
         tb.Label(
             grid,
             text="Other tasks finish on their own flow and ignore this value.",

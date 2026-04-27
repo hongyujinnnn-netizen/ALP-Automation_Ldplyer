@@ -6,6 +6,7 @@ Persists to config/dashboard_instances.json.
 """
 
 import json
+import re
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox as MessageBox
@@ -1132,40 +1133,40 @@ class DashboardDialogMixin:
 
     def _db_open_login_account_dialog(self):
         names = self._db_checked_names()
-        if len(names) > 1:
-            MessageBox.showinfo(
-                "Login",
-                "Login setup works on one LD instance at a time. Keep only one checkbox selected.",
-                parent=self._db_message_parent(),
-            )
+        if not names:
+            MessageBox.showinfo("Login", "Select one or more instances first.", parent=self._db_message_parent())
             return
-        if names:
+        if len(names) == 1:
             self._dashboard_selected = names[0]
-        inst = self._db_selected_instance()
-        if not inst:
-            MessageBox.showinfo("Login", "Select an instance first.", parent=self._db_message_parent())
-            return
+        inst = self._db_selected_instance() if len(names) == 1 else None
+        multi_mode = len(names) > 1
 
-        win = self._db_modal(f"Login Account · {inst.get('name')}", 920, 640)
+        title_suffix = f"{len(names)} instances" if multi_mode else (inst.get('name') if inst else "")
+        win = self._db_modal(f"Login Account · {title_suffix}", 920, 640)
         shell = tb.Frame(win, style="Card.TFrame", padding=18)
         shell.pack(fill="both", expand=True)
 
         head = tb.Frame(shell, style="CardInner.TFrame")
         head.pack(fill="x", pady=(0, 12))
         tb.Label(head, text="Login Account", style="SectionTitle.TLabel").pack(anchor="w")
-        tb.Label(
-            head,
-            text=f"Choose or import credentials for LD Instance · {inst.get('name')}",
-            style="Subtitle.TLabel",
-        ).pack(anchor="w", pady=(2, 0))
+        if multi_mode:
+            subtitle = (
+                f"Multi-login on {len(names)} LDs. Check at least {len(names)} accounts; "
+                "each LD will consume one account. Common settings (Parallel Devices, "
+                "Auto Arrange, Clear Cache) apply."
+            )
+        else:
+            subtitle = f"Choose or import credentials for LD Instance · {inst.get('name')}"
+        tb.Label(head, text=subtitle, style="Subtitle.TLabel").pack(anchor="w", pady=(2, 0))
 
-        cols = ("uid", "email", "password", "twofa")
+        cols = ("name", "uid", "email", "password", "twofa")
         self._db_login_checked_account_id = None
         self._db_login_checked_account_ids = set()
         tree = tb.Treeview(shell, columns=cols, show="tree headings", height=13, style="Custom.Treeview", selectmode="extended")
         tree.heading("#0", text="", anchor="center")
         tree.column("#0", width=42, minwidth=42, stretch=False, anchor="center")
         for col, width, title in (
+            ("name", 160, "Name"),
             ("uid", 180, "UID"),
             ("email", 220, "Email"),
             ("password", 150, "Password"),
@@ -1201,6 +1202,7 @@ class DashboardDialogMixin:
                     iid=account_id,
                     text="☑" if account_id in self._db_login_checked_account_ids else "☐",
                     values=(
+                        str(account.get("name") or ""),
                         str(account.get("uid") or ""),
                         str(account.get("email") or ""),
                         "••••••••" if account.get("password") else "",
@@ -1249,6 +1251,30 @@ class DashboardDialogMixin:
             win.destroy()
             self._db_start_login_account_task(inst, account)
 
+        def run_multi():
+            checked_ids = self._db_checked_login_account_ids(tree)
+            if len(checked_ids) < len(names):
+                MessageBox.showwarning(
+                    "Login Account",
+                    f"Need at least {len(names)} checked accounts; only {len(checked_ids)} selected.",
+                    parent=win,
+                )
+                return
+            accounts = [
+                self._db_get_login_account(str(account_id))
+                for account_id in checked_ids
+            ]
+            accounts = [a for a in accounts if a]
+            if len(accounts) < len(names):
+                MessageBox.showwarning(
+                    "Login Account",
+                    "Some checked accounts could not be loaded.",
+                    parent=win,
+                )
+                return
+            win.destroy()
+            self._db_start_multi_login_batch(list(names), accounts[: len(names)])
+
         footer = tb.Frame(win, style="CardInner.TFrame", padding=(18, 12))
         footer.pack(fill="x", side="bottom")
         tb.Button(footer, text="Import Text", bootstyle="info-outline", command=lambda: self._db_import_login_accounts_text(refresh, win), width=13).pack(side="left")
@@ -1256,7 +1282,16 @@ class DashboardDialogMixin:
         tb.Button(footer, text="Add Account", bootstyle="success-outline", command=lambda: self._db_add_login_account(refresh, win), width=13).pack(side="left", padx=(6, 0))
         tb.Button(footer, text="Delete Selected", bootstyle="danger-outline", command=delete_selected, width=15).pack(side="left", padx=(6, 0))
         tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(side="right")
-        tb.Button(footer, text="Use Account", bootstyle="primary", command=use_selected, width=12).pack(side="right", padx=(0, 6))
+        if multi_mode:
+            tb.Button(
+                footer,
+                text=f"Run Login on {len(names)} LDs",
+                bootstyle="primary",
+                command=run_multi,
+                width=22,
+            ).pack(side="right", padx=(0, 6))
+        else:
+            tb.Button(footer, text="Use Account", bootstyle="primary", command=use_selected, width=12).pack(side="right", padx=(0, 6))
 
         refresh()
 
@@ -1545,6 +1580,111 @@ class DashboardDialogMixin:
             pass
         threading.Thread(target=worker, daemon=True).start()
 
+    def _db_start_multi_login_batch(self, ld_names, accounts):
+        if not ld_names or not accounts:
+            return
+        if getattr(self, "running_event", None) is not None and self.running_event.is_set():
+            MessageBox.showwarning(
+                "Login Account",
+                "Automation is already running. Stop it before starting a login batch.",
+                parent=self._db_message_parent(),
+            )
+            return
+
+        from services.task_handler_factory import TaskHandlerContext, UnsupportedTaskTypeError
+
+        try:
+            blocked_countries = [
+                code.strip().upper()
+                for code in self._db_var_value("blocked_countries", "").split(",")
+                if code.strip()
+            ]
+        except Exception:
+            blocked_countries = []
+
+        handler_context = TaskHandlerContext(
+            emulator=self.emulator,
+            log=self.log,
+            pause_event=self.pause_event,
+            running_flag=lambda: self.running_event.is_set(),
+            blocked_countries=blocked_countries,
+            auto_arrange_ld=bool(self._db_var_value("auto_arrange_ld", False)),
+            state_callback=self.update_device_runtime_state,
+            verify_account=bool(self._db_var_value("verify_account", True)),
+            scroll_after_post=bool(self._db_var_value("scroll_after_post", True)),
+            clear_cache=bool(self._db_var_value("clear_cache", True)),
+        )
+
+        try:
+            task_handler = self.task_handler_factory.create("login", handler_context)
+        except UnsupportedTaskTypeError as exc:
+            MessageBox.showerror("Login Account", f"Login handler is not registered: {exc}", parent=self._db_message_parent())
+            return
+
+        parallel_ld = max(1, int(self._db_var_value("parallel_ld", 1) or 1))
+        boot_delay = max(1, int(self._db_var_value("boot_delay", 20) or 20))
+        task_duration_seconds = int(self._db_var_value("task_duration", 5) or 5) * 60
+
+        request = self.task_controller.build_request(
+            selected_ld_names=list(ld_names),
+            task_type="login",
+            task_template=str(self._db_var_value("task_template_var", "custom") or "custom"),
+            parallel_ld=parallel_ld,
+            start_same_time=bool(self._db_var_value("start_same_time", False)),
+            auto_arrange_ld=bool(self._db_var_value("auto_arrange_ld", False)),
+            boot_delay=boot_delay,
+            task_duration_seconds=task_duration_seconds,
+            max_videos=int(self._db_var_value("max_videos", 2) or 2),
+            page_per_account=int(self._db_var_value("page_per_account", 2) or 2),
+            accounts_per_ld=1,
+            scroll_after_post=bool(self._db_var_value("scroll_after_post", True)),
+            clear_cache=bool(self._db_var_value("clear_cache", True)),
+            verify_account=bool(self._db_var_value("verify_account", True)),
+            accounts_pool=list(accounts),
+            verify_2fa=bool(self._db_var_value("verify_2fa", True)),
+        )
+
+        try:
+            self.automation_controller.start()
+        except Exception:
+            self.running_event.set()
+        if hasattr(self, "status_task_lbl"):
+            self.status_task_lbl.set_status("Running", text=f"Tasks: {len(ld_names)} active")
+        self.log(f"Starting multi-login on {len(ld_names)} LD(s) with {len(accounts)} account(s)", "INFO")
+
+        def worker():
+            try:
+                runner = self.task_controller.create_runner(
+                    request=request,
+                    running_flag=lambda: self.running_event.is_set(),
+                    log_func=self.log,
+                    task_handler=task_handler,
+                    progress_callback=self.update_progress if hasattr(self, "update_progress") else None,
+                    emulator=self.emulator,
+                    state_callback=self.update_device_runtime_state,
+                )
+            except Exception as exc:
+                self.log(f"Multi-login setup error: {exc}", "ERROR")
+                self.stop_automation(confirm=False)
+                return
+
+            def _on_error(exc):
+                self.log(f"Multi-login error: {exc}", "ERROR")
+
+            def _on_completed(_completed):
+                pass
+
+            try:
+                self.automation_controller.run_batch(runner, on_error=_on_error, on_completed=_on_completed)
+            finally:
+                try:
+                    self.stop_automation(confirm=False)
+                except Exception:
+                    if getattr(self, "running_event", None) is not None:
+                        self.running_event.clear()
+
+        threading.Thread(target=worker, daemon=True).start()
+
     def _db_var_value(self, attr_name, default=None):
         value = getattr(self, attr_name, default)
         if hasattr(value, "get"):
@@ -1557,20 +1697,38 @@ class DashboardDialogMixin:
     def _db_parse_login_account_lines(self, text):
         accounts = []
         for raw_line in str(text or "").splitlines():
-            line = raw_line.strip()
+            line = raw_line.rstrip("\r\n").strip()
             if not line:
                 continue
-            if line.lower().startswith("uid,") or line.lower().startswith("facebook_uid,"):
+            lower = line.lower()
+            if (
+                lower.startswith("name,")
+                or lower.startswith("name\t")
+                or lower.startswith("uid,")
+                or lower.startswith("uid\t")
+                or lower.startswith("facebook_uid,")
+                or lower.startswith("facebook_uid\t")
+            ):
                 continue
-            parts = [part.strip() for part in line.split(",")]
+            if "\t" in line:
+                parts = [part.strip() for part in line.split("\t")]
+            elif "," in line:
+                parts = [part.strip() for part in line.split(",")]
+            else:
+                parts = [part.strip() for part in re.split(r"\s{2,}", line)]
             if len(parts) < 4:
                 continue
-            uid, password, email, twofa = parts[:4]
+            name = parts[0]
+            uid = parts[1]
+            password = parts[2]
+            email = parts[3]
+            twofa = parts[4] if len(parts) >= 5 else ""
             if not (uid or email) or not password:
                 continue
             accounts.append(
                 self._db_normalize_login_account(
                     {
+                        "name": name,
                         "uid": uid,
                         "password": password,
                         "email": email,
@@ -1585,9 +1743,11 @@ class DashboardDialogMixin:
         email = str(account.get("email") or account.get("mail") or "").strip()
         password = str(account.get("password") or "").strip()
         twofa = str(account.get("twofa") or account.get("2fa") or "").strip()
+        name = str(account.get("name") or "").strip()
         account_id = str(account.get("account_id") or uid or email).strip()
         return {
             "account_id": account_id,
+            "name": name,
             "uid": uid,
             "password": password,
             "email": email,
@@ -1633,7 +1793,7 @@ class DashboardDialogMixin:
         body = tb.Frame(win, style="Card.TFrame", padding=18)
         body.pack(fill="both", expand=True)
         tb.Label(body, text="Import Login Accounts", style="SectionTitle.TLabel").pack(anchor="w")
-        tb.Label(body, text="Format: UID,Password,email,2fa", style="Subtitle.TLabel").pack(anchor="w", pady=(2, 10))
+        tb.Label(body, text="Format per line: Name<TAB or ,>UID<TAB or ,>Password<TAB or ,>email<TAB or ,>2fa", style="Subtitle.TLabel").pack(anchor="w", pady=(2, 10))
         text = tk.Text(
             body,
             height=10,
@@ -1647,7 +1807,7 @@ class DashboardDialogMixin:
             highlightbackground=self.palette["border"],
         )
         text.pack(fill="both", expand=True)
-        text.insert("1.0", "UID,Password,email@example.com,2FA SECRET")
+        text.insert("1.0", "Name,UID,Password,email@example.com,2FA SECRET")
 
         def commit():
             accounts = self._db_parse_login_account_lines(text.get("1.0", "end"))

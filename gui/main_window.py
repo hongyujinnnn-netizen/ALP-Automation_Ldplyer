@@ -9,7 +9,8 @@ from utils.ip_guard import get_ld_public_ip_info
 class MainWindow:
     def __init__(self, selected_ld_names, running_flag, ld_thread, log_func=print,
                  start_same_time=False, auto_arrange_ld=False, task_type="scroll", task_template="custom", task_handler=None, progress_callback=None,
-                 boot_delay=20, task_duration=900, max_videos=2, page_per_account=2, accounts_per_ld=1, scroll_after_post=True, clear_cache=True, verify_account=True, emulator=None, state_callback=None):
+                 boot_delay=20, task_duration=900, max_videos=2, page_per_account=2, accounts_per_ld=1, scroll_after_post=True, clear_cache=True, verify_account=True, emulator=None, state_callback=None,
+                 accounts_pool=None, verify_2fa=True):
 
         # Import here to avoid circular imports when we need a fresh controller
         if emulator is None:
@@ -67,6 +68,15 @@ class MainWindow:
         self._closed_ld_names = set()
         self._close_lock = threading.Lock()
         self.reels_task_join_poll_seconds = 1.0
+        self.verify_2fa = bool(verify_2fa)
+        self._accounts_pool = list(accounts_pool or [])
+        self._accounts_pool_lock = threading.Lock()
+
+    def _take_login_account(self):
+        with self._accounts_pool_lock:
+            if not self._accounts_pool:
+                return None
+            return self._accounts_pool.pop(0)
 
     def _auto_arrange_windows(self):
         if not self.auto_arrange_ld:
@@ -216,6 +226,43 @@ class MainWindow:
                         scroll_after_post=self.scroll_after_post,
                         clear_cache=self.clear_cache,
                     )
+                elif self.task_type == "login":
+                    account = self._take_login_account()
+                    if account is None:
+                        self.log(f"No login account available for LD: {name}")
+                        success = False
+                    else:
+                        identifier = (
+                            account.get("identifier")
+                            or account.get("uid")
+                            or account.get("email")
+                            or account.get("username")
+                            or ""
+                        )
+                        identifier_label = account.get("identifier_label") or (
+                            "uid" if account.get("uid") else ("email" if account.get("email") else "username")
+                        )
+                        twofa_secret = str(account.get("twofa") or account.get("twofa_secret") or "").strip()
+                        payload = {
+                            "identifier": identifier,
+                            "identifier_label": identifier_label,
+                            "email": str(account.get("email") or "").strip(),
+                            "password": str(account.get("password") or "").strip(),
+                            "twofa": twofa_secret,
+                            "twofa_secret": twofa_secret,
+                            "twofa_email": str(account.get("twofa_email") or account.get("email") or "").strip(),
+                            "verify_2fa": bool(self.verify_2fa) or bool(twofa_secret),
+                            "clear_before_login": True,
+                        }
+                        self.log(f"Logging in '{identifier}' on LD: {name}")
+                        self._push_state(
+                            name,
+                            phase="task",
+                            state="Running",
+                            task=f"Login {identifier}",
+                            progress=80,
+                        )
+                        success = bool(self.task_handler.execute(name, self.task_duration, **payload))
                 elif self.task_type == "reg_account":
                     requested_accounts = max(1, int(self.accounts_per_ld))
                     completed_accounts = 0
@@ -263,6 +310,11 @@ class MainWindow:
                     # Registration batches should release the emulator immediately
                     # after the final account succeeds so we do not depend on the
                     # later close stage to shut the LD instance down.
+                    self._close_ld_if_needed(name)
+
+                if self.task_type == "login":
+                    # Login is one-shot per LD: close immediately so the next batch
+                    # can start fresh emulators with the next accounts.
                     self._close_ld_if_needed(name)
             
             # Update progress if callback provided

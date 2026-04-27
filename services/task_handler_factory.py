@@ -47,6 +47,7 @@ class TaskHandlerContext:
     state_callback: Callable[..., Any] | None = None
     verify_account: bool = False
     scroll_after_post: bool = False
+    random_like: bool = True
     clear_cache: bool = False
 
     # Task-specific config
@@ -81,6 +82,7 @@ def _build_scroll(ctx: TaskHandlerContext) -> Any:
     handler = ScrollTaskHandler(ctx.emulator, ctx.log, ctx.pause_event, ctx.running_flag)
     _apply_common_config(handler, ctx)
     _apply_reg_contact_config(handler, ctx)
+    handler.random_like = bool(ctx.random_like)
     return handler
 
 
@@ -116,11 +118,20 @@ def _build_test_feature(ctx: TaskHandlerContext) -> Any:
     return handler
 
 
+def _build_login(ctx: TaskHandlerContext) -> Any:
+    from core.logic.login_account import LoginAccountTaskHandler
+
+    handler = LoginAccountTaskHandler(ctx.emulator, ctx.log, ctx.pause_event, ctx.running_flag)
+    _apply_common_config(handler, ctx)
+    return handler
+
+
 _BUILDERS: Dict[str, HandlerBuilder] = {
     "scroll": _build_scroll,
     "reg_account": _build_reg_account,
     "reels": _build_reels,
     "test_feature": _build_test_feature,
+    "login": _build_login,
 }
 
 

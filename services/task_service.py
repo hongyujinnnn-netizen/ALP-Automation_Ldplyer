@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 
@@ -20,6 +20,8 @@ class TaskRunRequest:
     scroll_after_post: bool
     clear_cache: bool
     verify_account: bool
+    accounts_pool: list[dict] = field(default_factory=list)
+    verify_2fa: bool = True
 
 
 class TaskService:
@@ -63,4 +65,6 @@ class TaskService:
             request.verify_account,
             emulator=emulator,
             state_callback=state_callback,
+            accounts_pool=list(request.accounts_pool or []),
+            verify_2fa=request.verify_2fa,
         )

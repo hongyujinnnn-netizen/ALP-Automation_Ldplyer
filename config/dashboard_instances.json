@@ -80,12 +80,37 @@
     {
       "name": "Osaka Chuii",
       "account": {
-        "name": null,
+        "name": "Osaka Chuii",
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": []
+        "pages": [
+          {
+            "name": "Azúcar Morena Bakery",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "TheBushman Prank",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          }
+        ]
       }
     },
     {
@@ -145,6 +170,138 @@
             }
           }
         ]
+      }
+    },
+    {
+      "name": "Ray Jamary",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Jea Jonh Son",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Estelle B. Rose",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Pauline J. Flores",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "LD - Clone-14",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "LD - Clone-15",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "LD - Clone-16",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "LD - Clone-17",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "LD - Clone-18",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "LD - Clone-19",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "LD - Clone-20",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "LD - Clone-21",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
       }
     }
   ]
