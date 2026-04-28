@@ -46,6 +46,7 @@ logs/
 
 # Local runtime config/state
 config/created_accounts.json
+congig/accounts_login.json
 config/content_queue.json
 config/setting.json
 config/setting_schedule.json
