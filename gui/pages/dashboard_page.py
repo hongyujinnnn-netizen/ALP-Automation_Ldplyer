@@ -768,7 +768,9 @@ class DashboardDialogMixin:
         old_snapshot = dict(old_snapshot or {})
         new_snapshot = dict(new_snapshot or {})
 
-        self._dashboard_load_data()
+        # Do not reload from disk here — it replaces _dashboard_data with new
+        # dict objects and invalidates references captured by open editors,
+        # which silently discards pending Edit Account / Edit Page changes.
         insts = self._db_instances()
         by_name = {str(i.get("name") or ""): i for i in insts if i.get("name")}
         changed = False
@@ -2114,7 +2116,9 @@ class DashboardDialogMixin:
         form.columnconfigure(1, weight=1)
 
         def commit():
-            data["account"] = {
+            live = self._db_instances_by_name().get(str(data.get("name") or ""))
+            target = live if live is not None else data
+            target["account"] = {
                 "name": vars_map["name"].get().strip() or None,
                 "uid": vars_map["uid"].get().strip() or None,
                 "password": vars_map["password"].get().strip() or None,
@@ -2199,10 +2203,19 @@ class DashboardDialogMixin:
                 "page_id": pid_var.get().strip() or None,
                 "reels": page.get("reels") or self._db_default_reels_config(),
             }
+            live_inst = self._db_instances_by_name().get(str(inst.get("name") or ""))
+            target_pages = (
+                self._db_account_pages(live_inst.setdefault("account", {}))
+                if live_inst is not None
+                else pages
+            )
             if is_new:
-                pages.append(payload)
+                target_pages.append(payload)
             else:
-                page.update(payload)
+                if 0 <= idx < len(target_pages):
+                    target_pages[idx].update(payload)
+                else:
+                    target_pages.append(payload)
             self._db_mark_dirty()
             self._db_save_all()
             self._db_render_all()

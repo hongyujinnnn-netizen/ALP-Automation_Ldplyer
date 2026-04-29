@@ -185,7 +185,45 @@ class MainWindow:
             self.log(f"Waiting for LD ready: {name}")
             self._push_state(name, phase="start", state="Waiting", task="Waiting for Android ready", progress=24)
             if not self.em.wait_for_ld_ready(name, timeout=max(90, self.boot_delay * 6), poll_interval=2):
-                self.log(f"LD not ready in time: {name}")
+                # Adapter: self.log is injected and may be 1-arg or 2-arg.
+                def _safe_log(msg, level="INFO"):
+                    try:
+                        self.log(msg, level)
+                    except TypeError:
+                        try:
+                            self.log(f"[{level}] {msg}")
+                        except Exception:
+                            pass
+                    except Exception:
+                        pass
+
+                _safe_log(f"LD not ready in time: {name} — running health check", "WARNING")
+                self._push_state(name, phase="start", state="Attention", task="Health check", progress=0)
+                # Auto-recovery for VBox 'uCountStat < 100' / assertion wedges.
+                # One attempt is enough for transient state; we stay quiet on
+                # genuinely-down hosts so we don't loop forever.
+                try:
+                    recover = getattr(self.em, "recover_ld", None)
+                    if callable(recover):
+                        result = recover(
+                            name,
+                            attempts=1,
+                            log=_safe_log,
+                            boot_timeout=max(90, self.boot_delay * 6),
+                        )
+                        if result and getattr(result, "recovered", False):
+                            _safe_log(f"Auto-recovered LD: {name}", "SUCCESS")
+                            self._push_state(name, phase="ready", state="Active", task="Recovered", progress=36)
+                            self._start_ip_lookup(name)
+                            return
+                        if result and getattr(result, "issues", None):
+                            sigs = ", ".join(sorted({i.signature for i in result.issues}))
+                            _safe_log(
+                                f"VBox log shows: {sigs} — host may need a reboot",
+                                "ERROR",
+                            )
+                except Exception as exc:
+                    _safe_log(f"Recovery hook error for {name}: {exc}", "ERROR")
                 self._push_state(name, phase="start", state="Attention", task="Boot timeout", progress=0)
             else:
                 self._push_state(name, phase="ready", state="Active", task="Device online", progress=36)
@@ -315,8 +353,12 @@ class MainWindow:
 
                 if self.task_type == "login":
                     # Login is one-shot per LD: close immediately so the next batch
-                    # can start fresh emulators with the next accounts.
-                    self._close_ld_if_needed(name)
+                    # can start fresh emulators with the next accounts. The handler
+                    # renames the LD to the Facebook profile name on success, so
+                    # we must shut down the *renamed* instance — quitting by the
+                    # original name would silently no-op in dnconsole.
+                    close_name = getattr(self.task_handler, "last_renamed_to", "") or name
+                    self._close_ld_if_needed(close_name)
             
             # Update progress if callback provided
             if self.progress_callback:

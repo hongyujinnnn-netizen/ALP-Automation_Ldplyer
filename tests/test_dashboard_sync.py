@@ -80,6 +80,7 @@ class TestDashboardLdSync(unittest.TestCase):
             dashboard._dashboard_selected = "LD A"
 
             with patch("gui.pages.dashboard_page.get_app_paths", return_value=paths):
+                dashboard._dashboard_load_data()
                 changed = dashboard._db_sync_snapshot_changes(
                     {"LD A": "emulator-5554"},
                     {"LD Renamed": "emulator-5554"},
@@ -132,6 +133,7 @@ class TestDashboardLdSync(unittest.TestCase):
             dashboard._dashboard_checked = {"LD A", "LD B"}
 
             with patch("gui.pages.dashboard_page.get_app_paths", return_value=paths):
+                dashboard._dashboard_load_data()
                 changed = dashboard._db_sync_snapshot_changes(
                     {"LD A": "emulator-5554", "LD B": "emulator-5556"},
                     {"LD B": "emulator-5556"},

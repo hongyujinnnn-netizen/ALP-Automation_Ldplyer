@@ -1117,6 +1117,8 @@ class LDManagerApp(
         self.instance_context_menu.add_command(label="Restart", command=self._context_restart_instance)
         self.instance_context_menu.add_command(label="Rename...", command=self._context_rename_instance)
         self.instance_context_menu.add_command(label="Delete...", command=self._context_delete_instance)
+        self.instance_context_menu.add_command(label="Shared Folder...", command=self._context_set_shared_folder)
+        self.instance_context_menu.add_command(label="Health Check & Recover", command=self._context_health_check)
         self.instance_context_menu.add_separator()
         self.instance_group_menu = tk.Menu(self.instance_context_menu, tearoff=0)
         self.instance_context_menu.add_cascade(label="Groups", menu=self.instance_group_menu)
@@ -2141,6 +2143,163 @@ class LDManagerApp(
                     pass
             except Exception as exc:
                 self.log(f"Rename error for '{old_name}': {exc}", "ERROR")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _context_health_check(self):
+        """Run a VBox-log scan and (if needed) recovery on the targeted LD(s).
+
+        Surfaces the 'uCountStat < 100' / assertion family of wedges that
+        LDPlayer hits after long runs or driver upgrades. Per-instance
+        recovery is best-effort: quit → kill orphan VBox/dnplayer procs →
+        relaunch → wait for ADB-ready.
+        """
+        target_names = self._context_target_ld_names()
+        if not target_names:
+            return
+
+        def worker():
+            for name in target_names:
+                try:
+                    issues = []
+                    diagnose = getattr(self.emulator, "diagnose_ld", None)
+                    if callable(diagnose):
+                        try:
+                            issues = diagnose(name) or []
+                        except Exception as exc:
+                            self.log(f"Diagnose failed for '{name}': {exc}", "ERROR")
+                            issues = []
+
+                    if issues:
+                        sigs = sorted({i.signature for i in issues})
+                        self.log(
+                            f"'{name}' VBox log shows: {', '.join(sigs)} — attempting recovery",
+                            "WARNING",
+                        )
+                    else:
+                        self.log(
+                            f"'{name}' shows no known wedging signature — running recovery anyway",
+                            "INFO",
+                        )
+
+                    recover = getattr(self.emulator, "recover_ld", None)
+                    if not callable(recover):
+                        self.log(f"Recovery API unavailable for '{name}'", "ERROR")
+                        continue
+
+                    try:
+                        boot_timeout = max(90, int(self.boot_delay.get()) * 6)
+                    except Exception:
+                        boot_timeout = 120
+
+                    result = recover(
+                        name,
+                        attempts=2,
+                        log=self.log,
+                        boot_timeout=boot_timeout,
+                    )
+
+                    if result and getattr(result, "recovered", False):
+                        self.log(
+                            f"Recovered LD '{name}' in {result.attempts} attempt(s)",
+                            "SUCCESS",
+                        )
+                    else:
+                        err = getattr(result, "error", None) or "unknown"
+                        self.log(
+                            f"Could not recover LD '{name}' ({err}) — "
+                            "consider rebooting the host or disabling Hyper-V/Memory Integrity",
+                            "ERROR",
+                        )
+                except Exception as exc:
+                    self.log(f"Health check error for '{name}': {exc}", "ERROR")
+
+            try:
+                self.root.after(0, self.populate_ld_table)
+            except Exception:
+                pass
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _context_set_shared_folder(self):
+        target_names = self._context_target_ld_names()
+        if not target_names:
+            return
+
+        primary = target_names[0]
+        # Prefill with the LDPlayer default if known, else last user selection.
+        initial_dir = getattr(self, "_last_shared_folder_dir", None)
+        if not initial_dir:
+            try:
+                initial_dir = os.path.expanduser("~")
+            except Exception:
+                initial_dir = None
+
+        if len(target_names) == 1:
+            title = f"Shared Folder · {primary}"
+        else:
+            title = f"Shared Folder · {len(target_names)} LDs"
+
+        folder = filedialog.askdirectory(
+            title=title,
+            initialdir=initial_dir or None,
+            mustexist=True,
+            parent=self.root,
+        )
+        if not folder:
+            return
+
+        # Normalize to native Windows separators so dnconsole sees a clean path.
+        folder = os.path.normpath(folder)
+        self._last_shared_folder_dir = folder
+
+        if len(target_names) > 1:
+            preview = ", ".join(target_names[:5])
+            if len(target_names) > 5:
+                preview += f", ... (+{len(target_names) - 5} more)"
+            if not MessageBox.askyesno(
+                "Set Shared Folder",
+                f"Apply shared folder to {len(target_names)} LDs?\n\n"
+                f"{preview}\n\nFolder: {folder}",
+                parent=self.root,
+            ):
+                return
+
+        def worker():
+            updated = []
+            failed = []
+            for name in target_names:
+                try:
+                    # LDPlayer 9 rewrites the per-instance config on shutdown.
+                    # Stop the LD first so our edit is not clobbered later.
+                    try:
+                        self.emulator.quit_ld(name)
+                    except Exception:
+                        pass
+                    if self.emulator.set_shared_folder(name, folder):
+                        updated.append(name)
+                    else:
+                        failed.append(name)
+                except Exception as exc:
+                    failed.append(name)
+                    self.log(f"Shared folder error for '{name}': {exc}", "ERROR")
+
+            if updated:
+                self.log(
+                    f"Set shared folder for {len(updated)} LD(s) → {folder}: "
+                    f"{', '.join(updated)}",
+                    "SUCCESS",
+                )
+                self.log(
+                    "Restart the affected LD instances to apply the new shared folder.",
+                    "INFO",
+                )
+            if failed:
+                self.log(
+                    f"Failed to set shared folder for: {', '.join(failed)} "
+                    f"(check that the LD index/config exists and the file is writable)",
+                    "ERROR",
+                )
 
         threading.Thread(target=worker, daemon=True).start()
 

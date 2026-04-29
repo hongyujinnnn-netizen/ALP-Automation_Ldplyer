@@ -36,21 +36,20 @@ htmlcov/
 Thumbs.db
 Desktop.ini
 
-# Local runtime output
-logs/
-*.log
-
-# Local environment/secrets
-.env
-.env.*
-
-# Local runtime config/state
+# Local runtime config/state (sensitive data)
 config/created_accounts.json
+config/accounts_login.json
+config/logged_accounts.json
 config/content_queue.json
 config/setting.json
 config/setting_schedule.json
 config/scheduled_tasks.json
 config/*.tmp
+
+# Runtime logs
+logs/
+*.log
+*.jsonl
 
 # Optional local backups
 backups/

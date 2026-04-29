@@ -102,7 +102,7 @@ class LoginAccountTaskHandler(RegAccountTaskHandler):
         if not self._run_login_steps_with_retry(d, name, creds):
             return False
 
-        time.sleep(10)
+        time.sleep(12)
 
         login_status = self._detect_login_status(d)
         self.log(f"Detected login status for {name}: {login_status}")

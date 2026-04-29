@@ -487,27 +487,35 @@ class ControlEmulator:
         return False
     
     def quit_ld(self, name):
-        """Quit an LDPlayer instance"""
+        """Quit an LDPlayer instance.
+
+        Returns True only when dnconsole reports success (or when the binary
+        is absent and we're running in simulated mode). A non-zero exit from
+        dnconsole — typically "instance not found" after a rename — is a
+        real failure and must surface, otherwise callers will mark the LD as
+        idle while the process is still running.
+        """
         try:
             dnconsole_path = os.path.join(self.ld_dir, "dnconsole.exe")
-            
-            if os.path.exists(dnconsole_path):
-                result = subprocess.run(
-                    [dnconsole_path, "quit", "--name", name],
-                    capture_output=True,
-                    text=True,
-                    encoding='utf-8',
-                    timeout=10
-                )
-                
-                if result.returncode == 0:
-                    print(f"LD '{name}' quit successfully")
-                else:
-                    print(f"Failed to quit LD '{name}': {result.stderr}")
-            else:
+
+            if not os.path.exists(dnconsole_path):
                 print(f"LD '{name}' quit (simulated)")
-                
-            return True
+                return True
+
+            result = subprocess.run(
+                [dnconsole_path, "quit", "--name", name],
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                timeout=10,
+            )
+
+            if result.returncode == 0:
+                print(f"LD '{name}' quit successfully")
+                return True
+
+            print(f"Failed to quit LD '{name}': {(result.stderr or result.stdout or '').strip()}")
+            return False
         except Exception as e:
             print(f"Error quitting LD '{name}': {e}")
             return False
@@ -546,6 +554,146 @@ class ControlEmulator:
         except Exception as e:
             print(f"Error renaming LD '{old_name}' -> '{new_name}': {e}")
             return False
+
+    def diagnose_ld(self, name):
+        """Return any VBox-log wedging signals for this LD (read-only)."""
+        from core.ld_recovery import diagnose
+        return diagnose(self, name)
+
+    def recover_ld(self, name, *, attempts=2, log=None, boot_timeout=120):
+        """Best-effort recovery for a wedged LDPlayer instance.
+
+        Quits the LD, force-kills orphan VBox/dnplayer processes that match
+        its leidian index, then relaunches and waits for ADB-ready. Returns
+        a ``RecoveryResult`` (truthy on success).
+        """
+        from core.ld_recovery import recover_instance
+        return recover_instance(
+            self, name, attempts=attempts, log=log, boot_timeout=boot_timeout
+        )
+
+    def _instance_index(self, name):
+        """Return the LDPlayer index for a given instance name, or None."""
+        emu = self.em.get(name) if hasattr(self, "em") else None
+        index = getattr(emu, "index", None)
+        if index is None:
+            return None
+        try:
+            return int(index)
+        except (TypeError, ValueError):
+            return None
+
+    def _instance_config_path(self, name):
+        """Resolve <ld_dir>/vms/config/leidian{index}.config for this LD."""
+        index = self._instance_index(name)
+        if index is None:
+            return None
+        return os.path.join(self.ld_dir, "vms", "config", f"leidian{index}.config")
+
+    def set_shared_folder(self, name, folder_path):
+        """Set the LDPlayer instance's shared host folder.
+
+        LDPlayer 9 stores share paths in the per-instance config file
+        ``vms/config/leidian{index}.config`` under three concrete keys:
+        ``statusSettings.sharedMisc`` (generic "Other"),
+        ``statusSettings.sharedPictures``, and
+        ``statusSettings.sharedApplications`` (APK drop). There is no
+        enable flag on LD9 — setting the path is sufficient. We point all
+        three at the chosen folder.
+
+        Side effects:
+            * Creates ``folder_path`` on disk if missing.
+            * Writes a ``.bak`` snapshot of the config before mutating it.
+            * Stores the path with forward slashes (``D:/Foo``) — LDPlayer's
+              config parser accepts it more reliably than escaped backslashes.
+
+        Returns True only when the JSON config was successfully rewritten.
+        Caller should stop the LD before calling — LDPlayer rewrites the
+        config on graceful shutdown, clobbering edits made while running.
+        """
+        import json
+        import shutil
+
+        if not name or not folder_path:
+            return False
+
+        # LD config files render Windows paths most reliably with forward
+        # slashes; keep a native variant for the host-side mkdir / ldconsole.
+        folder_native = os.path.normpath(folder_path)
+        folder_for_config = folder_native.replace("\\", "/")
+
+        # 1) Make sure the host folder exists — LD silently refuses to mount
+        # a missing path on next boot.
+        try:
+            os.makedirs(folder_native, exist_ok=True)
+        except Exception as exc:
+            print(f"Could not create shared folder '{folder_native}': {exc}")
+            return False
+
+        # 2) Warn (don't refuse) if the LD is still running. LDPlayer rewrites
+        # the per-instance config from memory at shutdown, so anything we
+        # write now will be overwritten unless the caller stops it.
+        try:
+            if self.is_ld_running(name):
+                print(
+                    f"WARNING: LD '{name}' is running — its config will be "
+                    "overwritten on shutdown. Stop the instance before "
+                    "applying the shared folder."
+                )
+        except Exception:
+            pass
+
+        # 3) Authoritative path: edit the per-instance config JSON.
+        config_path = self._instance_config_path(name)
+        if not config_path:
+            print(f"Cannot resolve LD index for '{name}'; aborting shared folder change")
+            return False
+        if not os.path.exists(config_path):
+            print(f"Per-instance config not found: {config_path}")
+            return False
+
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+        except Exception as exc:
+            print(f"Failed to read {config_path}: {exc}")
+            return False
+        if not isinstance(cfg, dict):
+            print(f"Unexpected config shape in {config_path}; expected a JSON object")
+            return False
+
+        # Backup before mutating — keeps a one-step rollback handy.
+        try:
+            shutil.copy2(config_path, config_path + ".bak")
+        except Exception as exc:
+            print(f"Backup failed for {config_path}: {exc}")
+
+        # LDPlayer 9 exposes three concrete share targets — no enable flag.
+        # Point all three at the chosen folder so it surfaces in Android
+        # under "Other", "Picture", and as the APK install drop.
+        shared_keys = (
+            "statusSettings.sharedMisc",
+            "statusSettings.sharedPictures",
+            "statusSettings.sharedApplications",
+        )
+        for key in shared_keys:
+            cfg[key] = folder_for_config
+
+        try:
+            tmp_path = config_path + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(cfg, f, ensure_ascii=False, indent=4)
+            os.replace(tmp_path, config_path)
+        except Exception as exc:
+            print(f"Failed to write {config_path}: {exc}")
+            return False
+
+        print(
+            f"Shared folder for LD '{name}' written to {config_path} "
+            f"(keys: {', '.join(shared_keys)}) → '{folder_for_config}'"
+        )
+
+        return True
 
     def remove_ld(self, name):
         """Delete an LDPlayer instance via dnconsole.
