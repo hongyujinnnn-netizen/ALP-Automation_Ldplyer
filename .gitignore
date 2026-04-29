@@ -38,12 +38,8 @@ Desktop.ini
 
 # Local runtime config/state (sensitive data)
 config/created_accounts.json
-<<<<<<< HEAD
 config/accounts_login.json
 config/logged_accounts.json
-=======
-congig/accounts_login.json
->>>>>>> ab97901ca93bf271c07f4c42e6a50103866a9deb
 config/content_queue.json
 config/setting.json
 config/setting_schedule.json
