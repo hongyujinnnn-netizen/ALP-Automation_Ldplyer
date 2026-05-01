@@ -16,51 +16,26 @@
       "name": "Bunty juyer",
       "serial": "emulator-5588",
       "account": {
-        "name": "Bunty Juyer",
+        "name": null,
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": [
-          {
-            "name": "flametimer",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          },
-          {
-            "name": "whalesfm",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          }
-        ]
+        "pages": []
       }
     },
     {
       "name": "Christopher M. Luu",
       "serial": "emulator-5590",
       "account": {
-        "name": "Christopher M. Luu",
+        "name": "Domthetrol",
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
         "pages": [
           {
-            "name": "Domthetrol",
+            "name": "Christopher M. Luu",
             "page_id": null,
             "reels": {
               "enabled": true,
@@ -114,49 +89,12 @@
       "name": "Denn Kainu",
       "serial": "emulator-5594",
       "account": {
-        "name": "Denn Kainu",
+        "name": null,
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": [
-          {
-            "name": "healerjoy",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          },
-          {
-            "name": "OblivionWraith",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          },
-          {
-            "name": "Visionary Lane",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          }
-        ]
+        "pages": []
       }
     },
     {
@@ -187,98 +125,24 @@
       "name": "James Roberts",
       "serial": "emulator-5580",
       "account": {
-        "name": "James Roberts",
+        "name": null,
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": [
-          {
-            "name": "LiveLifetaller",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          },
-          {
-            "name": "marcocaravaggi2",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          },
-          {
-            "name": "HorizonVibes",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          }
-        ]
+        "pages": []
       }
     },
     {
       "name": "Jason L. Mickle",
       "serial": "emulator-5596",
       "account": {
-        "name": "Jason L. Mickle",
+        "name": null,
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": [
-          {
-            "name": "Osvaldo",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          },
-          {
-            "name": "Fan funnyy",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          },
-          {
-            "name": "Peter mai",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          }
-        ]
+        "pages": []
       }
     },
     {
@@ -322,37 +186,12 @@
       "name": "Jeck Lusika",
       "serial": "emulator-5582",
       "account": {
-        "name": "Jeck Lusika",
+        "name": null,
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": [
-          {
-            "name": "nikolaiiaksenov",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          },
-          {
-            "name": "Thetradesmanuk",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          }
-        ]
+        "pages": []
       }
     },
     {
@@ -383,37 +222,12 @@
       "name": "Mark Marguez",
       "serial": "emulator-5570",
       "account": {
-        "name": "Mark Marguez",
+        "name": null,
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": [
-          {
-            "name": "layerworks",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          },
-          {
-            "name": "ReelsVirals",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          }
-        ]
+        "pages": []
       }
     },
     {
@@ -480,49 +294,12 @@
       "name": "Ryu s. Kennedy",
       "serial": "emulator-5564",
       "account": {
-        "name": "Leon S. Kennedy",
+        "name": null,
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": [
-          {
-            "name": "Jamreel",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          },
-          {
-            "name": "Demoworld",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          },
-          {
-            "name": "meiileungg",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          }
-        ]
+        "pages": []
       }
     },
     {
@@ -540,6 +317,18 @@
     {
       "name": "Timo Wanun",
       "serial": "emulator-5578",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "LD - Clone-22",
+      "serial": "emulator-5598",
       "account": {
         "name": null,
         "uid": null,

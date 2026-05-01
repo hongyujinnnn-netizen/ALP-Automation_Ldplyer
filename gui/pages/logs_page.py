@@ -6,10 +6,44 @@ import ttkbootstrap as tb
 from gui.components.state_views import StateView
 
 
+def _hex_to_rgb(hex_color):
+    h = (hex_color or "#000000").lstrip("#")
+    if len(h) != 6:
+        return (0, 0, 0)
+    try:
+        return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    except ValueError:
+        return (0, 0, 0)
+
+
+def _rgb_to_hex(rgb):
+    return "#{:02X}{:02X}{:02X}".format(*[max(0, min(255, int(c))) for c in rgb])
+
+
+def _blend_color(top, base, ratio):
+    """Mix ``top`` over ``base`` at ``ratio`` (0..1).  Used for soft tints."""
+    tr, tg, tb_ = _hex_to_rgb(top)
+    br, bg, bb = _hex_to_rgb(base)
+    return _rgb_to_hex((
+        br + (tr - br) * ratio,
+        bg + (tg - bg) * ratio,
+        bb + (tb_ - bb) * ratio,
+    ))
+
+
 class LogsPageMixin:
     LOG_LEVELS = ("All", "INFO", "SUCCESS", "WARNING", "ERROR", "DEBUG", "Warnings & Errors")
     ALL_DEVICES_LABEL = "All Devices"
     GENERAL_LOG_LABEL = "General"
+
+    # Visual mapping for level: (display label, level tag, optional row-tint tag)
+    LOG_LEVEL_VISUALS = {
+        "INFO":    ("INFO", "LVL_INFO",    None),
+        "SUCCESS": ("DONE", "LVL_SUCCESS", None),
+        "WARNING": ("WARN", "LVL_WARNING", "ROW_WARN"),
+        "ERROR":   ("FAIL", "LVL_ERROR",   "ROW_ERROR"),
+        "DEBUG":   ("DBUG", "LVL_DEBUG",   None),
+    }
 
     def create_logs_tab(self):
         """Create a filterable structured log viewer."""
@@ -118,8 +152,10 @@ class LogsPageMixin:
             fg=self.palette["text"],
             insertbackground=self.palette["text"],
             selectbackground="#253447",
-            padx=10,
-            pady=10,
+            padx=14,
+            pady=12,
+            spacing1=2,
+            spacing3=3,
             relief="flat",
             highlightthickness=1,
             highlightbackground=self.palette["border"],
@@ -140,17 +176,61 @@ class LogsPageMixin:
         self._render_logs_view()
 
     def _configure_log_text_tags(self):
-        self.logs_text.tag_configure("INFO", foreground=self.palette["primary"])
-        self.logs_text.tag_configure("SUCCESS", foreground=self.palette["success"])
-        self.logs_text.tag_configure("WARNING", foreground=self.palette["warning"])
-        self.logs_text.tag_configure("ERROR", foreground=self.palette["danger"])
-        self.logs_text.tag_configure("DEBUG", foreground="#9b59b6")
-        self.logs_text.tag_configure("EMULATOR_COUNT", foreground="#2563EB")
-        self.logs_text.tag_configure("TIMESTAMP", foreground="#95a5a6")
-        self.logs_text.tag_configure("DEVICE", foreground="#38BDF8")
-        self.logs_text.tag_configure("CATEGORY", foreground=self.palette["muted"])
-        self.logs_text.tag_configure("MESSAGE", foreground=self.palette["text"])
-        self.logs_text.tag_configure("EMPTY", foreground=self.palette["muted"])
+        palette = self.palette
+        text = self.logs_text
+        surface = palette.get("surface", "#0E1118")
+        text_fg = palette.get("text", "#E2E8F0")
+        muted = palette.get("muted", "#64748B")
+        primary = palette.get("primary", "#22D3EE")
+        success = palette.get("success", "#10B981")
+        warning = palette.get("warning", "#F59E0B")
+        danger = palette.get("danger", "#EF4444")
+        debug_color = "#A78BFA"
+        emu_color = "#60A5FA"
+
+        # ── Row backgrounds (defined first so level/foreground tags win on conflict) ── #
+        text.tag_configure("ROW_WARN",  background=_blend_color(warning, surface, 0.10))
+        text.tag_configure("ROW_ERROR", background=_blend_color(danger,  surface, 0.14))
+
+        # ── Level badges — tinted background pill with bold colored text ── #
+        badge_font = (self.mono_font, 9, "bold")
+        for tag, color in (
+            ("LVL_INFO",    primary),
+            ("LVL_SUCCESS", success),
+            ("LVL_WARNING", warning),
+            ("LVL_ERROR",   danger),
+            ("LVL_DEBUG",   debug_color),
+            ("LVL_EMU",     emu_color),
+        ):
+            text.tag_configure(
+                tag,
+                foreground=color,
+                background=_blend_color(color, surface, 0.22),
+                font=badge_font,
+            )
+
+        # ── Field accents ── #
+        text.tag_configure("TIMESTAMP", foreground=_blend_color(text_fg, surface, 0.45))
+        text.tag_configure("DEVICE",    foreground=primary, font=(self.mono_font, 10, "bold"))
+        text.tag_configure("CATEGORY",  foreground=muted)
+        text.tag_configure("MESSAGE",   foreground=text_fg)
+        text.tag_configure("MESSAGE_WARN",  foreground=_blend_color(warning, text_fg, 0.65))
+        text.tag_configure("MESSAGE_ERROR", foreground=_blend_color(danger,  text_fg, 0.55))
+        text.tag_configure("SEPARATOR", foreground=_blend_color(muted, surface, 0.55))
+        text.tag_configure("GUTTER",    foreground=_blend_color(muted, surface, 0.45))
+        text.tag_configure("EMPTY",     foreground=muted, justify="center")
+
+        # Make level badges win the background-color conflict over row tints.
+        for tag in ("LVL_INFO", "LVL_SUCCESS", "LVL_WARNING", "LVL_ERROR", "LVL_DEBUG", "LVL_EMU"):
+            text.tag_raise(tag)
+
+        # ── Legacy tag aliases (kept for any external callers / older records) ── #
+        text.tag_configure("INFO",           foreground=primary)
+        text.tag_configure("SUCCESS",        foreground=success)
+        text.tag_configure("WARNING",        foreground=warning)
+        text.tag_configure("ERROR",          foreground=danger)
+        text.tag_configure("DEBUG",          foreground=debug_color)
+        text.tag_configure("EMULATOR_COUNT", foreground=emu_color)
 
     def _refresh_log_filter_options(self):
         if not hasattr(self, "log_device_combo"):
@@ -261,13 +341,37 @@ class LogsPageMixin:
         device = str(record.get("device") or self.GENERAL_LOG_LABEL)
         category = str(record.get("category") or "General")
         message = str(record.get("message") or "")
-        level_tag = "EMULATOR_COUNT" if message.startswith("Available emulators:") else level
 
-        self.logs_text.insert("end", f"[{timestamp}] ", "TIMESTAMP")
-        self.logs_text.insert("end", f"{level:<7} ", level_tag)
-        self.logs_text.insert("end", f"{device:<18.18} ", "DEVICE")
-        self.logs_text.insert("end", f"{category:<12.12} ", "CATEGORY")
-        self.logs_text.insert("end", f"{message}\n", "MESSAGE")
+        label, level_tag, row_tag = self.LOG_LEVEL_VISUALS.get(
+            level,
+            (level[:4].ljust(4), "LVL_INFO", None),
+        )
+        if message.startswith("Available emulators:"):
+            level_tag = "LVL_EMU"
+            label = "EMUL"
+
+        message_tag = "MESSAGE"
+        if level == "ERROR":
+            message_tag = "MESSAGE_ERROR"
+        elif level == "WARNING":
+            message_tag = "MESSAGE_WARN"
+
+        line_start = self.logs_text.index("end - 1c")
+
+        # Layout:  ▏ HH:MM:SS  [ INFO ]  Device              ·  Category        │  message
+        self.logs_text.insert("end", " ", "GUTTER")
+        self.logs_text.insert("end", f"{timestamp} ", "TIMESTAMP")
+        self.logs_text.insert("end", f" {label} ", level_tag)
+        self.logs_text.insert("end", "  ")
+        self.logs_text.insert("end", f"{device:<18.18}", "DEVICE")
+        self.logs_text.insert("end", "  ·  ", "SEPARATOR")
+        self.logs_text.insert("end", f"{category:<14.14}", "CATEGORY")
+        self.logs_text.insert("end", "  │  ", "SEPARATOR")
+        self.logs_text.insert("end", f"{message}\n", message_tag)
+
+        if row_tag:
+            line_end = self.logs_text.index("end - 1c")
+            self.logs_text.tag_add(row_tag, line_start, line_end)
 
     def clear_log_filters(self):
         if hasattr(self, "log_search_var"):
