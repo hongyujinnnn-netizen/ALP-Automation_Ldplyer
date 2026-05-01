@@ -589,7 +589,7 @@ class TestDashboardLdSync(unittest.TestCase):
         handler.execute.return_value = True
 
         with patch("gui.pages.dashboard_page.threading.Thread", FakeThread), patch(
-            "core.logic.login_account.LoginAccountTaskHandler",
+            "core.tasks.login_account.LoginAccountTaskHandler",
             return_value=handler,
         ):
             dashboard._db_start_login_account_task(
@@ -642,7 +642,7 @@ class TestDashboardLdSync(unittest.TestCase):
         handler.execute.return_value = True
 
         with patch("gui.pages.dashboard_page.threading.Thread", FakeThread), patch(
-            "core.logic.login_account.LoginAccountTaskHandler",
+            "core.tasks.login_account.LoginAccountTaskHandler",
             return_value=handler,
         ):
             dashboard._db_start_login_account_task(

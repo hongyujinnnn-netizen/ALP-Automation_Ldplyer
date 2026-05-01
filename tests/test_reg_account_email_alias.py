@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from core.logic.reg_account import RegAccountTaskHandler
+from core.tasks.reg_account import RegAccountTaskHandler
 from core.settings import AppSettings
 
 

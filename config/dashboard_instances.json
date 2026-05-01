@@ -28,49 +28,12 @@
       "name": "Christopher M. Luu",
       "serial": "emulator-5590",
       "account": {
-        "name": "Domthetrol",
+        "name": null,
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": [
-          {
-            "name": "Christopher M. Luu",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          },
-          {
-            "name": "Voodies",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          },
-          {
-            "name": "TrendNest",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          }
-        ]
+        "pages": []
       }
     },
     {
@@ -186,12 +149,37 @@
       "name": "Jeck Lusika",
       "serial": "emulator-5582",
       "account": {
-        "name": null,
+        "name": "Jeck Lusika",
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": []
+        "pages": [
+          {
+            "name": "nikolaiiaksenov",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "Thetradesmanuk",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          }
+        ]
       }
     },
     {
@@ -294,12 +282,49 @@
       "name": "Ryu s. Kennedy",
       "serial": "emulator-5564",
       "account": {
-        "name": null,
+        "name": "Leon S. Kennedy",
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": []
+        "pages": [
+          {
+            "name": "Jamreel",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "Demoworld",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "meiileungg",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          }
+        ]
       }
     },
     {
@@ -317,18 +342,6 @@
     {
       "name": "Timo Wanun",
       "serial": "emulator-5578",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "LD - Clone-22",
-      "serial": "emulator-5598",
       "account": {
         "name": null,
         "uid": null,

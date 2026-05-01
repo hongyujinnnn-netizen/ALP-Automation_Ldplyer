@@ -1,3 +1,3 @@
-from core.logic.reg_account import RegAccountTaskHandler
+from core.tasks.reg_account import RegAccountTaskHandler
 
 __all__ = ["RegAccountTaskHandler"]

@@ -1,3 +1,3 @@
-from core.logic.task_reels import ReelsTaskHandler
+from core.tasks.task_reels import ReelsTaskHandler
 
 __all__ = ["ReelsTaskHandler"]

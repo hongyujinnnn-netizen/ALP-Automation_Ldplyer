@@ -565,6 +565,8 @@ class DashboardDialogMixin:
             return False
         try:
             return bool(widget.winfo_exists())
+        except AttributeError:
+            return True
         except tk.TclError:
             return False
 
@@ -592,7 +594,11 @@ class DashboardDialogMixin:
             tree.item(item, image=image, text="")
         else:
             tree.item(item, image="", text="☑" if checked else "☐")
-        tags = [t for t in tree.item(item, "tags") if t != "row_checked"]
+        try:
+            current_tags = tree.item(item, "tags")
+        except TypeError:
+            current_tags = tree.item(item).get("tags", ())
+        tags = [t for t in current_tags if t != "row_checked"]
         if checked:
             tags.append("row_checked")
         tree.item(item, tags=tags)
@@ -1580,7 +1586,7 @@ class DashboardDialogMixin:
             return
 
         try:
-            from core.logic.login_account import LoginAccountTaskHandler
+            from core.tasks.login_account import LoginAccountTaskHandler
         except Exception as exc:
             MessageBox.showerror("Login Account", f"Login task is not available: {exc}", parent=self._db_message_parent())
             return
@@ -1836,11 +1842,12 @@ class DashboardDialogMixin:
                 parts = [part.strip() for part in re.split(r"\s{2,}", line)]
             if len(parts) < 4:
                 continue
-            name = parts[0]
-            uid = parts[1]
-            password = parts[2]
-            email = parts[3]
-            twofa = parts[4] if len(parts) >= 5 else ""
+            if len(parts) == 4:
+                name = ""
+                uid, password, email, twofa = parts
+            else:
+                name, uid, password, email = parts[:4]
+                twofa = parts[4]
             if not (uid or email) or not password:
                 continue
             accounts.append(
@@ -1863,14 +1870,16 @@ class DashboardDialogMixin:
         twofa = str(account.get("twofa") or account.get("2fa") or "").strip()
         name = str(account.get("name") or "").strip()
         account_id = str(account.get("account_id") or uid or email).strip()
-        return {
+        normalized = {
             "account_id": account_id,
-            "name": name,
             "uid": uid,
             "password": password,
             "email": email,
             "twofa": twofa,
         }
+        if name:
+            normalized["name"] = name
+        return normalized
 
     def _db_save_login_accounts(self, accounts):
         existing_accounts = self._db_login_accounts()

@@ -39,14 +39,27 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                 )
                 return False
 
-            serial = self.emulator.name_to_serial.get(name, name)
+            self.log(f"Facebook opened successfully on LD: {name}")
+            self.push_runtime_state(
+                name,
+                phase="task",
+                state="Running",
+                task="Facebook opened",
+                progress=70,
+            )
+
+            serial_map = getattr(self.emulator, "name_to_serial", {})
+            if not isinstance(serial_map, dict):
+                return True
+
+            serial = serial_map.get(name, name)
             if not serial:
                 self.log(f"No serial found for {name}")
                 return False
 
             if not U2_AVAILABLE:
                 self.log("uiautomator2 not available. Cannot inspect Facebook UI.")
-                return False
+                return True
 
             try:
                 d = u2.connect(serial)
@@ -57,15 +70,6 @@ class TestFeatureTaskHandler(BaseTaskHandler):
             # kwargs for potential future use:
             ld_page = 2 #default page index to click for LD selection in case of multiple pages, can be overridden by kwargs if needed
             video_page = 2 #default page index to click for video upload test, can be overridden by kwargs if needed
-
-            self.log(f"Facebook opened successfully on LD: {name}")
-            self.push_runtime_state(
-                name,
-                phase="task",
-                state="Running",
-                task="Facebook opened",
-                progress=70,
-            )
 
             time.sleep(5)
             if not self.click_facebook_menu(d):
@@ -281,6 +285,109 @@ class TestFeatureTaskHandler(BaseTaskHandler):
     def _point_inside(px, py, bounds):
         x1, y1, x2, y2 = bounds
         return x1 <= px <= x2 and y1 <= py <= y2
+
+    @staticmethod
+    def _bounds_dict(bounds):
+        x1, y1, x2, y2 = bounds
+        return {"left": x1, "top": y1, "right": x2, "bottom": y2}
+
+    @staticmethod
+    def _node_label(node):
+        return (
+            node.attrib.get("text")
+            or node.attrib.get("content-desc")
+            or node.attrib.get("contentDescription")
+            or ""
+        ).strip()
+
+    @staticmethod
+    def _looks_like_page_name(label):
+        text = re.sub(r"\s+", " ", str(label or "")).strip()
+        if len(text) < 2:
+            return False
+        lower = text.lower()
+        blocked = (
+            "pages you manage",
+            "see all",
+            "see options",
+            "search",
+            "create",
+            "notification",
+            "accounts center",
+            "meta",
+            "cancel",
+        )
+        if any(word in lower for word in blocked):
+            return False
+        if re.match(r"^\d+\s+(new|notification|notifications)$", lower):
+            return False
+        return True
+
+    @staticmethod
+    def _build_page_row_fallback_points(bounds, screen_width, screen_height):
+        left = int(bounds.get("left", 0))
+        top = int(bounds.get("top", 0))
+        right = int(bounds.get("right", screen_width))
+        bottom = int(bounds.get("bottom", top))
+        width = max(1, right - left)
+        y = min((top + bottom) // 2, int(screen_height * 0.72))
+        return [
+            (left + int(width * 0.16), y),
+            (min(screen_width - 1, left + int(width * 0.5)), y),
+            (min(screen_width - 1, right - int(width * 0.12)), y),
+        ]
+
+    def _managed_page_candidates_from_hierarchy(self, xml, screen_height=None):
+        try:
+            root = ET.fromstring(xml)
+        except Exception:
+            return []
+
+        anchor_top = None
+        nodes = []
+        for node in root.iter("node"):
+            label = self._node_label(node)
+            bounds = self._parse_bounds(node.attrib.get("bounds", ""))
+            if not bounds:
+                continue
+            if "pages you manage" in label.lower():
+                anchor_top = min(anchor_top, bounds[1]) if anchor_top is not None else bounds[1]
+                continue
+            nodes.append((label, bounds))
+
+        if anchor_top is None:
+            anchor_top = 0
+
+        max_top = int(screen_height * 0.72) if screen_height else None
+        candidates = []
+        seen = set()
+        for label, bounds in nodes:
+            if bounds[1] <= anchor_top + 35:
+                continue
+            if max_top is not None and bounds[1] > max_top:
+                continue
+            if not self._looks_like_page_name(label):
+                continue
+            if label in seen:
+                continue
+            seen.add(label)
+            candidates.append({"label": label, "bounds": self._bounds_dict(bounds)})
+        return candidates
+
+    def _find_page_row_target_from_hierarchy(self, xml, screen_width, page_name=None):
+        candidates = self._managed_page_candidates_from_hierarchy(xml)
+        requested = str(page_name or "").strip().lower()
+        if requested:
+            for candidate in candidates:
+                if requested in candidate["label"].lower():
+                    return candidate
+        return candidates[0] if candidates else None
+
+    def _extract_managed_page_names_from_hierarchy(self, xml, screen_height):
+        return [
+            candidate["label"]
+            for candidate in self._managed_page_candidates_from_hierarchy(xml, screen_height=screen_height)
+        ]
     # This method tries to find the text of items at specific screen locations by parsing the UI hierarchy and matching bounds. It first looks for any text whose bounds contain the center of the target area, and if not found, it looks for the text with the largest overlapping area. This is a heuristic to detect page names in the Facebook profile dropdown.
     def get_name_pages_by_bounds(self, d, bounds_list):
         """

@@ -1,407 +1,23 @@
+﻿import json
 import os
-import json
 import random
 import re
 import subprocess
 import time
+from typing import Any, Callable, TYPE_CHECKING
 
-from unittest import result
-import xml.etree.ElementTree as ET
+def get_app_paths():
+    """Resolve through task_reels so existing tests can patch that module."""
+    from core.tasks import task_reels
 
-from core.task_base import BaseTaskHandler, U2_AVAILABLE, u2
-from core.paths import get_app_paths
-from utils.ip_guard import check_ld_ip_allowed
+    return task_reels.get_app_paths()
 
-class ReelsTaskHandler(BaseTaskHandler):
-    """Handler for Facebook Reels tasks"""
-    def __init__(self, emulator, log_func, pause_event, running_flag, content_manager=None):
-        super().__init__(emulator, log_func, pause_event, running_flag)
-        self.content_manager = content_manager
-        from utils.error_handler import EnhancedErrorHandler
-        from utils.rate_limiter import RateLimiter
-        from utils.activity_randomizer import ActivityRandomizer
-        self.error_handler = EnhancedErrorHandler(log_func)
-        self.rate_limiter = RateLimiter()
-        self.randomizer = ActivityRandomizer()
+class ReelsHandlerMixin:
+    if TYPE_CHECKING:
+        emulator: Any
+        log: Callable[..., None]
 
-    def _open_file_manager_with_retry(self, d, attempts=2, delay=2):
-        """Open file manager with bounded retries."""
-        for attempt in range(1, attempts + 1):
-            try:
-                if self.open_file_manager(d):
-                    return True
-            except Exception:
-                pass
-            if attempt < attempts:
-                time.sleep(delay)
-        return False
-
-    def _clear_recent_apps(self, d):
-        """Open Recents and clear all running apps when possible."""
-        serial = getattr(d, "serial", None)
-        try:
-            try:
-                d.press("recent")
-            except Exception:
-                if serial:
-                    subprocess.run(
-                        ["adb", "-s", serial, "shell", "input", "keyevent", "187"],
-                        capture_output=True,
-                        text=True,
-                        timeout=10,
-                    )
-            time.sleep(2)
-
-            clear_selectors = [
-                {"resourceId": "com.android.systemui:id/clear_all"},
-                {"text": "Clear all"},
-                {"text": "CLEAR ALL"},
-                {"text": "Close all"},
-                {"text": "CLOSE ALL"},
-                {"text": "Clear"},
-                {"text": "CLEAR"},
-            ]
-
-            for selector in clear_selectors:
-                try:
-                    obj = d(**selector)
-                    if obj.exists(timeout=1):
-                        obj.click()
-                        self.log("Cleared recent apps")
-                        time.sleep(2)
-                        break
-                except Exception:
-                    continue
-
-            if serial:
-                subprocess.run(
-                    ["adb", "-s", serial, "shell", "am", "kill-all"],
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                )
-            try:
-                d.press("home")
-            except Exception:
-                pass
-            return True
-        except Exception as e:
-            self.log(f"Failed to clear recent apps: {e}")
-            return False
-
-
-    def execute(self, name, duration=60, max_videos=2, scroll_after_post=True, use_content_queue=True, page_per_account=2, clear_cache=True):
-        if self.check_paused():
-            return False
-
-        if not self.emulator.is_ld_running(name):
-            if not self.emulator.start_ld(name):
-                self.log(f"Failed to start LD: {name}")
-                return False
-            self.auto_arrange_ld_windows()
-            self.log(f"Waiting for emulator ready: {name}")
-            if not self.ensure_device_ready(name, timeout=max(90, int(getattr(self.emulator, 'boot_delay', 20)) * 6)):
-                self.log(f"Device not ready after startup: {name}")
-                return False
-
-        if not self.ensure_device_ready(name, timeout=60):
-            self.log(f"Device is not ready for Reels task: {name}")
-            return False
-
-        serial = self.emulator.name_to_serial.get(name)
-        if not serial:
-            self.log(f"No serial for {name}")
-            return False
-
-        blocked_countries = getattr(self, "blocked_countries", None)
-        if blocked_countries:
-            if not check_ld_ip_allowed(serial, blocked_countries, self.log, ld_name=name):
-                try:
-                    if hasattr(self.emulator, "quit_ld"):
-                        self.emulator.quit_ld(name)
-                except Exception:
-                    pass
-                return False
-
-        try:
-            if not U2_AVAILABLE:
-                self.log("uiautomator2 not available. Cannot run Reels task.")
-                return False
-            d = u2.connect(serial)
-        except Exception as e:
-            self.log(f"Failed to connect {serial}: {e}")
-            return False
-        
-        page_ready = 0
-        click_pages = 0
-        f_index = 2
-        video_posted = 0
-        success_pots = 0
-        videos_per_page = max(0, int(max_videos or 0))
-        total_pages = max(0, int(page_per_account or 0))
-        total_videos_target = videos_per_page * total_pages
-
-        self.push_runtime_state(
-            name,
-            state="Running",
-            task=f"Processed {success_pots}/{total_videos_target} video",
-            progress=78 if total_videos_target > 0 else 0,
-        )
-        # logic switch for reels post, if page_per_account is 1, it will only click the first page, if it's 2, it will click the second page, and so on. This is to avoid the issue of some accounts having multiple pages and the script always clicking the first one which may not be the intended one.
-        while page_ready < total_pages:
-            setup_ready = False
-            max_setup_attempts = 2
-
-            for setup_attempt in range(1, max_setup_attempts + 1):
-                try:
-                    time.sleep(5)
-                    if not self.open_facebook(d):
-                        raise RuntimeError("Can't open Facebook")
-                except Exception:
-                    self.log("Can't open Facebook!")
-                    return False
-
-                time.sleep(5)
-                menu_opened = self.click_facebook_menu(d)
-                profile_dropdown_opened = False
-
-                if menu_opened:
-                    time.sleep(4)
-                    profile_dropdown_opened = self.click_profile_dropdown(d)
-                else:
-                    self.log(f"Failed to open Facebook menu on {name}")
-
-                if not menu_opened or not profile_dropdown_opened:
-                    if menu_opened:
-                        self.log(f"Failed to open Facebook profile dropdown on {name}")
-
-                    if setup_attempt >= max_setup_attempts:
-                        task_message = (
-                            "Facebook menu not found"
-                            if not menu_opened
-                            else "Facebook profile dropdown not found"
-                        )
-                        self.push_runtime_state(
-                            name,
-                            phase="task",
-                            state="Attention",
-                            task=task_message,
-                            progress=0,
-                        )
-                        return False
-
-                    self.log(
-                        f"Facebook switcher setup failed on {name}. "
-                        f"Restarting Facebook before retry {setup_attempt + 1}/{max_setup_attempts}"
-                    )
-                    self._clear_recent_apps(d)
-                    time.sleep(2)
-                    continue
-
-                time.sleep(4)
-                page = self._get_dashboard_page_names(name)
-                if page:
-                    self.log(f"Using dashboard page names on {name}: {page}")
-                else:
-                    try:
-                        detected_names = self.detect_facebook_page(d)
-                    except Exception as e:
-                        self.log(f"Error occurred while detecting page names on {name}: {e}")
-                        return False
-                    self.log(f"Detected page names on {name}: {detected_names}")
-                    self._sync_detected_pages_to_dashboard(name, detected_names)
-                    page = self._page_names_from_detected_switcher(detected_names)
-
-                time.sleep(4)
-                if not self.click_on_page(d, page, page_to_click=click_pages):
-                    self.log(f"Failed to click on detected page names on {name}")
-                    self.push_runtime_state(
-                        name,
-                        phase="task",
-                        state="Attention",
-                        task="Could not click detected page",
-                        progress=0,
-                    )
-                    return False
-                time.sleep(15)
-                if self._open_file_manager_with_retry(d, attempts=2, delay=2):
-                    time.sleep(3)
-                    if self.navigate_to_pictures(d):
-                        setup_ready = True
-                        time.sleep(5)
-                        if not self.click_folder_post_page(d, index=f_index):
-                            self.log(f"Failed to click folder post page on {name}")
-                            self.push_runtime_state(
-                                name,
-                                phase="task",
-                                state="Attention",
-                                task="Could not click folder post page",
-                                progress=0,
-                            )
-                            return False
-                        break
-                    self.log(f"Failed to navigate to pictures on {name}")
-                else:
-                    self.log(f"Failed to open file manager on {name}")
-
-                if setup_attempt >= max_setup_attempts:
-                    break
-
-                self.log(f"Setup failed on {name}. Clearing all apps before retry {setup_attempt + 1}/{max_setup_attempts}")
-                self._clear_recent_apps(d)
-                time.sleep(2)
-
-            if not setup_ready:
-                return False
-
-            limiter = getattr(self, "rate_limiter", None)
-            if limiter is not None and not limiter.can_perform_action("reels_post"):
-                wait_for = max(0.0, limiter.get_wait_time())
-                if wait_for > 0:
-                    self.log(f"Reels rate limit reached on {name}; pausing for {wait_for:.1f}s")
-                    time.sleep(min(wait_for, 90.0))
-
-            page_video_posted = 0
-
-            while page_video_posted < videos_per_page:
-                try:
-                    if not self.hold_on_video(d, hold_time=2):
-                        self.log(f"Failed to hold on video on {name}")
-                        video_posted += 1
-                        page_video_posted += 1
-                        continue
-
-                    menu_present = any(
-                        d(textContains=hint).exists(timeout=0.8)
-                        for hint in ("Share", "Open with", "Delete", "Details", "Open")
-                    ) or d(resourceId="android:id/title").exists(timeout=0.8)
-                    if not menu_present:
-                        self.log(f"Long-press did not open expected menu on {name}")
-                        video_posted += 1
-                        page_video_posted += 1
-                        continue
-
-                    time.sleep(2)
-                    if not self.handle_context_menu_after_long_press(d, name):
-                        self.log(f"Failed to handle context menu after long-press on {name}")
-                        self.push_runtime_state(
-                            name,
-                            phase="task",
-                            state="Attention",
-                            task="Could not handle context menu after long-press",
-                            progress=0,
-                        )
-                        return False
-
-                    if not self.emulator.is_ld_running(name):
-                        self.log(f"LD closed after sending to Facebook on {name}")
-                        return True
-
-                    time.sleep(5)
-                    if self.check_and_handle_facebook_permission(d):
-                        return True
-
-                    if self.facebook_first_next(d):
-                        time.sleep(2)
-                    time.sleep(10)
-
-                    video_data = None
-                    if use_content_queue and self.content_manager:
-                        video_data = self.content_manager.get_next_video()
-
-                    if self.handle_reels_description(d, video_data):
-                        self.log("Waiting 5s to complete Facebook post...")
-                        time.sleep(5)
-
-                        if scroll_after_post:
-                            if self.emulator.is_ld_running(name):
-                                self.log("Starting Reels scrolling after post...")
-                                self.scroll_facebook_reels(d, duration=20, intensity="medium")
-                            else:
-                                self.log("LD closed before post-scroll, skipping Reels scrolling")
-
-                        if not self.emulator.is_ld_running(name):
-                            self.log("LD closed during Facebook post, skipping cleanup")
-                            video_posted += 1
-                            page_video_posted += 1
-                            continue
-
-                        try:
-                            time.sleep(5)
-                            d.app_stop("com.facebook.katana")
-                            time.sleep(2)
-
-                            if not self.emulator.is_ld_running(name):
-                                self.log("LD closed before video deletion, skipping")
-                                video_posted += 1
-                                page_video_posted += 1
-                                continue
-
-                            try:
-                                if self.delete_video(d):
-                                    self.log("Video deleted successfully")
-                                else:
-                                    if not self.emulator.is_ld_running(name):
-                                        self.log("LD closed before file manager, skipping")
-                                        video_posted += 1
-                                        page_video_posted += 1
-                                        continue
-
-                                    if not self._open_file_manager_with_retry(d, attempts=2, delay=1):
-                                        self.log(f"Failed to open file manager on {name}")
-                                        time.sleep(1)
-                                    if not self.delete_video(d):
-                                        self.log("Failed to delete video, continuing")
-                            except Exception as e:
-                                self.log(f"Error during video deletion: {e}")
-                        except Exception as e:
-                            self.log(f"Error during cleanup: {e}")
-
-                        video_posted += 1
-                        page_video_posted += 1
-                        success_pots += 1
-                        progress_value = min(100, 78 + int((success_pots / total_videos_target) * 22)) if total_videos_target > 0 else 100
-                        self.push_runtime_state(
-                            name,
-                            state="Running" if success_pots < total_videos_target else "Completed",
-                            task=f"Processed {success_pots}/{total_videos_target} video",
-                            progress=progress_value,
-                        )
-                        continue
-
-                    self.log(f"Failed to complete reels description/post flow on {name}")
-                    video_posted += 1
-                    page_video_posted += 1
-                except Exception as e:
-                    self.log(f"Exception during task execution on {name}: {e}")
-                    video_posted += 1
-                    page_video_posted += 1
-                    continue
-
-                self.log(f"Finished processing video {video_posted} on {name}")
-
-            page_ready += 1
-            click_pages += 1
-            f_index += 1
-
-        self.log("Finished processing all pages/videos for this account")    
-        time.sleep(5)
-        self.end_to_accoutn_profile(d, name)  
-        
-        time.sleep(6)
-        if clear_cache:
-            self.clear_app_cache(d, name)
-        
-        self.push_runtime_state(
-            name,
-            state="Completed" if success_pots > 0 else "Attention",
-            task=f"Processed {success_pots}/{total_videos_target} video",
-            progress=100 if success_pots > 0 else 0,
-        )
-        self.log(f"Task completed: Processed {success_pots}/{total_videos_target} videos successfully")
-        return success_pots > 0
-    
-
+        def push_runtime_state(self, name: str, **payload: Any) -> None: ...
 
     def end_to_accoutn_profile(self, d, name):
         if not self.open_facebook(d):
@@ -614,7 +230,7 @@ class ReelsTaskHandler(BaseTaskHandler):
                 d.press("home")
             except Exception:
                 pass
-    
+
     #def handle_facebook_reels_post(self, d, video_data=None):
     def handle_reels_description(self, d, video_data=None):
         """
@@ -628,7 +244,7 @@ class ReelsTaskHandler(BaseTaskHandler):
             # FIRST: Check for and click OK button if it exists
             ok_button_found = False
             ok_button_texts = [
-                "OK", "Okay", "Xong", "ç¡®è®¤", "í™•ì¸", "Aceptar", 
+                "OK", "Okay", "Xong", "Ã§Â¡Â®Ã¨Â®Â¤", "Ã­â„¢â€¢Ã¬ÂÂ¸", "Aceptar", 
                 "Accepter", "Accetta", "Einverstanden", "OKE"
             ]
             
@@ -727,8 +343,8 @@ class ReelsTaskHandler(BaseTaskHandler):
             time.sleep(3)
             share_button_found = False
             share_button_texts = [
-                "Share", "Post", "Share now", "Publish", "ÄÄƒng", "Publicar",
-                "å‘å¸ƒ", "å…±æœ‰", "Partager", "Compartir", "Condividi", "Teilen",
+                "Share", "Post", "Share now", "Publish", "Ã„ÂÃ„Æ’ng", "Publicar",
+                "Ã¥Ââ€˜Ã¥Â¸Æ’", "Ã¥â€¦Â±Ã¦Å“â€°", "Partager", "Compartir", "Condividi", "Teilen",
                 "Share reel", "Post reel"  # Added more specific options
             ]
             
@@ -754,7 +370,7 @@ class ReelsTaskHandler(BaseTaskHandler):
                     continue
             
             if share_button_found:
-                self.log("âœ… Reel posted successfully")
+                self.log("Ã¢Å“â€¦ Reel posted successfully")
                 return True
             else:
                 self.log(" Could not find share button, but UI was detected - considering partial success")
@@ -819,11 +435,11 @@ class ReelsTaskHandler(BaseTaskHandler):
                     delay += random.uniform(1.0, 3.0)
                 time.sleep(delay)
             
-            self.log(f"ðŸŽ¬ Finished scrolling Reels: {successful_swipes} swipes")
+            self.log(f"Ã°Å¸Å½Â¬ Finished scrolling Reels: {successful_swipes} swipes")
             return True
 
         except Exception as e:
-            self.log(f"âŒ Error while scrolling Reels: {e}")
+            self.log(f"Ã¢ÂÅ’ Error while scrolling Reels: {e}")
             return False
 
     def _tap(self, elem):
@@ -1021,7 +637,7 @@ class ReelsTaskHandler(BaseTaskHandler):
             os.system(f"adb -s {d.serial} shell pm clear {package_name}")
             return True
         except Exception as e:
-            self.log(f"âŒ Failed to clear app {package_name}: {e}")
+            self.log(f"Ã¢ÂÅ’ Failed to clear app {package_name}: {e}")
             return False
         
     #function delete video
@@ -1045,13 +661,13 @@ class ReelsTaskHandler(BaseTaskHandler):
                 time.sleep(2)
                 return True
             else:
-                self.log("âš ï¸Confirm deletion dialog not found")
+                self.log("Ã¢Å¡Â Ã¯Â¸ÂConfirm deletion dialog not found")
                 return False
 
         except Exception as e:
-            self.log(f"âŒError while deleting video: {e}")
+            self.log(f"Ã¢ÂÅ’Error while deleting video: {e}")
             return False
-    
+
     def _remove_file_extension(self, filename):
         """
         Remove file extension from filename
@@ -1076,22 +692,22 @@ class ReelsTaskHandler(BaseTaskHandler):
         """
         # List of sample captions for generic videos
         base_captions = [
-            "Check out this amazing video! ðŸŽ¥",
-            "Just created this awesome content! âœ¨",
-            "Watch this viral video trending now! ðŸ”¥",
-            "This video is blowing up! ðŸ’¥",
-            "Don't miss this incredible footage! ðŸ“¸",
-            "Epic content coming your way! ðŸš€",
-            "This is too good not to share! ðŸ‘",
-            "Viral moment captured on camera! ðŸ“¹",
-            "Trending content you need to see! ðŸ‘€",
-            "Amazing video that you'll love! â¤ï¸"
+            "Check out this amazing video! Ã°Å¸Å½Â¥",
+            "Just created this awesome content! Ã¢Å“Â¨",
+            "Watch this viral video trending now! Ã°Å¸â€Â¥",
+            "This video is blowing up! Ã°Å¸â€™Â¥",
+            "Don't miss this incredible footage! Ã°Å¸â€œÂ¸",
+            "Epic content coming your way! Ã°Å¸Å¡â‚¬",
+            "This is too good not to share! Ã°Å¸â€˜Â",
+            "Viral moment captured on camera! Ã°Å¸â€œÂ¹",
+            "Trending content you need to see! Ã°Å¸â€˜â‚¬",
+            "Amazing video that you'll love! Ã¢ÂÂ¤Ã¯Â¸Â"
         ]
         
         # List of popular hashtags for reels
         hashtag_groups = [
             "#reels #viral #trending #fyp #foryou #foryoupage #explorepage #instagramreels #reelitfeelit #reelkarofeelkaro #reelsindia #reelsteady #reelsvideo #reelsinsta #reelslovers #reelsofinstagram #reelsviral #reelsdance #reelsmusic #reelsfunny",
-            "#viralvideo #trendingnow #fypã‚· #foryourpage #explore #instareels #reelit #reelkarofeelkaro #reelsindia #reelsteadygo #reelsvideoviral #reelsinstagram #reelslover #reelsofig #reelsviraltrick #reelsdancevideo #reelsmusicvideo #reelsfunnyvideos #contentcreator #digitalcreator",
+            "#viralvideo #trendingnow #fypÃ£â€šÂ· #foryourpage #explore #instareels #reelit #reelkarofeelkaro #reelsindia #reelsteadygo #reelsvideoviral #reelsinstagram #reelslover #reelsofig #reelsviraltrick #reelsdancevideo #reelsmusicvideo #reelsfunnyvideos #contentcreator #digitalcreator",
             "#reels #viral #fyp #trending #foryou #instagramreels #reelitfeelit #reelsindia #reelsteady #reelsvideo #explorepage #foryoupage #reelsinsta #reelslovers #reelsofinstagram #reelsviral #reelsdance #reelsmusic #reelsfunny #contentcreation"
         ]
         
@@ -1131,7 +747,7 @@ class ReelsTaskHandler(BaseTaskHandler):
                     screen_height = d.info.get("displayHeight", 1920)
                     if bounds["top"] > screen_height * 0.7:  # Bottom 30% of screen
                         button.click()
-                        self.log(f"âœ… Clicked {class_name} button at bottom")
+                        self.log(f"Ã¢Å“â€¦ Clicked {class_name} button at bottom")
                         time.sleep(3)
                         return True
         except:
@@ -1148,7 +764,7 @@ class ReelsTaskHandler(BaseTaskHandler):
                     bounds = element.info.get('bounds', {})
                     if bounds:
                         element.click()
-                        self.log(f"âœ… Clicked button by resource ID: {resource_id}")
+                        self.log(f"Ã¢Å“â€¦ Clicked button by resource ID: {resource_id}")
                         time.sleep(3)
                         return True
         except:
@@ -1171,7 +787,7 @@ class ReelsTaskHandler(BaseTaskHandler):
             for x, y in positions:
                 try:
                     d.click(x, y)
-                    self.log(f"âœ… Clicked at position ({x}, {y}) as fallback")
+                    self.log(f"Ã¢Å“â€¦ Clicked at position ({x}, {y}) as fallback")
                     time.sleep(3)
                     return True
                 except:
@@ -1220,7 +836,7 @@ class ReelsTaskHandler(BaseTaskHandler):
                         # Use the device serial as a key to make it unique per device
                         device_key = f"{d.serial}_last_video_title"
                         setattr(self, device_key, text)
-                        self.log(f"ðŸ“¹ Found video: {text}")
+                        self.log(f"Ã°Å¸â€œÂ¹ Found video: {text}")
                         
                         # Long press it
                         element.long_click(duration=hold_time)
@@ -1238,7 +854,7 @@ class ReelsTaskHandler(BaseTaskHandler):
                     # This looks like a filename - store it in thread-local storage and long press
                     device_key = f"{d.serial}_last_video_title"
                     setattr(self, device_key, text)
-                    self.log(f"ðŸ“¹ Found possible video file: {text}")
+                    self.log(f"Ã°Å¸â€œÂ¹ Found possible video file: {text}")
                     element.long_click(duration=hold_time)
                     return True
             
@@ -1253,7 +869,7 @@ class ReelsTaskHandler(BaseTaskHandler):
                             x = (bounds["left"] + bounds["right"]) // 2
                             y = (bounds["top"] + bounds["bottom"]) // 2
                             d.long_click(x, y, duration=hold_time)
-                            self.log(f"ðŸŽ¥ Long-pressed thumbnail #{i+1}")
+                            self.log(f"Ã°Å¸Å½Â¥ Long-pressed thumbnail #{i+1}")
                             
                             # Try to find associated text for the thumbnail
                             text_elements_nearby = d(className="android.widget.TextView")
@@ -1267,7 +883,7 @@ class ReelsTaskHandler(BaseTaskHandler):
                                         if text and any(ext in text.lower() for ext in video_extensions):
                                             device_key = f"{d.serial}_last_video_title"
                                             setattr(self, device_key, text)
-                                            self.log(f"ðŸ“¹ Found video near thumbnail: {text}")
+                                            self.log(f"Ã°Å¸â€œÂ¹ Found video near thumbnail: {text}")
                                             break
                             return True
                     except:
@@ -1538,7 +1154,7 @@ class ReelsTaskHandler(BaseTaskHandler):
                     return False
                 return False
             # Standard send/share options for other contexts
-            send_options = ["send", "share", "gá»­i", "chia sáº»", "send to", "share with"]
+            send_options = ["send", "share", "gÃ¡Â»Â­i", "chia sÃ¡ÂºÂ»", "send to", "share with"]
             
             for option in send_options:
                 # Look for elements that contain the option text (case insensitive)
@@ -1555,7 +1171,7 @@ class ReelsTaskHandler(BaseTaskHandler):
                         self.log(f"Clicked option: {text}")
                         return True
             
-            self.log("âŒ No suitable context option found to click")
+            self.log("Ã¢ÂÅ’ No suitable context option found to click")
             return False
             
         except Exception as e:
@@ -1584,9 +1200,9 @@ class ReelsTaskHandler(BaseTaskHandler):
             # Candidate button texts in multiple languages
             post_button_texts = [
                 "Next", "Post", "Share", "Share now", "Done", "Publish",
-                "Tiáº¿p", "à¸•à¹ˆà¸­à¹„à¸›", "Siguiente", "Weiter", "Suivant", "Publicar",
-                "æ¬¡ã¸", "ë‹¤ìŒ", "ä¸‹ä¸€æ­¥", "Ä°leri", "Avanti", "PrÃ³ximo", "å‘å¸ƒ",
-                "ÄÄƒng", "Partager", "Compartir", "Condividi", "Teilen", "å…±æœ‰"
+                "TiÃ¡ÂºÂ¿p", "Ã Â¸â€¢Ã Â¹Ë†Ã Â¸Â­Ã Â¹â€žÃ Â¸â€º", "Siguiente", "Weiter", "Suivant", "Publicar",
+                "Ã¦Â¬Â¡Ã£ÂÂ¸", "Ã«â€¹Â¤Ã¬ÂÅ’", "Ã¤Â¸â€¹Ã¤Â¸â‚¬Ã¦Â­Â¥", "Ã„Â°leri", "Avanti", "PrÃƒÂ³ximo", "Ã¥Ââ€˜Ã¥Â¸Æ’",
+                "Ã„ÂÃ„Æ’ng", "Partager", "Compartir", "Condividi", "Teilen", "Ã¥â€¦Â±Ã¦Å“â€°"
             ]
 
             # Try text-based detection first
@@ -1633,7 +1249,7 @@ class ReelsTaskHandler(BaseTaskHandler):
                                 if (bounds["right"] > screen_width * 0.6 and 
                                     bounds["top"] > screen_height * 0.7):
                                     button.click()
-                                    self.log(f"âœ… Clicked bottom-right button: {txt or content_desc or rid}")
+                                    self.log(f"Ã¢Å“â€¦ Clicked bottom-right button: {txt or content_desc or rid}")
                                     time.sleep(2)
                                     return True
                         except:
@@ -1656,7 +1272,7 @@ class ReelsTaskHandler(BaseTaskHandler):
                             screen_height = d.info.get("displayHeight", 1920)
                             if bounds["top"] > screen_height * 0.7:
                                 element.click()
-                                self.log("âœ… Clicked bottom blue element (likely post button)")
+                                self.log("Ã¢Å“â€¦ Clicked bottom blue element (likely post button)")
                                 time.sleep(2)
                                 return True
                     except:
@@ -1678,17 +1294,17 @@ class ReelsTaskHandler(BaseTaskHandler):
             for x, y in click_positions:
                 try:
                     d.click(x, y)
-                    self.log(f"âœ… Clicked at position ({x}, {y}) as fallback")
+                    self.log(f"Ã¢Å“â€¦ Clicked at position ({x}, {y}) as fallback")
                     time.sleep(2)
                     return True
                 except:
                     continue
 
-            self.log("âŒ Could not find Facebook Post button")
+            self.log("Ã¢ÂÅ’ Could not find Facebook Post button")
             return False
 
         except Exception as e:
-            self.log(f"âŒ Error in facebook_post: {e}")
+            self.log(f"Ã¢ÂÅ’ Error in facebook_post: {e}")
             return False
 
     def open_file_manager(self, d):
@@ -1741,7 +1357,7 @@ class ReelsTaskHandler(BaseTaskHandler):
         except Exception as e:
             self.log(f"Error clicking Pictures: {e}")
             return False
-    
+
     def check_and_handle_facebook_permission(self, d):
         """Check for Facebook permission dialog, click ALLOW if found, and continue flow."""
         try:
@@ -1858,7 +1474,7 @@ class ReelsTaskHandler(BaseTaskHandler):
         except Exception as e:
             self.log(f"Error checking Facebook permission: {e}")
             return False
-    
+
     def click_facebook_menu(self, d, timeout=10):
 
         time.sleep(0.4)
@@ -1913,7 +1529,7 @@ class ReelsTaskHandler(BaseTaskHandler):
         self.log("Menu button not found")
         self.log("skipping Facebook menu click")
         return False
-    
+
     # Detect presence of page names in the list by looking for common patterns in the text of visible items.
     def click_profile_dropdown(self, d, timeout=5):
         """
@@ -1950,7 +1566,7 @@ class ReelsTaskHandler(BaseTaskHandler):
                     return True
 
             # --- Strategy 3: Bounds-based click (from UI dump) ---
-            # safer than fixed coord → use relative screen %
+            # safer than fixed coord â†’ use relative screen %
             width, height = d.window_size()
 
         except Exception as e:
@@ -2026,7 +1642,7 @@ class ReelsTaskHandler(BaseTaskHandler):
 
         self.log(f"Could not find page to click: {page_name}")
         return False
-    
+
     def click_folder_post_page(self, d, index, timeout=5):
         xpath_expr = f'(//android.widget.ImageView[@resource-id="com.cyanogenmod.filemanager:id/navigation_view_item_icon"])[{index}]'
         obj = d.xpath(xpath_expr)
@@ -2371,3 +1987,68 @@ class ReelsTaskHandler(BaseTaskHandler):
             "caption_template": "",
             "source_folder": "",
         }
+    def _open_file_manager_with_retry(self, d, attempts=2, delay=2):
+        """Open file manager with bounded retries."""
+        for attempt in range(1, attempts + 1):
+            try:
+                if self.open_file_manager(d):
+                    return True
+            except Exception:
+                pass
+            if attempt < attempts:
+                time.sleep(delay)
+        return False
+
+    def _clear_recent_apps(self, d):
+        """Open Recents and clear all running apps when possible."""
+        serial = getattr(d, "serial", None)
+        try:
+            try:
+                d.press("recent")
+            except Exception:
+                if serial:
+                    subprocess.run(
+                        ["adb", "-s", serial, "shell", "input", "keyevent", "187"],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                    )
+            time.sleep(2)
+
+            clear_selectors = [
+                {"resourceId": "com.android.systemui:id/clear_all"},
+                {"text": "Clear all"},
+                {"text": "CLEAR ALL"},
+                {"text": "Close all"},
+                {"text": "CLOSE ALL"},
+                {"text": "Clear"},
+                {"text": "CLEAR"},
+            ]
+
+            for selector in clear_selectors:
+                try:
+                    obj = d(**selector)
+                    if obj.exists(timeout=1):
+                        obj.click()
+                        self.log("Cleared recent apps")
+                        time.sleep(2)
+                        break
+                except Exception:
+                    continue
+
+            if serial:
+                subprocess.run(
+                    ["adb", "-s", serial, "shell", "am", "kill-all"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+            try:
+                d.press("home")
+            except Exception:
+                pass
+            return True
+        except Exception as e:
+            self.log(f"Failed to clear recent apps: {e}")
+            return False
+

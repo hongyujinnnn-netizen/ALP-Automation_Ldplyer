@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from core.logic.task_reels import ReelsTaskHandler
+from core.tasks.task_reels import ReelsTaskHandler
 from core.paths import AppPaths
 
 
@@ -58,7 +58,7 @@ class TestReelsExecutePageLoop(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch("core.logic.task_reels.get_app_paths", return_value=paths):
+            with patch("core.tasks.task_reels.get_app_paths", return_value=paths):
                 result = handler.back_to_account_profile(device, "US - 01")
 
         self.assertTrue(result)
@@ -108,7 +108,7 @@ class TestReelsExecutePageLoop(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch("core.logic.task_reels.get_app_paths", return_value=paths):
+            with patch("core.tasks.task_reels.get_app_paths", return_value=paths):
                 synced = handler._sync_detected_pages_to_dashboard(
                     "Ryu S. Kennedy",
                     ["Leon S. Kennedy", "Jamreel", "Demoworld", "meiileungg"],
@@ -196,10 +196,10 @@ class TestReelsExecutePageLoop(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch("core.logic.task_reels.U2_AVAILABLE", True), \
-                 patch("core.logic.task_reels.u2") as mock_u2, \
-                 patch("core.logic.task_reels.time.sleep", return_value=None), \
-                 patch("core.logic.task_reels.get_app_paths", return_value=paths):
+            with patch("core.tasks.task_reels.U2_AVAILABLE", True), \
+                 patch("core.tasks.task_reels.u2") as mock_u2, \
+                 patch("core.tasks.task_reels.time.sleep", return_value=None), \
+                 patch("core.tasks.task_reels.get_app_paths", return_value=paths):
                 device = Mock()
                 device.serial = "127.0.0.1:5555"
                 selector = Mock()
@@ -270,10 +270,10 @@ class TestReelsExecutePageLoop(unittest.TestCase):
             paths = build_test_paths(Path(tmp_dir))
             paths.ensure_runtime_dirs()
 
-            with patch("core.logic.task_reels.U2_AVAILABLE", True), \
-                 patch("core.logic.task_reels.u2") as mock_u2, \
-                 patch("core.logic.task_reels.time.sleep", return_value=None), \
-                 patch("core.logic.task_reels.get_app_paths", return_value=paths):
+            with patch("core.tasks.task_reels.U2_AVAILABLE", True), \
+                 patch("core.tasks.task_reels.u2") as mock_u2, \
+                 patch("core.tasks.task_reels.time.sleep", return_value=None), \
+                 patch("core.tasks.task_reels.get_app_paths", return_value=paths):
                 device = Mock()
                 device.serial = "127.0.0.1:5555"
                 selector = Mock()
@@ -355,10 +355,10 @@ class TestReelsExecutePageLoop(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch("core.logic.task_reels.U2_AVAILABLE", True), \
-                 patch("core.logic.task_reels.u2") as mock_u2, \
-                 patch("core.logic.task_reels.time.sleep", return_value=None), \
-                 patch("core.logic.task_reels.get_app_paths", return_value=paths):
+            with patch("core.tasks.task_reels.U2_AVAILABLE", True), \
+                 patch("core.tasks.task_reels.u2") as mock_u2, \
+                 patch("core.tasks.task_reels.time.sleep", return_value=None), \
+                 patch("core.tasks.task_reels.get_app_paths", return_value=paths):
                 device = Mock()
                 device.serial = "127.0.0.1:5555"
                 selector = Mock()

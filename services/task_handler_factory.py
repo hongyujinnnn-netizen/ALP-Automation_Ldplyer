@@ -77,7 +77,7 @@ def _apply_reg_contact_config(handler: Any, ctx: TaskHandlerContext) -> None:
 
 
 def _build_scroll(ctx: TaskHandlerContext) -> Any:
-    from core.logic.task_scroll import ScrollTaskHandler
+    from core.tasks.task_scroll import ScrollTaskHandler
 
     handler = ScrollTaskHandler(ctx.emulator, ctx.log, ctx.pause_event, ctx.running_flag)
     _apply_common_config(handler, ctx)
@@ -87,7 +87,7 @@ def _build_scroll(ctx: TaskHandlerContext) -> Any:
 
 
 def _build_reg_account(ctx: TaskHandlerContext) -> Any:
-    from core.logic.reg_account import RegAccountTaskHandler
+    from core.tasks.reg_account import RegAccountTaskHandler
 
     handler = RegAccountTaskHandler(ctx.emulator, ctx.log, ctx.pause_event, ctx.running_flag)
     _apply_common_config(handler, ctx)
@@ -96,7 +96,7 @@ def _build_reg_account(ctx: TaskHandlerContext) -> Any:
 
 
 def _build_reels(ctx: TaskHandlerContext) -> Any:
-    from core.logic.task_reels import ReelsTaskHandler
+    from core.tasks.task_reels import ReelsTaskHandler
 
     content_manager = ctx.content_manager if ctx.use_content_queue else None
     handler = ReelsTaskHandler(
@@ -119,7 +119,7 @@ def _build_test_feature(ctx: TaskHandlerContext) -> Any:
 
 
 def _build_login(ctx: TaskHandlerContext) -> Any:
-    from core.logic.login_account import LoginAccountTaskHandler
+    from core.tasks.login_account import LoginAccountTaskHandler
 
     handler = LoginAccountTaskHandler(ctx.emulator, ctx.log, ctx.pause_event, ctx.running_flag)
     _apply_common_config(handler, ctx)

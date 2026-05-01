@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock
 
-from core.logic.login_account import LoginAccountTaskHandler, LoginCredentials
+from core.tasks.login_account import LoginAccountTaskHandler, LoginCredentials
 
 
 class TestLoginAccountTaskHandler(unittest.TestCase):
