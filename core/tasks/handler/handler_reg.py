@@ -13,17 +13,6 @@ from core.settings import SettingsError, load_app_settings
 from services.otp_service import OTPService
 
 class RegAccountHandlerMixin:
-    if TYPE_CHECKING:
-        FIRST_NAMES: list[str]
-        LAST_NAMES: list[str]
-        MONTHS: list[str]
-        emulator: Any
-        log: Callable[..., None]
-
-        def check_paused(self) -> bool: ...
-        def open_facebook(self, d: Any) -> bool: ...
-        def push_runtime_state(self, name: str, **payload: Any) -> None: ...
-
     def enter_email(self, d, email, timeout=5):
         """
         Smart handler to find email input field and enter value
@@ -60,8 +49,7 @@ class RegAccountHandlerMixin:
                             typed_ok = True
                             break
                     except Exception:
-                        continue
-
+                        continue   
                 if not typed_ok:
                     self.log("Email text was not visible after input, retrying")
                     time.sleep(0.8)

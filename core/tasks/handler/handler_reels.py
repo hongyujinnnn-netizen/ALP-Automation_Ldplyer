@@ -13,12 +13,6 @@ def get_app_paths():
     return task_reels.get_app_paths()
 
 class ReelsHandlerMixin:
-    if TYPE_CHECKING:
-        emulator: Any
-        log: Callable[..., None]
-
-        def push_runtime_state(self, name: str, **payload: Any) -> None: ...
-
     def end_to_accoutn_profile(self, d, name):
         if not self.open_facebook(d):
             self.log(f"Failed to open Facebook for final cleanup on {name}")

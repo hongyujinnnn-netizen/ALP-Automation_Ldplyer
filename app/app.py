@@ -180,12 +180,37 @@ def main() -> None:
     if _request_admin_and_relaunch():
         raise SystemExit(0)
 
+    # Create the main Tk root first so ttkbootstrap styles register on the
+    # same root the app uses; show the splash as a Toplevel of that root.
     root = tk.Tk()
+    root.withdraw()
+
+    splash = None
     try:
+        from gui.splash_screen import SplashScreen, SplashConfig
+
+        splash = SplashScreen(SplashConfig(initial_progress=68), master=root)
+        splash.show()
+        splash.update_progress(75, "Loading modules...")
+    except Exception:
+        splash = None
+
+    try:
+        if splash is not None:
+            splash.update_progress(88, "Preparing dashboard...")
         app = LDManagerApp(root)
+        root.deiconify()
+        if splash is not None:
+            splash.update_progress(100, "Ready")
+            root.after(350, splash.close)
     except Exception as exc:
         import traceback
 
+        if splash is not None:
+            try:
+                splash.close()
+            except Exception:
+                pass
         traceback.print_exc()
         messagebox.showerror("Startup Error", str(exc))
         raise SystemExit(1)

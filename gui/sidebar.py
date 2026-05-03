@@ -1,7 +1,14 @@
+import os
 import tkinter as tk
 import ttkbootstrap as tb
 
 from gui.components.status import StatusPill
+
+try:
+    from PIL import Image, ImageTk
+except ImportError:
+    Image = None
+    ImageTk = None
 
 
 class SidebarMixin:
@@ -21,7 +28,34 @@ class SidebarMixin:
 
         logo = tb.Frame(sidebar, style="Sidebar.TFrame")
         logo.pack(fill="x", pady=(0, 14))
-        tb.Label(logo, text="LDPlayer", style="SidebarTitle.TLabel").pack(anchor="w")
+
+        logo_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "img", "logo.png",
+        )
+        logo_img = None
+        if Image is not None and os.path.exists(logo_path):
+            try:
+                pil_img = Image.open(logo_path).convert("RGBA")
+                target_w = 96
+                ratio = target_w / pil_img.width
+                target_h = max(1, int(pil_img.height * ratio))
+                pil_img = pil_img.resize((target_w, target_h), Image.LANCZOS)
+                logo_img = ImageTk.PhotoImage(pil_img)
+            except Exception:
+                logo_img = None
+
+        if logo_img is not None:
+            self._sidebar_logo_image = logo_img
+            logo_label = tk.Label(
+                logo,
+                image=logo_img,
+                bg=self.palette.get("surface", self.palette.get("background", "#000000")),
+                borderwidth=0,
+            )
+            logo_label.pack(anchor="w")
+        else:
+            tb.Label(logo, text="Ryu Automation", style="SidebarTitle.TLabel").pack(anchor="w")
         tb.Label(logo, text="Manager v2.0", style="SidebarSub.TLabel").pack(anchor="w")
 
         self._nav_rows = {}

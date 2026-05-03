@@ -12,35 +12,6 @@ from core.paths import get_app_paths
 from core.settings import _atomic_write_json
 
 class LoginHandlerMixin:
-    if TYPE_CHECKING:
-        emulator: Any
-        last_renamed_to: str
-        log: Callable[..., None]
-
-        def check_paused(self) -> bool: ...
-        def enter_confirmation_code(self, d: Any, otp_code: Any, timeout: int = 12) -> bool: ...
-        def open_facebook(self, d: Any) -> bool: ...
-        def _click_any_selector(
-            self,
-            d: Any,
-            selectors: list[dict[str, Any]],
-            timeout: int = 5,
-            required: bool = True,
-        ) -> bool: ...
-        def _click_prompt_selector(self, d: Any, selectors: list[dict[str, Any]], timeout: int = 2) -> bool: ...
-        def _reset_registration_apps(self, d: Any) -> bool: ...
-        def _resolve_confirmation_email(self) -> str: ...
-        def _selector_exists(self, d: Any, selectors: list[dict[str, Any]], timeout: int = 3) -> bool: ...
-        def _set_text_inputs(
-            self,
-            d: Any,
-            values: list[str],
-            hints: tuple[str, ...] = (),
-            exact_count: int | None = None,
-            require_hint_match: bool = False,
-        ) -> bool: ...
-        def _wait_for_confirmation_otp(self, confirmation_email: str | None = None) -> str | None: ...
-
     # ------------------------------------------------------------------
     # Credentials & retry orchestration
     # ------------------------------------------------------------------
