@@ -107,7 +107,32 @@
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": []
+        "pages": [
+          {
+            "name": "howto.fish",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "Glenda",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          }
+        ]
       }
     },
     {
@@ -380,43 +405,6 @@
       }
     },
     {
-      "name": "Mark Marguez",
-      "serial": "emulator-5570",
-      "account": {
-        "name": "Mark Marguez",
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": [
-          {
-            "name": "layerworks",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          },
-          {
-            "name": "ReelsVirals",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "hashtags": [],
-              "caption_template": "",
-              "source_folder": ""
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "Mary T. Butler",
       "serial": "emulator-5566",
       "account": {
@@ -455,18 +443,6 @@
     {
       "name": "Rixzz Oza",
       "serial": "emulator-5556",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "Roger J. Medley",
-      "serial": "emulator-5592",
       "account": {
         "name": null,
         "uid": null,
@@ -550,7 +526,7 @@
       }
     },
     {
-      "name": "LD - Clone-22",
+      "name": "Barbara Henriksen",
       "serial": "emulator-5598",
       "account": {
         "name": null,

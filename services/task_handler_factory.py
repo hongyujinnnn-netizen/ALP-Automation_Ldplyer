@@ -126,12 +126,21 @@ def _build_login(ctx: TaskHandlerContext) -> Any:
     return handler
 
 
+def _build_create_page(ctx: TaskHandlerContext) -> Any:
+    from core.tasks.create_page import CreatePageTaskHandler
+
+    handler = CreatePageTaskHandler(ctx.emulator, ctx.log, ctx.pause_event, ctx.running_flag)
+    _apply_common_config(handler, ctx)
+    return handler
+
+
 _BUILDERS: Dict[str, HandlerBuilder] = {
     "scroll": _build_scroll,
     "reg_account": _build_reg_account,
     "reels": _build_reels,
     "test_feature": _build_test_feature,
     "login": _build_login,
+    "create_page": _build_create_page,
 }
 
 

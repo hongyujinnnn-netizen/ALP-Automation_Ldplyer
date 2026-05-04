@@ -1179,6 +1179,7 @@ class DashboardDialogMixin:
         menu.add_command(label="Edit Account", command=self._db_edit_checked_account)
         menu.add_command(label="Add Page", command=self._db_add_page_to_checked)
         menu.add_command(label="Login", command=self._db_open_login_account_dialog)
+        menu.add_command(label="Create Page", command=self._db_open_create_page_dialog)
         menu.add_separator()
         menu.add_command(label="Clear Account Data", command=self._db_clear_checked_account_data)
         menu.add_command(label="Remove Dashboard Data", command=self._db_delete_checked_dashboard_data)
@@ -1225,6 +1226,368 @@ class DashboardDialogMixin:
         if names:
             self._dashboard_selected = names[0]
         self._db_add_page()
+
+    # ------------------------------------------------------------------
+    # Create Page (Facebook Page automation)
+    # ------------------------------------------------------------------
+
+    _CREATE_PAGE_RANDOM_WORDS = (
+        "Aurora", "Vertex", "Lumen", "Nimbus", "Cobalt", "Quartz", "Onyx",
+        "Echo", "Atlas", "Pixel", "Nova", "Drift", "Hatch", "Spark", "Mango",
+        "Harbor", "Summit", "Orbit", "Glow", "Ember", "Maple", "Lumio",
+        "Forge", "Loop", "Tide", "Cipher", "Halo", "Brisk", "Solace", "Vibe",
+    )
+
+    _CREATE_PAGE_RANDOM_SUFFIXES = (
+        "Studio", "Lab", "Hub", "House", "Co", "Works", "Daily", "Club",
+        "Media", "World", "Spot", "Press", "Notes", "Society", "Stories",
+    )
+
+    def _db_random_page_name(self):
+        import random
+        word = random.choice(self._CREATE_PAGE_RANDOM_WORDS)
+        suffix = random.choice(self._CREATE_PAGE_RANDOM_SUFFIXES)
+        # Occasional numeric suffix to reduce collisions.
+        if random.random() < 0.35:
+            return f"{word} {suffix} {random.randint(10, 9999)}"
+        return f"{word} {suffix}"
+
+    def _db_open_create_page_dialog(self):
+        names = self._db_checked_names()
+        if not names:
+            MessageBox.showinfo(
+                "Create Page",
+                "Select one or more instances first.",
+                parent=self._db_message_parent(),
+            )
+            return
+
+        multi_mode = len(names) > 1
+        title_suffix = f"{len(names)} instances" if multi_mode else names[0]
+        win = self._db_modal(f"Create Page · {title_suffix}", 640, 520 if multi_mode else 280)
+
+        shell = tb.Frame(win, style="Card.TFrame", padding=18)
+        shell.pack(fill="both", expand=True)
+
+        head = tb.Frame(shell, style="CardInner.TFrame")
+        head.pack(fill="x", pady=(0, 12))
+        tb.Label(head, text="Create Facebook Page", style="SectionTitle.TLabel").pack(anchor="w")
+        if multi_mode:
+            subtitle = (
+                f"Enter a page name for each of the {len(names)} selected LD instances. "
+                "Use Random to fill any blank rows automatically."
+            )
+        else:
+            subtitle = f"Set the page name for LD Instance · {names[0]}"
+        tb.Label(head, text=subtitle, style="Subtitle.TLabel").pack(anchor="w", pady=(2, 0))
+
+        # Optional shared category field.
+        category_var = tk.StringVar(value="")
+        cat_row = tb.Frame(shell, style="CardInner.TFrame")
+        cat_row.pack(fill="x", pady=(0, 10))
+        tb.Label(cat_row, text="Category (optional, applied to all):").pack(side="left")
+        tb.Entry(cat_row, textvariable=category_var, width=32).pack(side="left", padx=(8, 0))
+
+        name_vars: dict[str, tk.StringVar] = {}
+
+        if multi_mode:
+            list_frame = tb.Frame(shell, style="CardInner.TFrame")
+            list_frame.pack(fill="both", expand=True)
+
+            canvas = tk.Canvas(list_frame, bg=self.palette["surface"], highlightthickness=0)
+            scroll_y = tb.Scrollbar(list_frame, orient="vertical", command=canvas.yview, style="Vertical.TScrollbar")
+            inner = tb.Frame(canvas, style="CardInner.TFrame")
+            inner.bind(
+                "<Configure>",
+                lambda _e: canvas.configure(scrollregion=canvas.bbox("all")),
+            )
+            canvas.create_window((0, 0), window=inner, anchor="nw")
+            canvas.configure(yscrollcommand=scroll_y.set)
+            canvas.pack(side="left", fill="both", expand=True)
+            scroll_y.pack(side="right", fill="y")
+
+            header = tb.Frame(inner, style="CardInner.TFrame")
+            header.pack(fill="x", pady=(0, 4))
+            tb.Label(header, text="LD Instance", width=24, style="SectionTitle.TLabel").pack(side="left")
+            tb.Label(header, text="Page Name", style="SectionTitle.TLabel").pack(side="left", padx=(8, 0))
+
+            for ld_name in names:
+                row = tb.Frame(inner, style="CardInner.TFrame")
+                row.pack(fill="x", pady=2)
+                tb.Label(row, text=ld_name, width=24).pack(side="left")
+                var = tk.StringVar(value="")
+                name_vars[ld_name] = var
+                tb.Entry(row, textvariable=var, width=32).pack(side="left", padx=(8, 0))
+                tb.Button(
+                    row,
+                    text="🎲",
+                    width=3,
+                    bootstyle="secondary-outline",
+                    command=lambda v=var: v.set(self._db_random_page_name()),
+                ).pack(side="left", padx=(6, 0))
+        else:
+            single_var = tk.StringVar(value="")
+            name_vars[names[0]] = single_var
+            row = tb.Frame(shell, style="CardInner.TFrame")
+            row.pack(fill="x", pady=(0, 12))
+            tb.Label(row, text="Page Name:", width=12).pack(side="left")
+            tb.Entry(row, textvariable=single_var, width=36).pack(side="left", padx=(8, 0))
+            tb.Button(
+                row,
+                text="🎲 Random",
+                bootstyle="secondary-outline",
+                command=lambda: single_var.set(self._db_random_page_name()),
+            ).pack(side="left", padx=(6, 0))
+
+        # Footer buttons
+        footer = tb.Frame(shell, style="CardInner.TFrame")
+        footer.pack(fill="x", pady=(12, 0))
+
+        def fill_random_blanks():
+            for var in name_vars.values():
+                if not var.get().strip():
+                    var.set(self._db_random_page_name())
+
+        if multi_mode:
+            tb.Button(
+                footer,
+                text="Random All Blanks",
+                bootstyle="info-outline",
+                command=fill_random_blanks,
+            ).pack(side="left")
+
+        def on_cancel():
+            win.destroy()
+
+        def on_create():
+            assignments = []
+            missing = []
+            for ld_name in names:
+                page_name = name_vars[ld_name].get().strip()
+                if not page_name:
+                    missing.append(ld_name)
+                else:
+                    assignments.append((ld_name, page_name))
+
+            if missing:
+                MessageBox.showwarning(
+                    "Create Page",
+                    f"Missing page name for: {', '.join(missing)}.\n\n"
+                    "Type a name or click Random to fill blanks.",
+                    parent=win,
+                )
+                return
+
+            win.destroy()
+            self._db_start_create_page_batch(assignments, category=category_var.get().strip())
+
+        tb.Button(footer, text="Cancel", bootstyle="secondary", command=on_cancel).pack(side="right", padx=(6, 0))
+        tb.Button(footer, text="Create", bootstyle="primary", command=on_create).pack(side="right")
+
+    def _db_start_create_page_batch(self, assignments, category=""):
+        """Run the create_page task on each (ld_name, page_name) pair.
+
+        For a single assignment we run inline in a thread (mirrors single-login).
+        For multiple assignments we use the task_handler_factory + task_controller
+        batch runner, same as multi-login.
+        """
+        assignments = [(str(n).strip(), str(p).strip()) for n, p in assignments if str(n or "").strip()]
+        if not assignments:
+            return
+
+        if getattr(self, "running_event", None) is not None and self.running_event.is_set():
+            MessageBox.showwarning(
+                "Create Page",
+                "Automation is already running. Stop it before starting a create-page task.",
+                parent=self._db_message_parent(),
+            )
+            return
+
+        if len(assignments) == 1:
+            ld_name, page_name = assignments[0]
+            self._db_start_single_create_page(ld_name, page_name, category)
+            return
+
+        self._db_start_multi_create_page(assignments, category)
+
+    def _db_start_single_create_page(self, ld_name, page_name, category=""):
+        try:
+            from core.tasks.create_page import CreatePageTaskHandler
+        except Exception as exc:
+            MessageBox.showerror(
+                "Create Page",
+                f"Create-page task is not available: {exc}",
+                parent=self._db_message_parent(),
+            )
+            return
+
+        try:
+            if hasattr(self, "automation_controller"):
+                self.automation_controller.start()
+            elif getattr(self, "running_event", None) is not None:
+                self.running_event.set()
+            if hasattr(self, "status_task_lbl"):
+                self.status_task_lbl.set_status("Running", text="Tasks: 1 active")
+            self.update_device_runtime_state(
+                ld_name,
+                {
+                    "phase": "create_page",
+                    "state": "Running",
+                    "task": "Create Facebook Page",
+                    "progress": 5,
+                },
+            )
+        except Exception:
+            pass
+
+        handler = CreatePageTaskHandler(
+            self.emulator,
+            self.log,
+            self.pause_event,
+            lambda: self.running_event.is_set(),
+        )
+        handler.blocked_countries = [
+            code.strip().upper()
+            for code in self._db_var_value("blocked_countries", "").split(",")
+            if code.strip()
+        ]
+        handler.auto_arrange_ld = bool(self._db_var_value("auto_arrange_ld", False))
+        handler.state_callback = self.update_device_runtime_state
+
+        payload = {"page_name": page_name, "category": category}
+
+        def worker():
+            success = False
+            try:
+                self.log(f"Starting create-page task for {ld_name} → '{page_name}'", "INFO")
+                duration = int(self._db_var_value("task_duration", 5)) * 60
+                success = bool(handler.execute(ld_name, duration=duration, **payload))
+                self.log(
+                    f"Create-page task {'completed' if success else 'failed'} for {ld_name}",
+                    "SUCCESS" if success else "ERROR",
+                )
+                self.update_device_runtime_state(
+                    ld_name,
+                    {
+                        "phase": "create_page",
+                        "state": "Completed" if success else "Attention",
+                        "task": "Create Facebook Page",
+                        "progress": 100 if success else 0,
+                    },
+                )
+            except Exception as exc:
+                self.log(f"Create-page task error for {ld_name}: {exc}", "ERROR")
+            finally:
+                try:
+                    self.stop_automation(confirm=False)
+                except Exception:
+                    if getattr(self, "running_event", None) is not None:
+                        self.running_event.clear()
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _db_start_multi_create_page(self, assignments, category=""):
+        from services.task_handler_factory import TaskHandlerContext, UnsupportedTaskTypeError
+
+        ld_names = [n for n, _ in assignments]
+        page_name_by_ld = {n: p for n, p in assignments}
+
+        try:
+            blocked_countries = [
+                code.strip().upper()
+                for code in self._db_var_value("blocked_countries", "").split(",")
+                if code.strip()
+            ]
+        except Exception:
+            blocked_countries = []
+
+        handler_context = TaskHandlerContext(
+            emulator=self.emulator,
+            log=self.log,
+            pause_event=self.pause_event,
+            running_flag=lambda: self.running_event.is_set(),
+            blocked_countries=blocked_countries,
+            auto_arrange_ld=bool(self._db_var_value("auto_arrange_ld", False)),
+            state_callback=self.update_device_runtime_state,
+        )
+
+        try:
+            task_handler = self.task_handler_factory.create("create_page", handler_context)
+        except UnsupportedTaskTypeError as exc:
+            MessageBox.showerror(
+                "Create Page",
+                f"Create-page handler is not registered: {exc}",
+                parent=self._db_message_parent(),
+            )
+            return
+
+        # Inject the per-LD page name lookup so the runner can pass each LD
+        # its own page name when execute() is invoked.
+        original_execute = task_handler.execute
+
+        def execute_with_per_ld_name(name, duration=300, **kwargs):
+            kwargs.setdefault("page_name", page_name_by_ld.get(name, ""))
+            kwargs.setdefault("category", category)
+            return original_execute(name, duration=duration, **kwargs)
+
+        task_handler.execute = execute_with_per_ld_name
+
+        parallel_ld = max(1, int(self._db_var_value("parallel_ld", 1) or 1))
+        boot_delay = max(1, int(self._db_var_value("boot_delay", 20) or 20))
+        task_duration_seconds = int(self._db_var_value("task_duration", 5) or 5) * 60
+
+        request = self.task_controller.build_request(
+            selected_ld_names=list(ld_names),
+            task_type="create_page",
+            task_template=str(self._db_var_value("task_template_var", "custom") or "custom"),
+            parallel_ld=parallel_ld,
+            start_same_time=bool(self._db_var_value("start_same_time", False)),
+            auto_arrange_ld=bool(self._db_var_value("auto_arrange_ld", False)),
+            boot_delay=boot_delay,
+            task_duration_seconds=task_duration_seconds,
+            accounts_per_ld=1,
+        )
+
+        try:
+            self.automation_controller.start()
+        except Exception:
+            self.running_event.set()
+        if hasattr(self, "status_task_lbl"):
+            self.status_task_lbl.set_status("Running", text=f"Tasks: {len(ld_names)} active")
+        self.log(f"Starting multi create-page on {len(ld_names)} LD(s)", "INFO")
+
+        def worker():
+            try:
+                runner = self.task_controller.create_runner(
+                    request=request,
+                    running_flag=lambda: self.running_event.is_set(),
+                    log_func=self.log,
+                    task_handler=task_handler,
+                    progress_callback=self.update_progress if hasattr(self, "update_progress") else None,
+                    emulator=self.emulator,
+                    state_callback=self.update_device_runtime_state,
+                )
+            except Exception as exc:
+                self.log(f"Multi create-page setup error: {exc}", "ERROR")
+                self.stop_automation(confirm=False)
+                return
+
+            def _on_error(exc):
+                self.log(f"Multi create-page error: {exc}", "ERROR")
+
+            def _on_completed(_completed):
+                pass
+
+            try:
+                self.automation_controller.run_batch(runner, on_error=_on_error, on_completed=_on_completed)
+            finally:
+                try:
+                    self.stop_automation(confirm=False)
+                except Exception:
+                    if getattr(self, "running_event", None) is not None:
+                        self.running_event.clear()
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _db_open_login_account_dialog(self):
         names = self._db_checked_names()
