@@ -1470,58 +1470,97 @@ class ReelsHandlerMixin:
             return False
 
     def click_facebook_menu(self, d, timeout=10):
-
+        """Click the Menu tab in Facebook's bottom nav bar.
+        
+        Tries multiple strategies in order of reliability.
+        """
+        import time
+        
+        # Make sure tab bar is visible
         time.sleep(0.4)
         d.swipe_ext("down", scale=0.75, duration=0.08)
-        time.sleep(0.25)
+        time.sleep(0.5)
+        
+        # Strategy 1: selector-based
+        try:
+            clicked = self._click_any_selector(
+                d,
+                [
+                    {"descriptionMatches": r"(?i)^menu$"},
+                    {"descriptionContains": "Menu"},
+                    {"resourceIdMatches": r".*(tab_bar_menu|tab_menu|menu_tab).*"},
+                    {"text": "Menu"},
+                ],
+                timeout=5,
+                required=False,
+            )
+            if clicked:
+                time.sleep(1.0)
+                if self._verify_menu_opened(d):
+                    return True
+        except Exception as e:
+            print(f"[click_facebook_menu] Selector strategy failed: {e}")
+        
+        # Strategy 2: XPath with index [6]
+        try:
+            xpath = '(//android.view.View[@resource-id="com.facebook.katana:id/(name removed)"])[6]'
+            el = d.xpath(xpath)
+            if el.wait(timeout=5):
+                el.click()
+                time.sleep(1.0)
+                if self._verify_menu_opened(d):
+                    return True
+        except Exception as e:
+            print(f"[click_facebook_menu] XPath [6] failed: {e}")
+        
+        # Strategy 3: try other indices (tab order changes across versions)
+        for idx in [5, 7, 4, 3]:
+            try:
+                xpath = f'(//android.view.View[@resource-id="com.facebook.katana:id/(name removed)"])[{idx}]'
+                el = d.xpath(xpath)
+                if el.wait(timeout=2):
+                    el.click()
+                    time.sleep(1.0)
+                    if self._verify_menu_opened(d):
+                        print(f"[click_facebook_menu] Worked with index [{idx}]")
+                        return True
+            except Exception:
+                continue
+        
+        # Strategy 4: tap the rightmost tab by coordinates
+        try:
+            info = d.info
+            w, h = info["displayWidth"], info["displayHeight"]
+            # Bottom nav menu is usually the rightmost icon
+            x = int(w * 0.92)
+            y = int(h * 0.95)
+            d.click(x, y)
+            time.sleep(1.0)
+            if self._verify_menu_opened(d):
+                print("[click_facebook_menu] Worked via coordinate tap")
+                return True
+        except Exception as e:
+            print(f"[click_facebook_menu] Coordinate tap failed: {e}")
+        
+        print("[click_facebook_menu] All strategies failed")
+        return False
 
-        selectors = [
-            # Best case: accessibility description
-            {"descriptionContains": "menu"},
-            {"descriptionContains": "Menu"},
-            {"descriptionContains": "More"},
 
-            # Sometimes Facebook uses resource-id
-            {"resourceIdMatches": ".*menu.*"},
-
-            # Fallback by class (top-left clickable button)
-            {"className": "android.widget.ImageView"},
-            {"className": "android.widget.Button"},
+    def _verify_menu_opened(self, d):
+        """Check if the Menu screen actually opened by looking for known elements."""
+        menu_indicators = [
+            {"textMatches": r"(?i)settings.*privacy"},
+            {"textMatches": r"(?i)your profile"},
+            {"textMatches": r"(?i)log\s*out"},
+            {"descriptionContains": "Settings & privacy"},
+            {"text": "Menu"},  # often the screen header
         ]
-
-        def try_click_menu_button():
-            for sel in selectors:
-                try:
-                    obj = d(**sel)
-                    if obj.exists:
-                        bounds = obj.info.get("bounds", {})
-                        x = (bounds.get("left", 0) + bounds.get("right", 0)) // 2
-                        y = (bounds.get("top", 0) + bounds.get("bottom", 0)) // 2
-
-                        # Only click if it's near top-left (hamburger location)
-                        if x < d.window_size()[0] * 0.3 and y < d.window_size()[1] * 0.2:
-                            self.log("Clicking Facebook menu button")
-                            obj.click()
-                            return True
-                except Exception as e:
-                    self.log(f"Error: {e}")
-            return False
-
-        # Use up to 2 quick swipes to reveal the menu button if Facebook is still settling.
-        for attempt in range(2):
-            if try_click_menu_button():
-                return True
-
-        deadline = time.time() + timeout
-
-        while time.time() < deadline:
-            if try_click_menu_button():
-                return True
-
-            time.sleep(0.5)
-
-        self.log("Menu button not found")
-        self.log("skipping Facebook menu click")
+        for sel in menu_indicators:
+            try:
+                if d(**sel).exists:
+                    return True
+            except Exception:
+                continue
         return False
 
     # Detect presence of page names in the list by looking for common patterns in the text of visible items.
@@ -1680,7 +1719,6 @@ class ReelsHandlerMixin:
         """
         Tap the main account/profile card using the Facebook account name from dashboard.
         """
-
         try:
             if isinstance(instance_name, (int, float)) and timeout == 3:
                 timeout = instance_name

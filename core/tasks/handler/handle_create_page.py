@@ -1,4 +1,5 @@
 import json
+from os import name
 import time
 from datetime import datetime
 
@@ -51,8 +52,13 @@ class CreatePageHandlerMixin:
         return False
 
     def _run_create_page_steps_once(self, d, ld_name, profile):
-        if not self._open_menu_tab(d):
-            self.log(f"Could not open Menu tab on {ld_name}")
+
+        time.sleep(0.4)
+        d.swipe_ext("down", scale=0.75, duration=0.08)
+        time.sleep(0.25)
+
+        if not self.click_facebook_menu(d):
+            self.log(f"Could not open Facebook menu on {ld_name}")
             return False
 
         if not self._open_pages_section(d):
@@ -88,47 +94,234 @@ class CreatePageHandlerMixin:
 
         time.sleep(10)
         self._handle_next_notifications_prompt(d)
+
+        time.sleep(2)
+        self.end_to_accoutn_profile(d,ld_name)
         return True
 
     # ------------------------------------------------------------------
     # Navigation
     # ------------------------------------------------------------------
 
-    def _open_menu_tab(self, d):
-        return self._click_any_selector(
-            d,
-            [
-                {"descriptionMatches": r"(?i)^menu$"},
-                {"descriptionContains": "Menu"},
-                {"resourceIdMatches": r".*(tab_bar_menu|tab_menu|menu_tab).*"},
-                {"text": "Menu"},
-            ],
-            timeout=8,
-            required=False,
-        )
-
-    def _open_pages_section(self, d):
-        # Some FB builds need a scroll inside Menu to reveal "Pages".
-        for _ in range(4):
-            if self._click_any_selector(
+    def click_facebook_menu(self, d, timeout=10):
+        """Click the Menu tab in Facebook's bottom nav bar.
+        
+        Tries multiple strategies in order of reliability.
+        """
+        import time
+        
+        # Make sure tab bar is visible
+        time.sleep(0.4)
+        d.swipe_ext("down", scale=0.75, duration=0.08)
+        time.sleep(0.5)
+        
+        # Strategy 1: selector-based
+        try:
+            clicked = self._click_any_selector(
                 d,
                 [
-                    {"text": "Pages"},
-                    {"description": "Pages"},
-                    {"textContains": "Pages"},
-                    {"descriptionContains": "Pages"},
-                    {"resourceIdMatches": r".*(pages_entry|menu_pages).*"},
+                    {"descriptionMatches": r"(?i)^menu$"},
+                    {"descriptionContains": "Menu"},
+                    {"resourceIdMatches": r".*(tab_bar_menu|tab_menu|menu_tab).*"},
+                    {"text": "Menu"},
                 ],
-                timeout=3,
+                timeout=5,
                 required=False,
-            ):
+            )
+            if clicked:
+                time.sleep(1.0)
+                if self._verify_menu_opened(d):
+                    return True
+        except Exception as e:
+            print(f"[click_facebook_menu] Selector strategy failed: {e}")
+        
+        # Strategy 2: XPath with index [6]
+        try:
+            xpath = '(//android.view.View[@resource-id="com.facebook.katana:id/(name removed)"])[6]'
+            el = d.xpath(xpath)
+            if el.wait(timeout=5):
+                el.click()
+                time.sleep(1.0)
+                if self._verify_menu_opened(d):
+                    return True
+        except Exception as e:
+            print(f"[click_facebook_menu] XPath [6] failed: {e}")
+        
+        # Strategy 3: try other indices (tab order changes across versions)
+        for idx in [5, 7, 4, 3]:
+            try:
+                xpath = f'(//android.view.View[@resource-id="com.facebook.katana:id/(name removed)"])[{idx}]'
+                el = d.xpath(xpath)
+                if el.wait(timeout=2):
+                    el.click()
+                    time.sleep(1.0)
+                    if self._verify_menu_opened(d):
+                        print(f"[click_facebook_menu] Worked with index [{idx}]")
+                        return True
+            except Exception:
+                continue
+        
+        # Strategy 4: tap the rightmost tab by coordinates
+        try:
+            info = d.info
+            w, h = info["displayWidth"], info["displayHeight"]
+            # Bottom nav menu is usually the rightmost icon
+            x = int(w * 0.92)
+            y = int(h * 0.95)
+            d.click(x, y)
+            time.sleep(1.0)
+            if self._verify_menu_opened(d):
+                print("[click_facebook_menu] Worked via coordinate tap")
+                return True
+        except Exception as e:
+            print(f"[click_facebook_menu] Coordinate tap failed: {e}")
+        
+        print("[click_facebook_menu] All strategies failed")
+        return False
+
+
+    def _verify_menu_opened(self, d):
+        """Check if the Menu screen actually opened by looking for known elements."""
+        menu_indicators = [
+            {"textMatches": r"(?i)settings.*privacy"},
+            {"textMatches": r"(?i)your profile"},
+            {"textMatches": r"(?i)log\s*out"},
+            {"descriptionContains": "Settings & privacy"},
+            {"text": "Menu"},  # often the screen header
+        ]
+        for sel in menu_indicators:
+            try:
+                if d(**sel).exists:
+                    return True
+            except Exception:
+                continue
+        return False
+
+    def _open_pages_section(self, d):
+        """
+        Open Facebook Menu > Pages.
+
+        Flow:
+        1. Try to find Pages first.
+        2. If Pages is not visible, click See more once.
+        3. Scroll down and keep finding Pages.
+        """
+
+        def click_pages():
+            # Primary: direct uiautomator2 selector
+            try:
+                obj = d(className="android.view.ViewGroup", description="Pages")
+                if obj.exists(timeout=2):
+                    obj.click()
+                    self.log("Clicked Pages by className + description")
+                    return True
+            except Exception as e:
+                self.log(f"Pages direct selector failed: {e}")
+
+            # Fallback 1: description only
+            try:
+                obj = d(description="Pages")
+                if obj.exists(timeout=1):
+                    obj.click()
+                    self.log("Clicked Pages by description")
+                    return True
+            except Exception as e:
+                self.log(f"Pages description selector failed: {e}")
+
+            # Fallback 2: text only
+            try:
+                obj = d(text="Pages")
+                if obj.exists(timeout=1):
+                    obj.click()
+                    self.log("Clicked Pages by text")
+                    return True
+            except Exception as e:
+                self.log(f"Pages text selector failed: {e}")
+
+            # Fallback 3: XPath
+            try:
+                obj = d.xpath('//android.view.ViewGroup[@content-desc="Pages"]')
+                if obj.exists:
+                    obj.click()
+                    self.log("Clicked Pages by XPath")
+                    return True
+            except Exception as e:
+                self.log(f"Pages XPath failed: {e}")
+
+            return False
+
+        def click_see_more():
+            # Primary: direct uiautomator2 selector
+            try:
+                obj = d(className="android.widget.Button", description="See more")
+                if obj.exists(timeout=2):
+                    obj.click()
+                    self.log("Clicked See more by className + description")
+                    return True
+            except Exception as e:
+                self.log(f"See more direct selector failed: {e}")
+
+            # Fallback 1: description only
+            try:
+                obj = d(description="See more")
+                if obj.exists(timeout=1):
+                    obj.click()
+                    self.log("Clicked See more by description")
+                    return True
+            except Exception as e:
+                self.log(f"See more description selector failed: {e}")
+
+            # Fallback 2: text only
+            try:
+                obj = d(text="See more")
+                if obj.exists(timeout=1):
+                    obj.click()
+                    self.log("Clicked See more by text")
+                    return True
+            except Exception as e:
+                self.log(f"See more text selector failed: {e}")
+
+            # Fallback 3: XPath
+            try:
+                obj = d.xpath('//android.widget.Button[@content-desc="See more"]')
+                if obj.exists:
+                    obj.click()
+                    self.log("Clicked See more by XPath")
+                    return True
+            except Exception as e:
+                self.log(f"See more XPath failed: {e}")
+
+            return False
+
+        clicked_see_more = False
+
+        for attempt in range(10):
+            # 1. First find Pages
+            if click_pages():
                 time.sleep(2)
                 return True
+
+            # 2. If Pages not found, click See more once
+            if not clicked_see_more:
+                if click_see_more():
+                    clicked_see_more = True
+                    time.sleep(1.5)
+
+                    # Try Pages immediately after expanding See more
+                    if click_pages():
+                        time.sleep(2)
+                        return True
+
+            # 3. Scroll down and retry Pages
             try:
-                d.swipe_ext("up", scale=0.6)
-            except Exception:
+                self.log(f"Pages not found, scrolling... attempt {attempt + 1}")
+                d.swipe_ext("up", scale=0.65)
+                time.sleep(0.8)
+            except Exception as e:
+                self.log(f"Scroll failed while finding Pages: {e}")
                 break
-            time.sleep(0.6)
+
+        self.log("Could not find Pages section")
         return False
 
     def _tap_create_new_page(self, d):
@@ -169,7 +362,6 @@ class CreatePageHandlerMixin:
 
         # ⚠️ Fallback: click near top chip area (based on your screenshot)
         try:
-            self.log("[Create Page] Fallback → coordinate tap")
             d.click(88, 203)  # adjust if needed
             return True
         except Exception as e:
@@ -371,7 +563,6 @@ class CreatePageHandlerMixin:
                 if node.exists:
                     info = node.info or {}
                     node.click()
-                    self.log(f"[Page Category] Clicked first suggestion row by XPath: {xp}, info={info}")
                     return True
 
             except Exception as exc:
@@ -586,3 +777,40 @@ class CreatePageHandlerMixin:
         if skipped:
             self.log(f"next {skipped} post-login prompt(s)")
         return skipped
+
+    def end_to_accoutn_profile(self, d, name):
+        if not self.open_facebook(d):
+            self.log(f"Failed to open Facebook for final cleanup on {name}")
+
+        time.sleep(6)
+        if not self.click_facebook_menu(d):
+            self.log(f"Failed to open Facebook menu on {name}")
+            return False
+
+        time.sleep(4)
+        if not self.back_to_profile(d):
+            self.log(f"Failed to switch back to profile on {name}")
+            return False
+        return True
+    
+    def back_to_profile(self, d, timeout=10):
+        """Click the Menu tab in Facebook's bottom nav bar using UiSelector."""
+        import time
+        
+        # Make sure tab bar is visible
+        time.sleep(0.4)
+        d.swipe_ext("down", scale=0.75, duration=0.08)
+        time.sleep(0.5)
+        
+        try:
+            el = d(className="android.widget.ImageView", instance=1)
+            if el.wait(timeout=timeout):
+                el.click()
+                time.sleep(1.0)
+                return True
+            else:
+                print("[back_to_profile] Element not found within timeout")
+        except Exception as e:
+            print(f"[back_to_profile] Failed: {e}")
+        
+        return False

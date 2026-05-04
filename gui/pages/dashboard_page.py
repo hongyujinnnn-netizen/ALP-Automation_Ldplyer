@@ -1545,7 +1545,13 @@ class DashboardDialogMixin:
             auto_arrange_ld=bool(self._db_var_value("auto_arrange_ld", False)),
             boot_delay=boot_delay,
             task_duration_seconds=task_duration_seconds,
+            max_videos=int(self._db_var_value("max_videos", 2) or 2),
+            page_per_account=int(self._db_var_value("page_per_account", 2) or 2),
             accounts_per_ld=1,
+            scroll_after_post=bool(self._db_var_value("scroll_after_post", True)),
+            clear_cache=bool(self._db_var_value("clear_cache", True)),
+            verify_account=bool(self._db_var_value("verify_account", True)),
+            verify_2fa=bool(self._db_var_value("verify_2fa", True)),
         )
 
         try:
