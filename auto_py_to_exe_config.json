@@ -1,0 +1,46 @@
+{
+  "version": "auto-py-to-exe-configuration_v1",
+  "pyinstallerOptions": [
+    {
+      "optionDest": "noconfirm",
+      "value": true
+    },
+    {
+      "optionDest": "filenames",
+      "value": "D:\\Dev_application\\ALP-Automation_Ldplyer\\Alp_Automation.py"
+    },
+    {
+      "optionDest": "onefile",
+      "value": false
+    },
+    {
+      "optionDest": "console",
+      "value": false
+    },
+    {
+      "optionDest": "name",
+      "value": "ALP-Automation"
+    },
+    {
+      "optionDest": "clean_build",
+      "value": true
+    },
+    {
+      "optionDest": "collect_all",
+      "value": "uiautomator2"
+    },
+    {
+      "optionDest": "datas",
+      "value": "D:\\Dev_application\\ALP-Automation_Ldplyer\\assets;assets"
+    },
+    {
+      "optionDest": "datas",
+      "value": "C:\\Users\\khunh\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python313\\site-packages\\uiautomator2\\assets;uiautomator2\\assets"
+    }
+  ],
+  "nonPyinstallerOptions": {
+    "increaseRecursionLimit": true,
+    "manualArguments": "",
+    "outputDirectory": "D:\\Dev_application\\ALP-Automation_Ldplyer\\output"
+  }
+}

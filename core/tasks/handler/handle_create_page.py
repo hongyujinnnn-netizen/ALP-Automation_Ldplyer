@@ -117,18 +117,10 @@ class CreatePageHandlerMixin:
         
         # Strategy 1: selector-based
         try:
-            clicked = self._click_any_selector(
-                d,
-                [
-                    {"descriptionMatches": r"(?i)^menu$"},
-                    {"descriptionContains": "Menu"},
-                    {"resourceIdMatches": r".*(tab_bar_menu|tab_menu|menu_tab).*"},
-                    {"text": "Menu"},
-                ],
-                timeout=5,
-                required=False,
-            )
-            if clicked:
+            xpath = '//*[@content-desc="Menu"]'
+            el = d.xpath(xpath)
+            if el.wait(timeout=5):
+                el.click()
                 time.sleep(1.0)
                 if self._verify_menu_opened(d):
                     return True

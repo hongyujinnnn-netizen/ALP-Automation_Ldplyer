@@ -1,17 +1,30 @@
 # -*- mode: python ; coding: utf-8 -*-
+
 from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
 
-datas = []
+
+datas = [
+    ("assets", "assets"),
+]
 binaries = []
 hiddenimports = []
-tmp_ret = collect_all('uiautomator2')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-datas += collect_data_files('uiautomator2', includes=['assets/*', 'ext/htmlreport/assets/*'])
-hiddenimports += collect_submodules('uiautomator2')
+
+tmp_ret = collect_all("uiautomator2")
+datas += tmp_ret[0]
+binaries += tmp_ret[1]
+hiddenimports += tmp_ret[2]
+
+# uiautomator2 loads these files at runtime through importlib.resources.
+# Keep them under uiautomator2/assets so "assets/u2.jar" resolves in frozen builds.
+datas += collect_data_files(
+    "uiautomator2",
+    includes=["assets/*", "ext/htmlreport/assets/*"],
+)
+hiddenimports += collect_submodules("uiautomator2")
 
 
 a = Analysis(
-    ['app.py'],
+    ["Alp_Automation.py"],
     pathex=[],
     binaries=binaries,
     datas=datas,
@@ -28,20 +41,27 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
-    name='app',
+    exclude_binaries=True,
+    name="ALP-Automation",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=True,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name="ALP-Automation",
 )

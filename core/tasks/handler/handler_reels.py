@@ -1474,8 +1474,6 @@ class ReelsHandlerMixin:
         
         Tries multiple strategies in order of reliability.
         """
-        import time
-        
         # Make sure tab bar is visible
         time.sleep(0.4)
         d.swipe_ext("down", scale=0.75, duration=0.08)
@@ -1483,23 +1481,15 @@ class ReelsHandlerMixin:
         
         # Strategy 1: selector-based
         try:
-            clicked = self._click_any_selector(
-                d,
-                [
-                    {"descriptionMatches": r"(?i)^menu$"},
-                    {"descriptionContains": "Menu"},
-                    {"resourceIdMatches": r".*(tab_bar_menu|tab_menu|menu_tab).*"},
-                    {"text": "Menu"},
-                ],
-                timeout=5,
-                required=False,
-            )
-            if clicked:
+            xpath = '//*[@content-desc="Menu"]'
+            el = d.xpath(xpath)
+            if el.wait(timeout=5):
+                el.click()
                 time.sleep(1.0)
                 if self._verify_menu_opened(d):
                     return True
         except Exception as e:
-            print(f"[click_facebook_menu] Selector strategy failed: {e}")
+            self.log(f"[click_facebook_menu] Selector strategy failed: {e}")
         
         # Strategy 2: XPath with index [6]
         try:
@@ -1546,21 +1536,67 @@ class ReelsHandlerMixin:
         return False
 
 
-    def _verify_menu_opened(self, d):
-        """Check if the Menu screen actually opened by looking for known elements."""
+    def _verify_menu_opened(self, d, timeout=3):
+        """
+        Verify Facebook Menu screen/drawer is opened.
+
+        Works with visible menu items like:
+        - Your shortcuts
+        - Pages
+        - Saved
+        - Memories
+        - Marketplace
+        - Groups
+        - See more
+        """
         menu_indicators = [
-            {"textMatches": r"(?i)settings.*privacy"},
-            {"textMatches": r"(?i)your profile"},
-            {"textMatches": r"(?i)log\s*out"},
-            {"descriptionContains": "Settings & privacy"},
-            {"text": "Menu"},  # often the screen header
+            # Strong indicators from your screenshot
+            {"text": "Your shortcuts"},
+            {"textContains": "Your shortcuts"},
+            {"text": "Pages"},
+            {"text": "Saved"},
+            {"text": "Memories"},
+            {"text": "Marketplace"},
+            {"text": "Groups"},
+            {"text": "See more"},
+
+            # Extra fallback indicators
+            {"textMatches": r"(?i)your shortcuts"},
+            {"textMatches": r"(?i)pages"},
+            {"textMatches": r"(?i)saved"},
+            {"textMatches": r"(?i)memories"},
+            {"textMatches": r"(?i)marketplace"},
+            {"textMatches": r"(?i)groups"},
+            {"textMatches": r"(?i)see\s*more"},
+
+            # Sometimes Facebook uses content-desc
+            {"descriptionContains": "Pages"},
+            {"descriptionContains": "Saved"},
+            {"descriptionContains": "Marketplace"},
+            {"descriptionContains": "Groups"},
+            {"descriptionContains": "See more"},
         ]
-        for sel in menu_indicators:
-            try:
-                if d(**sel).exists:
-                    return True
-            except Exception:
-                continue
+
+        end_time = time.time() + timeout
+
+        while time.time() < end_time:
+            matched = []
+
+            for sel in menu_indicators:
+                try:
+                    if d(**sel).exists:
+                        matched.append(sel)
+                except Exception:
+                    continue
+
+            # Require at least 2 indicators to avoid false positive
+            if len(matched) >= 2:
+                self.log(f"Facebook menu verified. Matched: {matched[:3]}")
+                return True
+
+            time.sleep(0.3)
+
+        self.log("Facebook menu not verified")
         return False
 
     # Detect presence of page names in the list by looking for common patterns in the text of visible items.
