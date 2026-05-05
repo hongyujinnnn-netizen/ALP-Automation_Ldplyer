@@ -54,3 +54,4 @@ logs/
 # Optional local backups
 backups/
 app_backup.py
+output/
