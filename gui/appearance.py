@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-
 THEME_PRESETS = {
     "dark": {"label": "Dark", "ttk_theme": "darkly", "mode": "dark"},
     "light": {"label": "Light", "ttk_theme": "flatly", "mode": "light"},

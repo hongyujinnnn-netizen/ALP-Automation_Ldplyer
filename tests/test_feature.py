@@ -1,9 +1,9 @@
-import time
-from unittest import result
-import xml.etree.ElementTree as ET
-import re
 import random
-from core.task_base import BaseTaskHandler, U2_AVAILABLE, u2
+import re
+import time
+import xml.etree.ElementTree as ET
+
+from core.task_base import U2_AVAILABLE, BaseTaskHandler, u2
 
 
 class TestFeatureTaskHandler(BaseTaskHandler):

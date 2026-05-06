@@ -4,7 +4,6 @@ import ttkbootstrap as tb
 
 from gui.components.status import StatusPill
 
-
 DEFAULT_PALETTE = {
     "surface": "#0E1118",
     "surface_alt": "#141820",

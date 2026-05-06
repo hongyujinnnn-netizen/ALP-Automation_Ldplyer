@@ -1,10 +1,9 @@
-import os
 import random
 import re
 import subprocess
 import time
 
-from core.task_base import BaseTaskHandler, U2_AVAILABLE, u2
+from core.task_base import U2_AVAILABLE, BaseTaskHandler, u2
 from utils.ip_guard import check_ld_ip_allowed
 
 
@@ -758,9 +757,9 @@ class EnhancedScrollTaskHandler(ScrollTaskHandler):
 
     def __init__(self, emulator, log_func, pause_event, running_flag):
         super().__init__(emulator, log_func, pause_event, running_flag)
+        from utils.activity_randomizer import ActivityRandomizer
         from utils.error_handler import EnhancedErrorHandler
         from utils.rate_limiter import RateLimiter
-        from utils.activity_randomizer import ActivityRandomizer
 
         self.error_handler = EnhancedErrorHandler(log_func)
         self.rate_limiter = RateLimiter()

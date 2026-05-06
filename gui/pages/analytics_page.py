@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 import ttkbootstrap as tb
 
-from gui.components.cards import AlertCard, FeedCard, MetricCard
+from gui.components.cards import AlertCard, FeedCard
 from gui.components.scrollable_frame import ScrollableFrame
 from gui.components.state_views import StateView
 from gui.components.status import (

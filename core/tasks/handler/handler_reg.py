@@ -5,7 +5,6 @@ import string
 import subprocess
 import time
 from datetime import datetime
-from typing import Any, Callable, TYPE_CHECKING
 
 from core.email_models import EmailAccountConfig, OTPRequest
 from core.paths import get_app_paths

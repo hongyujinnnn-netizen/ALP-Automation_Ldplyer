@@ -1,5 +1,6 @@
 import os
 import tkinter as tk
+
 import ttkbootstrap as tb
 
 from gui.components.status import StatusPill

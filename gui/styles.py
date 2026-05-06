@@ -1,4 +1,3 @@
-import ttkbootstrap as tb
 
 
 def configure_styles(root, style, palette, display_font, mono_font, appearance=None):

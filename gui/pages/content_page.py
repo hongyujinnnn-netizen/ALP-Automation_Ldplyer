@@ -1,8 +1,11 @@
 import os
-from pathlib import Path
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox as MessageBox
+from pathlib import Path
+from tkinter import filedialog, ttk
+from tkinter import messagebox as MessageBox
+
 import ttkbootstrap as tb
+
 from gui.components.cards import DetailCard
 from gui.components.state_views import StateView
 

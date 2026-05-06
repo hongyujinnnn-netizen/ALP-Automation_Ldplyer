@@ -1,51 +1,39 @@
-import os
-import threading
-import tkinter as tk
-from tkinter import ttk
-from tkinter import font as tkfont
-from tkinter.scrolledtext import ScrolledText
-from tkinter import messagebox as MessageBox
-from tkinter import filedialog
-from tkinter import simpledialog
-from datetime import datetime
 import json
-import time
-from pathlib import Path
+import os
+import platform
 import random
 import re
 import sys
+import threading
+import time
+import tkinter as tk
 import zipfile
 from abc import ABC, abstractmethod
-import platform
+from datetime import datetime
+from pathlib import Path
+from tkinter import filedialog, simpledialog, ttk
+from tkinter import font as tkfont
+from tkinter import messagebox as MessageBox
+from tkinter.scrolledtext import ScrolledText
+
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 from ttkbootstrap.scrolled import ScrolledText as tbScrolledText
 
 # Import local modules
 from controllers.app_controller import AppController
+from controllers.automation_controller import AutomationController, AutomationState
 from controllers.emulator_controller import EmulatorController
 from controllers.otp_controller import OTPController
-from controllers.automation_controller import AutomationController, AutomationState
 from controllers.task_controller import TaskController
+from core.managers import AccountManager, BackupManager, ContentManager, SmartScheduler, TaskTemplates
 from core.paths import get_app_paths
-from core.managers import AccountManager, ContentManager, BackupManager, SmartScheduler, TaskTemplates
 from core.settings import AppSettings, ScheduleSettings
-from services.scheduler_service import SchedulerService
-from services.emulator_service import EmulatorService
-from services.task_service import TaskService
-from services.task_handler_factory import (
-    TaskHandlerContext,
-    TaskHandlerFactory,
-    UnsupportedTaskTypeError,
-)
-from utils.performance_monitor import PerformanceMonitor
-from utils.app_utils import AppUtils
-from utils.ip_guard import check_ip_allowed
-from utils.system_power import schedule_pc_shutdown
-from services.logging_service import AppLogger
-from services.settings_service import SettingsService
+from gui.appearance import resolve_appearance
 from gui.checkbox_treeview import CheckboxTreeview
 from gui.components.cards import SectionCard
+from gui.components.command_palette import Command, CommandPalette
+from gui.components.state_views import StateView
 from gui.components.status import (
     StatusPill,
     configure_status_tree_tags,
@@ -55,29 +43,39 @@ from gui.components.status import (
     status_table_text,
     status_tag,
 )
-from gui.components.state_views import StateView
-from gui.components.command_palette import Command, CommandPalette
-from gui.mixins import ToolsMixin
-from gui.gradient_progress import GradientProgressBar
-from gui.styles import configure_styles
-from gui.appearance import resolve_appearance
-from gui.sidebar import SidebarMixin
-from gui.topbar import TopBarMixin
-from gui.status_bar import StatusBarMixin
-from gui.menu_bar import MenuBarMixin
-from gui.pages.analytics_page import DashboardPageMixin
-from gui.pages.devices_page import DevicesPageMixin
-from gui.pages.tasks_page import TasksPageMixin
-from gui.pages.backup_page import BackupPageMixin
-from gui.pages.schedule_page import SchedulePageMixin
-from gui.pages.content_page import ContentPageMixin
-from gui.pages.logs_page import LogsPageMixin
-from gui.dialogs.settings_dialog import SettingsDialogMixin
-from gui.pages.account_page import AccountDialogMixin
-from gui.dialogs.tools_dialog import ToolsDialogMixin
 from gui.dialogs.perf_dialog import PerformanceDialogMixin
+from gui.dialogs.settings_dialog import SettingsDialogMixin
+from gui.dialogs.tools_dialog import ToolsDialogMixin
+from gui.gradient_progress import GradientProgressBar
+from gui.menu_bar import MenuBarMixin
+from gui.mixins import ToolsMixin
+from gui.pages.account_page import AccountDialogMixin
+from gui.pages.analytics_page import DashboardPageMixin
+from gui.pages.backup_page import BackupPageMixin
+from gui.pages.content_page import ContentPageMixin
 from gui.pages.dashboard_page import DashboardDialogMixin
-
+from gui.pages.devices_page import DevicesPageMixin
+from gui.pages.logs_page import LogsPageMixin
+from gui.pages.schedule_page import SchedulePageMixin
+from gui.pages.tasks_page import TasksPageMixin
+from gui.sidebar import SidebarMixin
+from gui.status_bar import StatusBarMixin
+from gui.styles import configure_styles
+from gui.topbar import TopBarMixin
+from services.emulator_service import EmulatorService
+from services.logging_service import AppLogger
+from services.scheduler_service import SchedulerService
+from services.settings_service import SettingsService
+from services.task_handler_factory import (
+    TaskHandlerContext,
+    TaskHandlerFactory,
+    UnsupportedTaskTypeError,
+)
+from services.task_service import TaskService
+from utils.app_utils import AppUtils
+from utils.ip_guard import check_ip_allowed
+from utils.performance_monitor import PerformanceMonitor
+from utils.system_power import schedule_pc_shutdown
 
 _DEV_EMULATOR_NAMES = ("US - clone", "US - 01", "US - 02", "US - 03", "US - 04", "US - 05")
 

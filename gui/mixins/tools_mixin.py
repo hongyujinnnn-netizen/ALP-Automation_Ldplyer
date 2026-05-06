@@ -1,6 +1,5 @@
-from tkinter import filedialog
+from tkinter import filedialog, simpledialog
 from tkinter import messagebox as MessageBox
-from tkinter import simpledialog
 
 
 class ToolsMixin:

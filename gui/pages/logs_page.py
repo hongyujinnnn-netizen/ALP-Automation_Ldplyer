@@ -1,5 +1,6 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox as MessageBox
+from tkinter import filedialog
+from tkinter import messagebox as MessageBox
 
 import ttkbootstrap as tb
 

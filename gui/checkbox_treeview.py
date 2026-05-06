@@ -1,6 +1,6 @@
+import time
 import tkinter as tk
 from tkinter import ttk
-import time
 
 from gui.components.status import DEFAULT_PALETTE, configure_status_tree_tags, status_tag
 

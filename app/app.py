@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import ctypes
 import contextlib
+import ctypes
 import os
 import subprocess
 import sys
@@ -186,7 +186,7 @@ def main() -> None:
 
     splash = None
     try:
-        from gui.splash_screen import SplashScreen, SplashConfig
+        from gui.splash_screen import SplashConfig, SplashScreen
 
         splash = SplashScreen(SplashConfig(initial_progress=68), master=root)
         splash.show()

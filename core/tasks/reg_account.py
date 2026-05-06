@@ -1,20 +1,9 @@
-import json
-import random
-import string
-import subprocess
 import time
 from dataclasses import dataclass
-from datetime import datetime
 
-import re
-
-from core.email_models import EmailAccountConfig, OTPRequest
-from core.tasks.task_scroll import ScrollTaskHandler
-from core.tasks.handler.handler_reg import RegAccountHandlerMixin
-from core.paths import get_app_paths
-from core.settings import SettingsError, _atomic_write_json, load_app_settings
 from core.task_base import U2_AVAILABLE, u2
-from services.otp_service import OTPService
+from core.tasks.handler.handler_reg import RegAccountHandlerMixin
+from core.tasks.task_scroll import ScrollTaskHandler
 from utils.ip_guard import check_ld_ip_allowed
 
 

@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 
 from core.credential_store import CredentialStore
 
-
 PROVIDER_DEFAULTS: dict[str, dict[str, object]] = {
     "yandex": {
         "imap_server": "imap.yandex.com",

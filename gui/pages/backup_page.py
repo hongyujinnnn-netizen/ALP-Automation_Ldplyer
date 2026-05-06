@@ -1,16 +1,15 @@
-import math
 import os
+import tkinter as tk
 import zipfile
 from datetime import datetime
 from pathlib import Path
-import tkinter as tk
-from tkinter import filedialog, messagebox as MessageBox
+from tkinter import filedialog
+from tkinter import messagebox as MessageBox
 
 import ttkbootstrap as tb
 
 from gui.components.scrollable_frame import ScrollableFrame
 from gui.components.state_views import StateView
-
 
 # ── Local palette accents (independent of Analytics/Devices look) ──────── #
 _VAULT_INDIGO = "#6366F1"

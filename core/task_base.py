@@ -6,7 +6,7 @@ try:
     import uiautomator2 as u2
 
     U2_AVAILABLE = True
-except Exception as e:
+except Exception:
     u2 = None
     U2_AVAILABLE = False
 

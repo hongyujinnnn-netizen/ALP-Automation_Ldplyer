@@ -2,8 +2,8 @@ from gui.components.cards import AlertCard, DetailCard, FeedCard, MetricCard, Se
 from gui.components.scrollable_frame import ScrollableFrame
 from gui.components.state_views import StateView, show_state
 from gui.components.status import (
-    StatusPill,
     StatusBadge,
+    StatusPill,
     configure_status_tree_tags,
     event_level_status,
     get_status_spec,
@@ -11,8 +11,8 @@ from gui.components.status import (
     status_background,
     status_bootstyle,
     status_code,
-    status_count_text,
     status_color,
+    status_count_text,
     status_filter_values,
     status_label,
     status_sort_key,

@@ -1,5 +1,5 @@
-from dataclasses import dataclass, field
 import tkinter as tk
+from dataclasses import dataclass, field
 from tkinter import ttk
 from typing import Callable
 

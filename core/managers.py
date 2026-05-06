@@ -1,12 +1,11 @@
-import json
 import csv
+import json
 import logging
-import time
+import textwrap
+import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
-import zipfile
-import os
-import textwrap
+
 from core.account_secrets import (
     SECRET_ACCOUNT_FIELDS,
     delete_secrets,
@@ -17,7 +16,7 @@ from core.account_secrets import (
     redacted_copy,
 )
 from core.credential_store import CredentialStore
-from core.paths import get_app_paths, AppPaths
+from core.paths import AppPaths, get_app_paths
 from core.settings import _atomic_write_json
 
 logger = logging.getLogger(__name__)

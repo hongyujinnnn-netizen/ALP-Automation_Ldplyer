@@ -5,7 +5,7 @@ Author: Bunhong
 """
 
 import tkinter as tk
-import ttkbootstrap as tb
+
 from gui.gradient_progress import GradientProgressBar
 
 

@@ -1,17 +1,9 @@
-import base64
-import hashlib
-import hmac
-import json
-import struct
 import time
 from dataclasses import dataclass
-from datetime import datetime
 
-from core.tasks.reg_account import RegAccountTaskHandler
-from core.tasks.handler.handler_login import LoginHandlerMixin
-from core.paths import get_app_paths
-from core.settings import _atomic_write_json
 from core.task_base import U2_AVAILABLE, u2
+from core.tasks.handler.handler_login import LoginHandlerMixin
+from core.tasks.reg_account import RegAccountTaskHandler
 from utils.ip_guard import check_ld_ip_allowed
 
 

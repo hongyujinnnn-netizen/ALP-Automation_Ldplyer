@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from core.tasks.reg_account import RegAccountTaskHandler
 from core.settings import AppSettings
+from core.tasks.reg_account import RegAccountTaskHandler
 
 
 class TestRegAccountEmailAlias(unittest.TestCase):

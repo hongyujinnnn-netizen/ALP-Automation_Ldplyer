@@ -1,15 +1,7 @@
-import os
-import json
-import random
-import re
-import subprocess
 import time
 
-from unittest import result
-import xml.etree.ElementTree as ET
-
-from core.task_base import BaseTaskHandler, U2_AVAILABLE, u2
-from core.paths import get_app_paths
+from core.paths import get_app_paths  # noqa: F401  # re-exported for test patching
+from core.task_base import U2_AVAILABLE, BaseTaskHandler, u2
 from core.tasks.handler.handler_reels import ReelsHandlerMixin
 from utils.ip_guard import check_ld_ip_allowed
 
@@ -20,9 +12,9 @@ class ReelsTaskHandler(ReelsHandlerMixin, BaseTaskHandler):
     def __init__(self, emulator, log_func, pause_event, running_flag, content_manager=None):
         super().__init__(emulator, log_func, pause_event, running_flag)
         self.content_manager = content_manager
+        from utils.activity_randomizer import ActivityRandomizer
         from utils.error_handler import EnhancedErrorHandler
         from utils.rate_limiter import RateLimiter
-        from utils.activity_randomizer import ActivityRandomizer
 
         self.error_handler = EnhancedErrorHandler(log_func)
         self.rate_limiter = RateLimiter()

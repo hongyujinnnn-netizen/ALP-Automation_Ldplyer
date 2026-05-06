@@ -4,7 +4,6 @@ import ttkbootstrap as tb
 
 from gui.components.scrollable_frame import ScrollableFrame
 
-
 # ── Tasks page accent palette (kept local so the page can have its own identity) ── #
 _TASKS_PRIMARY = "#22D3EE"
 _TASKS_PRIMARY_HOVER = "#67E8F9"

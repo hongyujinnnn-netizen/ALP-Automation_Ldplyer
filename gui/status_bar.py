@@ -1,5 +1,6 @@
 import tkinter as tk
 from datetime import datetime
+
 import psutil
 
 from gui.components.status import StatusPill

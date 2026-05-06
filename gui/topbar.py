@@ -1,6 +1,7 @@
 import tkinter as tk
-import ttkbootstrap as tb
 from datetime import datetime
+
+import ttkbootstrap as tb
 
 from gui.components.status import StatusPill
 

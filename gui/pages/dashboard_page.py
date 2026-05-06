@@ -10,7 +10,8 @@ import logging
 import re
 import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox as MessageBox
+from tkinter import filedialog
+from tkinter import messagebox as MessageBox
 
 import ttkbootstrap as tb
 
@@ -27,6 +28,7 @@ from core.account_secrets import (
 from core.paths import get_app_paths
 
 _logger = logging.getLogger(__name__)
+from gui.checkbox_treeview import build_checkbox_image_set
 from gui.components.cards import FeedCard, MetricCard
 from gui.components.scrollable_frame import ScrollableFrame
 from gui.components.state_views import StateView
@@ -36,9 +38,6 @@ from gui.components.status import (
     status_table_text,
     status_tag,
 )
-from gui.checkbox_treeview import build_checkbox_image_set
-from gui.gradient_progress import GradientProgressBar
-
 
 _NONE_TOKEN = "None"
 

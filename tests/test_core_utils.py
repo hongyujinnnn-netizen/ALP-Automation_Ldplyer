@@ -1,14 +1,12 @@
 import time
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 from core.emulator import ControlEmulator
-from tests.test_feature import TestFeatureTaskHandler
-from core.tasks.task_reels import ReelsTaskHandler
-from core.managers import AccountManager
 from core.paths import get_app_paths
-from core.settings import AppSettings, save_app_settings, load_app_settings
+from core.settings import AppSettings, load_app_settings, save_app_settings
+from core.tasks.task_reels import ReelsTaskHandler
+from tests.test_feature import TestFeatureTaskHandler
 from utils.app_utils import AppUtils
 from utils.performance_monitor import PerformanceMonitor
 from utils.rate_limiter import RateLimiter

@@ -1,9 +1,9 @@
 import time
 from dataclasses import dataclass
 
-from core.tasks.reg_account import RegAccountTaskHandler
-from core.tasks.handler.handle_create_page import CreatePageHandlerMixin
 from core.task_base import U2_AVAILABLE, u2
+from core.tasks.handler.handle_create_page import CreatePageHandlerMixin
+from core.tasks.reg_account import RegAccountTaskHandler
 from utils.ip_guard import check_ld_ip_allowed
 
 

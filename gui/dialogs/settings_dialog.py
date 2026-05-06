@@ -1,6 +1,7 @@
 import re
 import tkinter as tk
 from tkinter import filedialog, messagebox
+
 import ttkbootstrap as tb
 
 from gui.appearance import (

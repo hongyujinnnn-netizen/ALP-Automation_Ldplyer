@@ -22,7 +22,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional
 
-
 # ── Known wedging signatures ─────────────────────────────────────────── #
 # Substrings (case-insensitive) — match anywhere in the VBox log line.
 ASSERTION_SIGNATURES = (

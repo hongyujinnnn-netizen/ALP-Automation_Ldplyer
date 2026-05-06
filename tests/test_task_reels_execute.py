@@ -4,8 +4,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from core.tasks.task_reels import ReelsTaskHandler
 from core.paths import AppPaths
+from core.tasks.task_reels import ReelsTaskHandler
 
 
 def build_test_paths(root: Path) -> AppPaths:

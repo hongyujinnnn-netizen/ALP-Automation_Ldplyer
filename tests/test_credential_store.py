@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from core import credential_store
-from core.credential_store import CredentialStore, SERVICE_NAME
+from core.credential_store import SERVICE_NAME, CredentialStore
 
 
 class TestCredentialStore(unittest.TestCase):

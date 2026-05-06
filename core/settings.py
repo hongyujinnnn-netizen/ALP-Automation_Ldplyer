@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 from core.credential_store import CredentialStore
 from core.email_models import EmailAccountConfig, OTPRequest

@@ -3,11 +3,9 @@ import hashlib
 import hmac
 import json
 import logging
-import re
 import struct
 import time
 from datetime import datetime
-from typing import Any, Callable, TYPE_CHECKING
 
 from core.credential_store import CredentialStore
 from core.paths import get_app_paths

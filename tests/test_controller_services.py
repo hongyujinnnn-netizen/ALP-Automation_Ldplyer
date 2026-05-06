@@ -10,14 +10,14 @@ from controllers.task_controller import TaskController
 from core.managers import AccountManager
 from core.paths import AppPaths
 from core.settings import AppSettings, SettingsError
+from gui.ld_manager_app import LDManagerApp
+from gui.main_window import MainWindow
 from services.adb_service import ADBService
 from services.emulator_service import EmulatorService, EmulatorServiceConfig
 from services.logging_service import AppLogger
 from services.scheduler_service import SchedulerService
 from services.settings_service import SettingsService
 from services.task_service import TaskRunRequest, TaskService
-from gui.ld_manager_app import LDManagerApp
-from gui.main_window import MainWindow
 
 
 def build_test_paths(root: Path) -> AppPaths:

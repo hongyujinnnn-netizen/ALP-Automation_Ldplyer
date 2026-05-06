@@ -5,7 +5,6 @@ Author: Bunhong
 """
 
 import tkinter as tk
-import ttkbootstrap as tb
 
 
 class ToolsDialogMixin:
@@ -389,7 +388,10 @@ class ToolsDialogMixin:
         if not hasattr(self, "system_info_text"):
             return
         try:
-            import platform, sys, psutil
+            import platform
+            import sys
+
+            import psutil
 
             info = {
                 "platform": platform.system() + " " + platform.release(),

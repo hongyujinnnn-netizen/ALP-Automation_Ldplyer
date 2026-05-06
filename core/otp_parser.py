@@ -4,7 +4,6 @@ import html
 import re
 from html.parser import HTMLParser
 
-
 DEFAULT_OTP_PATTERNS: list[str] = [
     r"(?i)\bverification code(?:\s+is|\s*[:=-])?\s*([0-9]{4,8})\b",
     r"(?i)\botp(?:\s+code)?(?:\s+is|\s*[:=-])?\s*([0-9]{4,8})\b",

@@ -1,5 +1,4 @@
 import json
-from os import name
 import time
 from datetime import datetime
 

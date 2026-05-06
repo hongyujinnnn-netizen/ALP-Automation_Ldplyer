@@ -5,7 +5,6 @@ from pathlib import Path
 
 import uiautomator2
 
-
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT / "auto_py_to_exe_config.json"
 

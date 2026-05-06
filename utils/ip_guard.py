@@ -4,8 +4,7 @@ import json
 import subprocess
 import urllib.error
 import urllib.request
-from typing import Callable, Iterable, List, Optional, Dict, Set
-
+from typing import Callable, Dict, Iterable, List, Optional, Set
 
 _IP_CACHE: Optional[Dict] = None
 

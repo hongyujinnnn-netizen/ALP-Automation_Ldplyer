@@ -4,7 +4,6 @@ import random
 import re
 import subprocess
 import time
-from typing import Any, Callable, TYPE_CHECKING
 
 
 def get_app_paths():
