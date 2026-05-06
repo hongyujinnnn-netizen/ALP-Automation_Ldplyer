@@ -25,15 +25,11 @@ class TopBarMixin:
         title_wrap = tb.Frame(top_bar, style="Topbar.TFrame")
         title_wrap.pack(side="left")
 
-        tb.Label(
-            title_wrap,
-            text="Analytics",
-            style="TopTitle.TLabel"
-        ).pack(anchor="w")
+        tb.Label(title_wrap, text="Analytics", style="TopTitle.TLabel").pack(anchor="w")
         self.top_status_label = tb.Label(
             title_wrap,
             text=f"System: Idle | {datetime.now().strftime('%d %b %Y %H:%M')}",
-            style="TopSub.TLabel"
+            style="TopSub.TLabel",
         )
         self.top_status_label.pack(anchor="w")
 
@@ -66,7 +62,9 @@ class TopBarMixin:
 
         actions = tb.Frame(top_bar, style="Topbar.TFrame")
         actions.pack(side="right")
-        tb.Button(actions, text="⟳ Refresh", bootstyle="outline-info", command=self.refresh_all, width=10).pack(side="left", padx=4)
+        tb.Button(
+            actions, text="⟳ Refresh", bootstyle="outline-info", command=self.refresh_all, width=10
+        ).pack(side="left", padx=4)
         self.top_stop_button = tb.Button(
             actions,
             text="Stop All",

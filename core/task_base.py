@@ -4,24 +4,27 @@ from abc import ABC, abstractmethod
 # Import uiautomator2
 try:
     import uiautomator2 as u2
+
     U2_AVAILABLE = True
 except Exception as e:
     u2 = None
     U2_AVAILABLE = False
 
+
 class BaseTaskHandler(ABC):
     """Abstract base class for task handlers"""
+
     def __init__(self, emulator, log_func, pause_event, running_flag):
         self.emulator = emulator
         self.log = log_func
         self.pause_event = pause_event
         self.running_flag = running_flag
         self._last_runtime_state = {}
-    
+
     @abstractmethod
     def execute(self, name, duration=None, **kwargs):
         pass
-    
+
     def check_paused(self):
         """Check if operations should be paused - blocks if paused"""
         while not self.pause_event.is_set() and self.running_flag():

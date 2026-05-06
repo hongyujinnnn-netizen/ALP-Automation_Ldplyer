@@ -32,7 +32,9 @@ class TestLoginAccountTaskHandler(unittest.TestCase):
         calls = []
         handler._open_existing_account_login = Mock(side_effect=lambda _d: calls.append("open"))
         handler._dismiss_account_picker = Mock(side_effect=lambda _d: calls.append("dismiss"))
-        handler._fill_identifier = Mock(side_effect=lambda _d, _identifier: calls.append("identifier") or True)
+        handler._fill_identifier = Mock(
+            side_effect=lambda _d, _identifier: calls.append("identifier") or True
+        )
         handler._fill_password = Mock(side_effect=lambda _d, _password: calls.append("password") or True)
         handler._submit_login = Mock(return_value=True)
 

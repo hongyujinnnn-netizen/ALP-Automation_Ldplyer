@@ -163,9 +163,7 @@ class CommandPalette(tk.Toplevel):
         scored = []
 
         for index, command in enumerate(self.commands):
-            haystack = " ".join(
-                [command.label, command.category, command.hint, *command.keywords]
-            ).lower()
+            haystack = " ".join([command.label, command.category, command.hint, *command.keywords]).lower()
             label = command.label.lower()
             category = command.category.lower()
             keywords = " ".join(command.keywords).lower()
@@ -229,7 +227,9 @@ class CommandPalette(tk.Toplevel):
                 row,
                 text=command.category.upper(),
                 bg=self._row_bg(index),
-                fg=self._color("primary", "#00E5FF") if index == self.selected_index else self._color("muted", "#64748B"),
+                fg=self._color("primary", "#00E5FF")
+                if index == self.selected_index
+                else self._color("muted", "#64748B"),
                 font=(self.mono_font, 8),
                 padx=8,
             )

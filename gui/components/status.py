@@ -38,31 +38,61 @@ class StatusSpec:
 
 
 STATUS_SPECS = {
-    "running": StatusSpec("running", "Running", "RUN", "success", "running", "success", "#081C14", 10, ("run",)),
-    "live": StatusSpec("live", "Live", "LIVE", "success", "active", "success", "#081C14", 19, ("online account",)),
-    "active": StatusSpec("active", "Active", "ON", "info", "active", "primary", "#0A1A20", 20, ("online", "ready")),
+    "running": StatusSpec(
+        "running", "Running", "RUN", "success", "running", "success", "#081C14", 10, ("run",)
+    ),
+    "live": StatusSpec(
+        "live", "Live", "LIVE", "success", "active", "success", "#081C14", 19, ("online account",)
+    ),
+    "active": StatusSpec(
+        "active", "Active", "ON", "info", "active", "primary", "#0A1A20", 20, ("online", "ready")
+    ),
     "ready": StatusSpec("ready", "Ready", "READY", "success", "active", "success", "#0A1A14", 21),
-    "queued": StatusSpec("queued", "Queued", "QUEUE", "warning", "queued", "warning", "#111827", 30, ("queue",)),
+    "queued": StatusSpec(
+        "queued", "Queued", "QUEUE", "warning", "queued", "warning", "#111827", 30, ("queue",)
+    ),
     "starting": StatusSpec("starting", "Starting", "START", "warning", "queued", "warning", "#111827", 31),
     "preparing": StatusSpec("preparing", "Preparing", "PREP", "warning", "queued", "warning", "#111827", 32),
     "waiting": StatusSpec("waiting", "Waiting", "WAIT", "warning", "queued", "warning", "#111827", 33),
-    "paused": StatusSpec("paused", "Paused", "PAUSE", "warning", "paused", "secondary", "#160F22", 40, ("pause",)),
-    "completed": StatusSpec("completed", "Completed", "DONE", "info", "completed", "primary", "#0A1420", 50, ("done", "complete")),
-    "inactive": StatusSpec("inactive", "Inactive", "OFF", "secondary", "inactive", "muted", "#0E1118", 60, ("offline",)),
+    "paused": StatusSpec(
+        "paused", "Paused", "PAUSE", "warning", "paused", "secondary", "#160F22", 40, ("pause",)
+    ),
+    "completed": StatusSpec(
+        "completed", "Completed", "DONE", "info", "completed", "primary", "#0A1420", 50, ("done", "complete")
+    ),
+    "inactive": StatusSpec(
+        "inactive", "Inactive", "OFF", "secondary", "inactive", "muted", "#0E1118", 60, ("offline",)
+    ),
     "idle": StatusSpec("idle", "Idle", "IDLE", "secondary", "idle", "muted", "#0E1118", 61),
     "disabled": StatusSpec("disabled", "Disabled", "OFF", "secondary", "inactive", "muted", "#0E1118", 62),
-    "neutral": StatusSpec("neutral", "Neutral", "INFO", "secondary", "inactive", "muted", "#0E1118", 63, ("secondary",)),
+    "neutral": StatusSpec(
+        "neutral", "Neutral", "INFO", "secondary", "inactive", "muted", "#0E1118", 63, ("secondary",)
+    ),
     "scheduled": StatusSpec("scheduled", "Scheduled", "SCHED", "info", "active", "primary", "#0A1A20", 70),
     "enabled": StatusSpec("enabled", "Enabled", "ON", "success", "active", "success", "#0A1A14", 71),
     "success": StatusSpec("success", "Success", "OK", "success", "active", "success", "#0A1A14", 72),
     "info": StatusSpec("info", "Info", "INFO", "info", "active", "primary", "#0A1A20", 73),
     "warning": StatusSpec("warning", "Warning", "WARN", "warning", "queued", "warning", "#111827", 74),
     "attention": StatusSpec("attention", "Attention", "ATTN", "danger", "attention", "danger", "#1F1720", 80),
-    "critical": StatusSpec("critical", "Critical", "CRIT", "danger", "attention", "danger", "#1F1720", 80, ("incident",)),
-    "failed": StatusSpec("failed", "Failed", "FAIL", "danger", "attention", "danger", "#1F1720", 81, ("failure",)),
+    "critical": StatusSpec(
+        "critical", "Critical", "CRIT", "danger", "attention", "danger", "#1F1720", 80, ("incident",)
+    ),
+    "failed": StatusSpec(
+        "failed", "Failed", "FAIL", "danger", "attention", "danger", "#1F1720", 81, ("failure",)
+    ),
     "error": StatusSpec("error", "Error", "ERR", "danger", "attention", "danger", "#1F1720", 82, ("errors",)),
     "dead": StatusSpec("dead", "Dead", "DEAD", "danger", "dead", "danger", "#1F1720", 83),
-    "novery": StatusSpec("novery", "No Verify", "NOVER", "warning", "novery", "warning", "#111827", 84, ("no verify", "not verified")),
+    "novery": StatusSpec(
+        "novery",
+        "No Verify",
+        "NOVER",
+        "warning",
+        "novery",
+        "warning",
+        "#111827",
+        84,
+        ("no verify", "not verified"),
+    ),
     "unknown": StatusSpec("unknown", "Unknown", "UNK", "secondary", "inactive", "muted", "#0E1118", 99),
 }
 

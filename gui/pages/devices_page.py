@@ -4,7 +4,13 @@ import ttkbootstrap as tb
 from gui.components.cards import MetricCard
 from gui.components.scrollable_frame import ScrollableFrame
 from gui.components.state_views import StateView
-from gui.components.status import StatusPill, configure_status_tree_tags, status_label, status_table_text, status_tag
+from gui.components.status import (
+    StatusPill,
+    configure_status_tree_tags,
+    status_label,
+    status_table_text,
+    status_tag,
+)
 from gui.gradient_progress import GradientProgressBar
 
 
@@ -115,7 +121,13 @@ class DevicesPageMixin:
             "Detailed view for the clicked or currently active LD.",
             pady=(0, 12),
         )
-        self.device_focus_name = tk.Label(focus, text="No device selected", bg=self.palette["surface"], fg=self.palette["text"], font=(self.display_font, 15))
+        self.device_focus_name = tk.Label(
+            focus,
+            text="No device selected",
+            bg=self.palette["surface"],
+            fg=self.palette["text"],
+            font=(self.display_font, 15),
+        )
         self.device_focus_name.pack(anchor="w")
         self.device_focus_state = StatusPill(
             focus,
@@ -126,7 +138,15 @@ class DevicesPageMixin:
             pady=2,
         )
         self.device_focus_state.pack(anchor="w", pady=(4, 0))
-        self.device_focus_task = tk.Label(focus, text="Waiting for selection", bg=self.palette["surface"], fg=self.palette["text"], font=(self.mono_font, 10), wraplength=280, justify="left")
+        self.device_focus_task = tk.Label(
+            focus,
+            text="Waiting for selection",
+            bg=self.palette["surface"],
+            fg=self.palette["text"],
+            font=(self.mono_font, 10),
+            wraplength=280,
+            justify="left",
+        )
         self.device_focus_task.pack(anchor="w", pady=(12, 8))
         self.device_focus_progress = GradientProgressBar(
             focus,
@@ -136,9 +156,21 @@ class DevicesPageMixin:
             height=7,
         )
         self.device_focus_progress.pack(fill="x", pady=(0, 8))
-        self.device_focus_meta = tk.Label(focus, text="Runtime: 00:00  |  Queue: -", bg=self.palette["surface"], fg=self.palette["muted"], font=(self.mono_font, 9))
+        self.device_focus_meta = tk.Label(
+            focus,
+            text="Runtime: 00:00  |  Queue: -",
+            bg=self.palette["surface"],
+            fg=self.palette["muted"],
+            font=(self.mono_font, 9),
+        )
         self.device_focus_meta.pack(anchor="w")
-        self.device_focus_ip = tk.Label(focus, text="IP: -", bg=self.palette["surface"], fg=self.palette["muted"], font=(self.mono_font, 9))
+        self.device_focus_ip = tk.Label(
+            focus,
+            text="IP: -",
+            bg=self.palette["surface"],
+            fg=self.palette["muted"],
+            font=(self.mono_font, 9),
+        )
         self.device_focus_ip.pack(anchor="w", pady=(6, 0))
 
         queue_card = self._create_card_section(
@@ -173,18 +205,33 @@ class DevicesPageMixin:
         chip_row = tb.Frame(card, style="CardInner.TFrame")
         chip_row.pack(fill="x", pady=(0, 10))
         self.device_group_total_chip = StatusPill(
-            chip_row, "info", palette=self.palette,
-            text="0 groups", font=(self.mono_font, 9), padx=10, pady=3,
+            chip_row,
+            "info",
+            palette=self.palette,
+            text="0 groups",
+            font=(self.mono_font, 9),
+            padx=10,
+            pady=3,
         )
         self.device_group_total_chip.pack(side="left", padx=(0, 6))
         self.device_group_assigned_chip = StatusPill(
-            chip_row, "success", palette=self.palette,
-            text="0 assigned", font=(self.mono_font, 9), padx=10, pady=3,
+            chip_row,
+            "success",
+            palette=self.palette,
+            text="0 assigned",
+            font=(self.mono_font, 9),
+            padx=10,
+            pady=3,
         )
         self.device_group_assigned_chip.pack(side="left", padx=(0, 6))
         self.device_group_unassigned_chip = StatusPill(
-            chip_row, "muted", palette=self.palette,
-            text="0 ungrouped", font=(self.mono_font, 9), padx=10, pady=3,
+            chip_row,
+            "muted",
+            palette=self.palette,
+            text="0 ungrouped",
+            font=(self.mono_font, 9),
+            padx=10,
+            pady=3,
         )
         self.device_group_unassigned_chip.pack(side="left")
 
@@ -206,11 +253,17 @@ class DevicesPageMixin:
         quick_row = tb.Frame(card, style="CardInner.TFrame")
         quick_row.pack(fill="x", pady=(0, 8))
         tb.Button(
-            quick_row, text="All", bootstyle="outline-info", width=8,
+            quick_row,
+            text="All",
+            bootstyle="outline-info",
+            width=8,
             command=lambda: self._set_ld_group_filter("All Groups"),
         ).pack(side="left", padx=(0, 6))
         tb.Button(
-            quick_row, text="Ungrouped", bootstyle="outline-warning", width=11,
+            quick_row,
+            text="Ungrouped",
+            bootstyle="outline-warning",
+            width=11,
             command=lambda: self._set_ld_group_filter("Ungrouped"),
         ).pack(side="left")
 
@@ -257,27 +310,42 @@ class DevicesPageMixin:
         primary_actions = tb.Frame(card, style="CardInner.TFrame")
         primary_actions.pack(fill="x", pady=(10, 0))
         tb.Button(
-            primary_actions, text="+ Create", bootstyle="primary",
-            command=self.create_ld_group, width=11,
+            primary_actions,
+            text="+ Create",
+            bootstyle="primary",
+            command=self.create_ld_group,
+            width=11,
         ).pack(side="left", padx=(0, 6))
         tb.Button(
-            primary_actions, text="Assign Selected", bootstyle="info",
-            command=self.assign_selected_to_group, width=16,
+            primary_actions,
+            text="Assign Selected",
+            bootstyle="info",
+            command=self.assign_selected_to_group,
+            width=16,
         ).pack(side="left", padx=(0, 6))
         tb.Button(
-            primary_actions, text="Select Group", bootstyle="success",
-            command=self.select_active_group_devices, width=14,
+            primary_actions,
+            text="Select Group",
+            bootstyle="success",
+            command=self.select_active_group_devices,
+            width=14,
         ).pack(side="left")
 
         secondary_actions = tb.Frame(card, style="CardInner.TFrame")
         secondary_actions.pack(fill="x", pady=(6, 0))
         tb.Button(
-            secondary_actions, text="Rename", bootstyle="outline-secondary",
-            command=self.rename_selected_ld_group, width=10,
+            secondary_actions,
+            text="Rename",
+            bootstyle="outline-secondary",
+            command=self.rename_selected_ld_group,
+            width=10,
         ).pack(side="left", padx=(0, 6))
         tb.Button(
-            secondary_actions, text="Delete", bootstyle="outline-danger",
-            command=self.delete_selected_ld_group, width=10,
+            secondary_actions,
+            text="Delete",
+            bootstyle="outline-danger",
+            command=self.delete_selected_ld_group,
+            width=10,
         ).pack(side="left")
 
     def _device_page_rows(self):
@@ -288,24 +356,30 @@ class DevicesPageMixin:
             runtime = self._device_runtime_state.get(name, {})
             account = self._ld_account_cache.get(name, "No account")
             selected = name in getattr(self, "_ld_checked_names", set())
-            state = runtime.get("state") or ("Queued" if selected and not self.running_event.is_set() else self._ld_status_cache.get(name, "Idle"))
+            state = runtime.get("state") or (
+                "Queued"
+                if selected and not self.running_event.is_set()
+                else self._ld_status_cache.get(name, "Idle")
+            )
             task = runtime.get("task") or ("Waiting for batch" if selected else "Idle")
             timer = self._device_elapsed_text(name)
             target = f"{self.task_duration.get()} min"
             queue = runtime.get("queue_label") or ("Selected" if selected else "-")
-            rows.append({
-                "name": name,
-                "state": state,
-                "task": task,
-                "timer": timer,
-                "target": target,
-                "queue": queue,
-                "account": account,
-                "selected": selected,
-                "progress": runtime.get("progress", 0),
-                "public_ip": runtime.get("public_ip") or "-",
-                "public_ip_country": runtime.get("public_ip_country") or "",
-            })
+            rows.append(
+                {
+                    "name": name,
+                    "state": state,
+                    "task": task,
+                    "timer": timer,
+                    "target": target,
+                    "queue": queue,
+                    "account": account,
+                    "selected": selected,
+                    "progress": runtime.get("progress", 0),
+                    "public_ip": runtime.get("public_ip") or "-",
+                    "public_ip_country": runtime.get("public_ip_country") or "",
+                }
+            )
         return rows
 
     def _device_elapsed_text(self, name):
@@ -315,6 +389,7 @@ class DevicesPageMixin:
             return "00:00"
         try:
             from datetime import datetime
+
             started = datetime.fromisoformat(started_at)
             elapsed = max(0, int((datetime.now() - started).total_seconds()))
             minutes, seconds = divmod(elapsed, 60)
@@ -338,7 +413,11 @@ class DevicesPageMixin:
                     title="No runtime devices yet",
                     message="Refresh the emulator fleet or start automation to populate device runtime state.",
                     actions=[
-                        {"text": "Refresh", "command": self.refresh_emulator_list, "bootstyle": "outline-info"},
+                        {
+                            "text": "Refresh",
+                            "command": self.refresh_emulator_list,
+                            "bootstyle": "outline-info",
+                        },
                     ],
                 )
                 self.devices_table_state_view.pack(fill="x", pady=(0, 10))
@@ -363,7 +442,15 @@ class DevicesPageMixin:
             self.devices_tree.insert(
                 "",
                 "end",
-                values=(row["name"], status_table_text(row["state"]), row["task"], row["timer"], row["target"], row["queue"], row["account"]),
+                values=(
+                    row["name"],
+                    status_table_text(row["state"]),
+                    row["task"],
+                    row["timer"],
+                    row["target"],
+                    row["queue"],
+                    row["account"],
+                ),
                 tags=(tag,),
             )
 
@@ -375,7 +462,9 @@ class DevicesPageMixin:
 
         if hasattr(self, "devices_waiting_list"):
             self.devices_waiting_list.delete(0, "end")
-            waiting_rows = [row for row in rows if row["selected"] and row["state"].lower() not in ("running",)]
+            waiting_rows = [
+                row for row in rows if row["selected"] and row["state"].lower() not in ("running",)
+            ]
             if waiting_rows:
                 for row in waiting_rows:
                     self.devices_waiting_list.insert("end", f"{row['name']}  |  {row['task']}")

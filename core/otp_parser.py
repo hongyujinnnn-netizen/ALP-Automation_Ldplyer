@@ -70,7 +70,9 @@ def extract_otp(text: str, patterns: list[str] | None = None) -> str | None:
             candidate = _extract_candidate(match)
             if not candidate:
                 continue
-            if index == len(active_patterns) - 1 and not _is_reasonable_fallback(candidate, normalized, match.start()):
+            if index == len(active_patterns) - 1 and not _is_reasonable_fallback(
+                candidate, normalized, match.start()
+            ):
                 continue
             return candidate
     return None

@@ -46,7 +46,9 @@ class TestDashboardLdSync(unittest.TestCase):
 
             with patch("gui.pages.dashboard_page.get_app_paths", return_value=paths):
                 dashboard._db_sync_from_devices()
-                saved = json.loads((paths.config_dir / "dashboard_instances.json").read_text(encoding="utf-8"))
+                saved = json.loads(
+                    (paths.config_dir / "dashboard_instances.json").read_text(encoding="utf-8")
+                )
 
         self.assertEqual([inst["name"] for inst in saved["instances"]], ["LD A"])
         self.assertIn("account", saved["instances"][0])
@@ -195,7 +197,11 @@ class TestDashboardLdSync(unittest.TestCase):
                 json.dumps(
                     {
                         "instances": [
-                            {"name": "LD Saved A", "serial": "emulator-5554", "account": {"name": "Facebook A"}},
+                            {
+                                "name": "LD Saved A",
+                                "serial": "emulator-5554",
+                                "account": {"name": "Facebook A"},
+                            },
                             {"name": "LD Saved B", "account": {"mail": "b@example.com"}},
                         ]
                     }
@@ -408,7 +414,12 @@ class TestDashboardLdSync(unittest.TestCase):
                 },
                 {
                     "name": "LD B",
-                    "account": {"name": "Facebook B", "uid": None, "mail": None, "pages": [{"name": "Page B"}]},
+                    "account": {
+                        "name": "Facebook B",
+                        "uid": None,
+                        "mail": None,
+                        "pages": [{"name": "Page B"}],
+                    },
                 },
             ]
         }
@@ -470,6 +481,7 @@ class TestDashboardLdSync(unittest.TestCase):
 
     def _fake_keyring(self):
         from unittest.mock import Mock
+
         vault: dict[tuple[str, str], str] = {}
         fake = Mock()
         fake.set_password.side_effect = lambda svc, user, pwd: vault.__setitem__((svc, user), pwd)
@@ -479,11 +491,14 @@ class TestDashboardLdSync(unittest.TestCase):
 
     def test_dashboard_login_accounts_save_to_accounts_login_json(self):
         from core import credential_store
+
         fake, vault = self._fake_keyring()
 
-        with tempfile.TemporaryDirectory() as tmp_dir, \
-             patch.object(credential_store, "keyring", fake), \
-             patch.object(credential_store, "_AVAILABLE", True):
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(credential_store, "keyring", fake),
+            patch.object(credential_store, "_AVAILABLE", True),
+        ):
             paths = build_test_paths(Path(tmp_dir))
             paths.ensure_runtime_dirs()
             dashboard = self._dashboard()
@@ -527,9 +542,11 @@ class TestDashboardLdSync(unittest.TestCase):
     def test_dashboard_login_accounts_keep_plaintext_when_keyring_unavailable(self):
         from core import credential_store
 
-        with tempfile.TemporaryDirectory() as tmp_dir, \
-             patch.object(credential_store, "_AVAILABLE", False), \
-             self.assertLogs("gui.pages.dashboard_page", level="WARNING"):
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(credential_store, "_AVAILABLE", False),
+            self.assertLogs("gui.pages.dashboard_page", level="WARNING"),
+        ):
             paths = build_test_paths(Path(tmp_dir))
             paths.ensure_runtime_dirs()
             dashboard = self._dashboard()
@@ -546,11 +563,14 @@ class TestDashboardLdSync(unittest.TestCase):
 
     def test_dashboard_delete_login_accounts_removes_selected_rows(self):
         from core import credential_store
+
         fake, vault = self._fake_keyring()
 
-        with tempfile.TemporaryDirectory() as tmp_dir, \
-             patch.object(credential_store, "keyring", fake), \
-             patch.object(credential_store, "_AVAILABLE", True):
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(credential_store, "keyring", fake),
+            patch.object(credential_store, "_AVAILABLE", True),
+        ):
             paths = build_test_paths(Path(tmp_dir))
             paths.ensure_runtime_dirs()
             dashboard = self._dashboard()
@@ -575,23 +595,28 @@ class TestDashboardLdSync(unittest.TestCase):
 
     def test_dashboard_login_accounts_migrate_legacy_plaintext(self):
         from core import credential_store
+
         fake, vault = self._fake_keyring()
 
-        with tempfile.TemporaryDirectory() as tmp_dir, \
-             patch.object(credential_store, "keyring", fake), \
-             patch.object(credential_store, "_AVAILABLE", True):
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(credential_store, "keyring", fake),
+            patch.object(credential_store, "_AVAILABLE", True),
+        ):
             paths = build_test_paths(Path(tmp_dir))
             paths.ensure_runtime_dirs()
             (paths.config_dir / "accounts_login.json").write_text(
-                json.dumps([
-                    {
-                        "account_id": "9999",
-                        "uid": "9999",
-                        "password": "legacy-pw",
-                        "email": "legacy@x.com",
-                        "twofa": "LEG ACY TOTP",
-                    }
-                ]),
+                json.dumps(
+                    [
+                        {
+                            "account_id": "9999",
+                            "uid": "9999",
+                            "password": "legacy-pw",
+                            "email": "legacy@x.com",
+                            "twofa": "LEG ACY TOTP",
+                        }
+                    ]
+                ),
                 encoding="utf-8",
             )
             dashboard = self._dashboard()
@@ -610,28 +635,35 @@ class TestDashboardLdSync(unittest.TestCase):
 
     def test_dashboard_instances_secrets_round_trip_via_keyring(self):
         from core import credential_store
+
         fake, vault = self._fake_keyring()
 
-        with tempfile.TemporaryDirectory() as tmp_dir, \
-             patch.object(credential_store, "keyring", fake), \
-             patch.object(credential_store, "_AVAILABLE", True):
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(credential_store, "keyring", fake),
+            patch.object(credential_store, "_AVAILABLE", True),
+        ):
             paths = build_test_paths(Path(tmp_dir))
             paths.ensure_runtime_dirs()
             dashboard_path = paths.config_dir / "dashboard_instances.json"
             dashboard_path.write_text(
-                json.dumps({
-                    "instances": [{
-                        "name": "LD A",
-                        "account": {
-                            "name": "Alice",
-                            "uid": "u-100",
-                            "password": "InstancePw",
-                            "twofa": "INST TOTP",
-                            "mail": "alice@x.com",
-                            "pages": [],
-                        },
-                    }]
-                }),
+                json.dumps(
+                    {
+                        "instances": [
+                            {
+                                "name": "LD A",
+                                "account": {
+                                    "name": "Alice",
+                                    "uid": "u-100",
+                                    "password": "InstancePw",
+                                    "twofa": "INST TOTP",
+                                    "mail": "alice@x.com",
+                                    "pages": [],
+                                },
+                            }
+                        ]
+                    }
+                ),
                 encoding="utf-8",
             )
             dashboard = self._dashboard()
@@ -719,9 +751,12 @@ class TestDashboardLdSync(unittest.TestCase):
         handler = Mock()
         handler.execute.return_value = True
 
-        with patch("gui.pages.dashboard_page.threading.Thread", FakeThread), patch(
-            "core.tasks.login_account.LoginAccountTaskHandler",
-            return_value=handler,
+        with (
+            patch("gui.pages.dashboard_page.threading.Thread", FakeThread),
+            patch(
+                "core.tasks.login_account.LoginAccountTaskHandler",
+                return_value=handler,
+            ),
         ):
             dashboard._db_start_login_account_task(
                 {"name": "LD A"},
@@ -772,9 +807,12 @@ class TestDashboardLdSync(unittest.TestCase):
         handler = Mock()
         handler.execute.return_value = True
 
-        with patch("gui.pages.dashboard_page.threading.Thread", FakeThread), patch(
-            "core.tasks.login_account.LoginAccountTaskHandler",
-            return_value=handler,
+        with (
+            patch("gui.pages.dashboard_page.threading.Thread", FakeThread),
+            patch(
+                "core.tasks.login_account.LoginAccountTaskHandler",
+                return_value=handler,
+            ),
         ):
             dashboard._db_start_login_account_task(
                 {"name": "LD A"},

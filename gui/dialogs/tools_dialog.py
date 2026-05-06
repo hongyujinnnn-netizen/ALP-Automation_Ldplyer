@@ -9,7 +9,6 @@ import ttkbootstrap as tb
 
 
 class ToolsDialogMixin:
-
     def show_tools_center(self, section="quick"):
         win = getattr(self, "_tools_center_window", None)
         if win is not None and win.winfo_exists():
@@ -30,23 +29,25 @@ class ToolsDialogMixin:
         win.protocol("WM_DELETE_WINDOW", self._close_tools_center)
 
         # ── header ────────────────────────────────────────────────────── #
-        hdr = tk.Frame(win, bg=P["surface_alt"],
-                       highlightthickness=1,
-                       highlightbackground=P["border_alt"])
+        hdr = tk.Frame(win, bg=P["surface_alt"], highlightthickness=1, highlightbackground=P["border_alt"])
         hdr.pack(fill="x")
 
-        tk.Label(hdr, text="🔌", bg="#100D04",
-                 fg=P["warning"], font=(self.display_font, 14),
-                 width=4, pady=14).pack(side="left")
-        tk.Label(hdr, text="Tools Center", bg=P["surface_alt"],
-                 fg=P["text"], font=(self.display_font, 14)).pack(side="left", padx=(4, 0))
-        tk.Label(hdr, text="Quick actions · diagnostics · ADB console",
-                 bg=P["surface_alt"], fg=P["muted"],
-                 font=(self.mono_font, 9)).pack(side="left", padx=(8, 0))
+        tk.Label(
+            hdr, text="🔌", bg="#100D04", fg=P["warning"], font=(self.display_font, 14), width=4, pady=14
+        ).pack(side="left")
+        tk.Label(
+            hdr, text="Tools Center", bg=P["surface_alt"], fg=P["text"], font=(self.display_font, 14)
+        ).pack(side="left", padx=(4, 0))
+        tk.Label(
+            hdr,
+            text="Quick actions · diagnostics · ADB console",
+            bg=P["surface_alt"],
+            fg=P["muted"],
+            font=(self.mono_font, 9),
+        ).pack(side="left", padx=(8, 0))
 
         # ── tab bar ───────────────────────────────────────────────────── #
-        tab_bar = tk.Frame(win, bg=P["surface_alt"],
-                           highlightthickness=1, highlightbackground=P["border"])
+        tab_bar = tk.Frame(win, bg=P["surface_alt"], highlightthickness=1, highlightbackground=P["border"])
         tab_bar.pack(fill="x")
 
         self._tools_panels = {}
@@ -58,11 +59,17 @@ class ToolsDialogMixin:
 
         for key, label in tabs:
             btn = tk.Button(
-                tab_btn_frame, text=label,
-                bg=P["surface_alt"], fg=P["muted"],
-                activebackground=P["surface_alt"], activeforeground=P["primary"],
-                relief="flat", font=(self.display_font, 10),
-                padx=16, pady=8, cursor="hand2",
+                tab_btn_frame,
+                text=label,
+                bg=P["surface_alt"],
+                fg=P["muted"],
+                activebackground=P["surface_alt"],
+                activeforeground=P["primary"],
+                relief="flat",
+                font=(self.display_font, 10),
+                padx=16,
+                pady=8,
+                cursor="hand2",
                 command=lambda k=key: self._open_tools_tab(k),
             )
             btn.pack(side="left")
@@ -77,20 +84,49 @@ class ToolsDialogMixin:
         self._tools_panels["quick"] = q
 
         quick_tools = [
-            ("💾", "Create Backup",      "Snapshot current settings and account data",
-             P["primary"], self.create_backup),
-            ("🔄", "Restore Backup",     "Load a previous configuration snapshot",
-             "#A78BFA",   self.restore_backup),
-            ("🧹", "Clean Old Backups",  "Delete older backup ZIPs, keep latest 10",
-             P["danger"], self.cleanup_old_backups),
-            ("📊", "Performance Report", "Open live metrics & session statistics",
-             P["success"], self.show_performance_report),
-            ("👤", "Account Manager",   "View and manage linked Facebook accounts",
-             P["warning"], self.show_account_manager),
+            (
+                "💾",
+                "Create Backup",
+                "Snapshot current settings and account data",
+                P["primary"],
+                self.create_backup,
+            ),
+            (
+                "🔄",
+                "Restore Backup",
+                "Load a previous configuration snapshot",
+                "#A78BFA",
+                self.restore_backup,
+            ),
+            (
+                "🧹",
+                "Clean Old Backups",
+                "Delete older backup ZIPs, keep latest 10",
+                P["danger"],
+                self.cleanup_old_backups,
+            ),
+            (
+                "📊",
+                "Performance Report",
+                "Open live metrics & session statistics",
+                P["success"],
+                self.show_performance_report,
+            ),
+            (
+                "👤",
+                "Account Manager",
+                "View and manage linked Facebook accounts",
+                P["warning"],
+                self.show_account_manager,
+            ),
         ]
         for icon, name, desc, color, cmd in quick_tools:
             self._tool_card(
-                q, icon, name, desc, color,
+                q,
+                icon,
+                name,
+                desc,
+                color,
                 lambda action=cmd: self._invoke_tools_action(action),
             )
 
@@ -98,79 +134,114 @@ class ToolsDialogMixin:
         d = tk.Frame(content, bg=P["surface"], padx=18, pady=16)
         self._tools_panels["diag"] = d
 
-        tk.Label(d, text="SYSTEM INFORMATION", bg=P["surface"],
-                 fg=P["muted"], font=(self.display_font, 9)).pack(anchor="w", pady=(0, 8))
+        tk.Label(
+            d, text="SYSTEM INFORMATION", bg=P["surface"], fg=P["muted"], font=(self.display_font, 9)
+        ).pack(anchor="w", pady=(0, 8))
 
-        out_frame = tk.Frame(d, bg="#030508",
-                             highlightthickness=1, highlightbackground=P["border"])
+        out_frame = tk.Frame(d, bg="#030508", highlightthickness=1, highlightbackground=P["border"])
         out_frame.pack(fill="both", expand=True, pady=(0, 10))
 
         self.system_info_text = tk.Text(
-            out_frame, wrap="word", height=14,
-            bg="#030508", fg="#7dd3fc",
-            font=(self.mono_font, 10), relief="flat",
-            insertbackground=P["primary"], highlightthickness=0,
-            padx=12, pady=10,
+            out_frame,
+            wrap="word",
+            height=14,
+            bg="#030508",
+            fg="#7dd3fc",
+            font=(self.mono_font, 10),
+            relief="flat",
+            insertbackground=P["primary"],
+            highlightthickness=0,
+            padx=12,
+            pady=10,
         )
         self.system_info_text.pack(fill="both", expand=True)
         # Treat diagnostics as read-only viewer.
         self.system_info_text.config(state="disabled")
 
-        self._tool_row_btn(d, "↺ Refresh System Info", P["primary"],
-                           self._refresh_system_info_tree)
+        self._tool_row_btn(d, "↺ Refresh System Info", P["primary"], self._refresh_system_info_tree)
 
         # ADB tab
         a = tk.Frame(content, bg=P["surface"], padx=18, pady=16)
         self._tools_panels["adb"] = a
 
-        tk.Label(a, text="ADB COMMAND CONSOLE", bg=P["surface"],
-                 fg=P["muted"], font=(self.display_font, 9)).pack(anchor="w", pady=(0, 8))
+        tk.Label(
+            a, text="ADB COMMAND CONSOLE", bg=P["surface"], fg=P["muted"], font=(self.display_font, 9)
+        ).pack(anchor="w", pady=(0, 8))
 
         cmd_row = tk.Frame(a, bg=P["surface"])
         cmd_row.pack(fill="x", pady=(0, 8))
 
         self.adb_command_var = tk.StringVar(value="adb devices")
-        inp_frame = tk.Frame(cmd_row, bg=P["surface_alt"],
-                             highlightthickness=1, highlightbackground=P["border_alt"])
+        inp_frame = tk.Frame(
+            cmd_row, bg=P["surface_alt"], highlightthickness=1, highlightbackground=P["border_alt"]
+        )
         inp_frame.pack(side="left", fill="x", expand=True, padx=(0, 8))
-        tk.Entry(inp_frame, textvariable=self.adb_command_var,
-                 bg=P["surface_alt"], fg=P["text"],
-                 insertbackground=P["primary"], relief="flat",
-                 font=(self.mono_font, 11), highlightthickness=0,
-                 borderwidth=0).pack(fill="x", padx=10, pady=7, ipady=6)
+        tk.Entry(
+            inp_frame,
+            textvariable=self.adb_command_var,
+            bg=P["surface_alt"],
+            fg=P["text"],
+            insertbackground=P["primary"],
+            relief="flat",
+            font=(self.mono_font, 11),
+            highlightthickness=0,
+            borderwidth=0,
+        ).pack(fill="x", padx=10, pady=7, ipady=6)
 
         run_f = tk.Frame(cmd_row, bg=P["primary"], padx=1, pady=1)
         run_f.pack(side="right")
-        tk.Button(run_f, text="Run ›", bg=P["surface_alt"], fg=P["primary"],
-                  activebackground=P["surface"], activeforeground=P["primary"],
-                  relief="flat", font=(self.mono_font, 11), padx=14, pady=5,
-                  cursor="hand2",
-                  command=self._run_custom_adb_command).pack()
+        tk.Button(
+            run_f,
+            text="Run ›",
+            bg=P["surface_alt"],
+            fg=P["primary"],
+            activebackground=P["surface"],
+            activeforeground=P["primary"],
+            relief="flat",
+            font=(self.mono_font, 11),
+            padx=14,
+            pady=5,
+            cursor="hand2",
+            command=self._run_custom_adb_command,
+        ).pack()
 
         # quick-fire preset buttons
         preset_row = tk.Frame(a, bg=P["surface"])
         preset_row.pack(fill="x", pady=(0, 8))
-        for preset in ("adb devices", "adb shell getprop ro.build.version.release",
-                       "adb kill-server"):
+        for preset in ("adb devices", "adb shell getprop ro.build.version.release", "adb kill-server"):
             short = preset.split()[-1]
             f = tk.Frame(preset_row, bg=P["border"], padx=1, pady=1)
             f.pack(side="left", padx=(0, 6))
-            tk.Button(f, text=short, bg=P["surface_alt"], fg=P["muted"],
-                      activebackground=P["surface"], activeforeground=P["text"],
-                      relief="flat", font=(self.mono_font, 9),
-                      padx=8, pady=4, cursor="hand2",
-                      command=lambda p=preset: self.adb_command_var.set(p)).pack()
+            tk.Button(
+                f,
+                text=short,
+                bg=P["surface_alt"],
+                fg=P["muted"],
+                activebackground=P["surface"],
+                activeforeground=P["text"],
+                relief="flat",
+                font=(self.mono_font, 9),
+                padx=8,
+                pady=4,
+                cursor="hand2",
+                command=lambda p=preset: self.adb_command_var.set(p),
+            ).pack()
 
-        out_frame2 = tk.Frame(a, bg="#030508",
-                              highlightthickness=1, highlightbackground=P["border"])
+        out_frame2 = tk.Frame(a, bg="#030508", highlightthickness=1, highlightbackground=P["border"])
         out_frame2.pack(fill="both", expand=True)
 
         self.adb_output = tk.Text(
-            out_frame2, wrap="word", height=10,
-            bg="#030508", fg="#7dd3fc",
-            font=(self.mono_font, 10), relief="flat",
-            insertbackground=P["primary"], highlightthickness=0,
-            padx=12, pady=10,
+            out_frame2,
+            wrap="word",
+            height=10,
+            bg="#030508",
+            fg="#7dd3fc",
+            font=(self.mono_font, 10),
+            relief="flat",
+            insertbackground=P["primary"],
+            highlightthickness=0,
+            padx=12,
+            pady=10,
         )
         self.adb_output.insert("end", "// output will appear here\n")
         self.adb_output.pack(fill="both", expand=True)
@@ -178,19 +249,27 @@ class ToolsDialogMixin:
         self.adb_output.config(state="disabled")
 
         # ── footer ────────────────────────────────────────────────────── #
-        foot = tk.Frame(win, bg=P["surface_alt"],
-                        highlightthickness=1, highlightbackground=P["border"])
+        foot = tk.Frame(win, bg=P["surface_alt"], highlightthickness=1, highlightbackground=P["border"])
         foot.pack(fill="x", side="bottom")
         fp = tk.Frame(foot, bg=P["surface_alt"], padx=16, pady=12)
         fp.pack(fill="x")
 
         f = tk.Frame(fp, bg=P["border"], padx=1, pady=1)
         f.pack(side="left", padx=4)
-        tk.Button(f, text="Close", bg=P["surface_alt"], fg=P["muted"],
-                  activebackground=P["surface"], activeforeground=P["text"],
-                  relief="flat", font=(self.mono_font, 10),
-                  padx=14, pady=5, cursor="hand2",
-                  command=self._close_tools_center).pack()
+        tk.Button(
+            f,
+            text="Close",
+            bg=P["surface_alt"],
+            fg=P["muted"],
+            activebackground=P["surface"],
+            activeforeground=P["text"],
+            relief="flat",
+            font=(self.mono_font, 10),
+            padx=14,
+            pady=5,
+            cursor="hand2",
+            command=self._close_tools_center,
+        ).pack()
 
         self._open_tools_tab(section)
 
@@ -198,13 +277,17 @@ class ToolsDialogMixin:
 
     def _tool_card(self, parent, icon, name, desc, color, command):
         P = self.palette
-        card = tk.Frame(parent, bg=P["surface_alt"],
-                        highlightthickness=1, highlightbackground=P["border"],
-                        cursor="hand2")
+        card = tk.Frame(
+            parent, bg=P["surface_alt"], highlightthickness=1, highlightbackground=P["border"], cursor="hand2"
+        )
         card.pack(fill="x", pady=5)
 
-        def on_enter(e):  card.config(highlightbackground=P["border_alt"])
-        def on_leave(e):  card.config(highlightbackground=P["border"])
+        def on_enter(e):
+            card.config(highlightbackground=P["border_alt"])
+
+        def on_leave(e):
+            card.config(highlightbackground=P["border"])
+
         def on_click(_event=None):
             command()
 
@@ -212,25 +295,25 @@ class ToolsDialogMixin:
         inner.pack(fill="x")
 
         # icon pill
-        ico_bg = tk.Frame(inner, bg=P["surface3"] if hasattr(P, "surface3")
-                          else P["surface_alt"])
+        ico_bg = tk.Frame(inner, bg=P["surface3"] if hasattr(P, "surface3") else P["surface_alt"])
         ico_bg.pack(side="left", padx=(0, 12))
-        tk.Label(ico_bg, text=icon, bg=P["surface_alt"],
-                 fg=color, font=(self.display_font, 18),
-                 width=3, pady=4).pack()
+        tk.Label(
+            ico_bg, text=icon, bg=P["surface_alt"], fg=color, font=(self.display_font, 18), width=3, pady=4
+        ).pack()
 
         info = tk.Frame(inner, bg=P["surface_alt"])
         info.pack(side="left", fill="x", expand=True)
 
-        tk.Label(info, text=name, bg=P["surface_alt"],
-                 fg=P["text"], font=(self.display_font, 11),
-                 anchor="w").pack(fill="x")
-        tk.Label(info, text=desc, bg=P["surface_alt"],
-                 fg=P["muted"], font=(self.mono_font, 9),
-                 anchor="w").pack(fill="x")
+        tk.Label(
+            info, text=name, bg=P["surface_alt"], fg=P["text"], font=(self.display_font, 11), anchor="w"
+        ).pack(fill="x")
+        tk.Label(
+            info, text=desc, bg=P["surface_alt"], fg=P["muted"], font=(self.mono_font, 9), anchor="w"
+        ).pack(fill="x")
 
-        tk.Label(inner, text="›", bg=P["surface_alt"],
-                 fg=P["border_alt"], font=(self.display_font, 16)).pack(side="right")
+        tk.Label(inner, text="›", bg=P["surface_alt"], fg=P["border_alt"], font=(self.display_font, 16)).pack(
+            side="right"
+        )
 
         for widget in (card, inner, ico_bg, info):
             widget.bind("<Enter>", on_enter)
@@ -246,10 +329,19 @@ class ToolsDialogMixin:
         P = self.palette
         f = tk.Frame(parent, bg=color, padx=1, pady=1)
         f.pack(fill="x", pady=(0, 4))
-        tk.Button(f, text=text, bg=P["surface_alt"], fg=color,
-                  activebackground=P["surface"], activeforeground=color,
-                  relief="flat", font=(self.mono_font, 10),
-                  pady=7, cursor="hand2", command=command).pack(fill="x")
+        tk.Button(
+            f,
+            text=text,
+            bg=P["surface_alt"],
+            fg=color,
+            activebackground=P["surface"],
+            activeforeground=color,
+            relief="flat",
+            font=(self.mono_font, 10),
+            pady=7,
+            cursor="hand2",
+            command=command,
+        ).pack(fill="x")
 
     def _open_tools_tab(self, key):
         P = self.palette
@@ -258,9 +350,12 @@ class ToolsDialogMixin:
         self._tools_panels[key].pack(fill="both", expand=True)
         for k, btn in self._tools_tab_btns.items():
             if k == key:
-                btn.config(fg=P["primary"],
-                           highlightthickness=1, highlightbackground=P["primary"],
-                           highlightcolor=P["primary"])
+                btn.config(
+                    fg=P["primary"],
+                    highlightthickness=1,
+                    highlightbackground=P["primary"],
+                    highlightcolor=P["primary"],
+                )
             else:
                 btn.config(fg=P["muted"], highlightthickness=0)
 
@@ -295,14 +390,15 @@ class ToolsDialogMixin:
             return
         try:
             import platform, sys, psutil
+
             info = {
-                "platform":    platform.system() + " " + platform.release(),
-                "python":      sys.version.split()[0],
-                "cpu_cores":   psutil.cpu_count(logical=False),
+                "platform": platform.system() + " " + platform.release(),
+                "python": sys.version.split()[0],
+                "cpu_cores": psutil.cpu_count(logical=False),
                 "cpu_threads": psutil.cpu_count(logical=True),
-                "ram_total":   f"{psutil.virtual_memory().total / 1e9:.1f} GB",
-                "ram_avail":   f"{psutil.virtual_memory().available / 1e9:.1f} GB",
-                "disk_free":   f"{psutil.disk_usage('/').free / 1e9:.1f} GB",
+                "ram_total": f"{psutil.virtual_memory().total / 1e9:.1f} GB",
+                "ram_avail": f"{psutil.virtual_memory().available / 1e9:.1f} GB",
+                "disk_free": f"{psutil.disk_usage('/').free / 1e9:.1f} GB",
             }
             try:
                 extra = self.performance_monitor.get_stats()
@@ -337,13 +433,17 @@ class ToolsDialogMixin:
         self.adb_output.config(state="disabled")
 
     # compat stubs
-    def _build_tools_quick_tab(self, parent):      pass
-    def _build_tools_diagnostics_tab(self, parent): pass
-    def _build_tools_adb_tab(self, parent):        pass
-    def _create_tool_card(self, parent, title, desc, command,
-                          icon="", style="info"):
-        return self._tool_card(parent, icon, title, desc,
-                               self.palette["primary"], command)
+    def _build_tools_quick_tab(self, parent):
+        pass
+
+    def _build_tools_diagnostics_tab(self, parent):
+        pass
+
+    def _build_tools_adb_tab(self, parent):
+        pass
+
+    def _create_tool_card(self, parent, title, desc, command, icon="", style="info"):
+        return self._tool_card(parent, icon, title, desc, self.palette["primary"], command)
 
     def show_system_info(self):
         self.show_tools_center("diag")

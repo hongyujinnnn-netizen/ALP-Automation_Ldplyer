@@ -27,8 +27,7 @@ def _request_admin_and_relaunch() -> bool:
 
     if not messagebox.askyesno(
         "Administrator Access",
-        "This app requires Administrator permission to run.\n\n"
-        "Run as Administrator now?",
+        "This app requires Administrator permission to run.\n\nRun as Administrator now?",
     ):
         messagebox.showerror(
             "Administrator Required",

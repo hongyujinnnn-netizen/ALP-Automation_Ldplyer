@@ -140,12 +140,26 @@ class AppSettings:
                 email_sender_filter=str(raw.get("email_sender_filter", request_defaults.sender_filter)),
                 email_subject_filter=str(raw.get("email_subject_filter", request_defaults.subject_filter)),
                 email_timeout_seconds=int(raw.get("email_timeout_seconds", request_defaults.timeout_seconds)),
-                email_poll_interval_seconds=int(raw.get("email_poll_interval_seconds", request_defaults.poll_interval_seconds)),
+                email_poll_interval_seconds=int(
+                    raw.get("email_poll_interval_seconds", request_defaults.poll_interval_seconds)
+                ),
                 email_mark_as_seen=bool(raw.get("email_mark_as_seen", request_defaults.mark_as_seen)),
-                theme_preset=_choice(raw.get("theme_preset", defaults.theme_preset), defaults.theme_preset, {"dark", "light"}),
-                accent_color=_choice(raw.get("accent_color", defaults.accent_color), defaults.accent_color, {"cyan", "blue", "purple", "green"}),
-                ui_density=_choice(raw.get("ui_density", defaults.ui_density), defaults.ui_density, {"compact", "comfortable", "spacious"}),
-                ui_scale=_choice(raw.get("ui_scale", defaults.ui_scale), defaults.ui_scale, {"small", "normal", "large"}),
+                theme_preset=_choice(
+                    raw.get("theme_preset", defaults.theme_preset), defaults.theme_preset, {"dark", "light"}
+                ),
+                accent_color=_choice(
+                    raw.get("accent_color", defaults.accent_color),
+                    defaults.accent_color,
+                    {"cyan", "blue", "purple", "green"},
+                ),
+                ui_density=_choice(
+                    raw.get("ui_density", defaults.ui_density),
+                    defaults.ui_density,
+                    {"compact", "comfortable", "spacious"},
+                ),
+                ui_scale=_choice(
+                    raw.get("ui_scale", defaults.ui_scale), defaults.ui_scale, {"small", "normal", "large"}
+                ),
                 ld_groups=ld_groups,
                 blocked_countries=blocked_countries,
             )

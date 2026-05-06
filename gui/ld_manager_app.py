@@ -114,7 +114,7 @@ class LDManagerApp(
             startup_settings = self.settings_service.load_app_settings()
         except Exception:
             startup_settings = AppSettings()
-        
+
         self.appearance = resolve_appearance(startup_settings)
         self.palette = self.appearance.palette
         self.style = tb.Style(theme=self.appearance.ttk_theme)
@@ -150,9 +150,11 @@ class LDManagerApp(
         self.ld_account_filter_var = tk.StringVar(value="All")
         self.ld_group_filter_var = tk.StringVar(value="All Groups")
         self._ld_groups = {}
-        
+
         # Configure custom styles
-        configure_styles(self.root, self.style, self.palette, self.display_font, self.mono_font, self.appearance)
+        configure_styles(
+            self.root, self.style, self.palette, self.display_font, self.mono_font, self.appearance
+        )
         self.app_logger = AppLogger(self.paths)
         self.controller = AppController(self.settings_service, log_func=self.log)
         self.otp_controller = OTPController(
@@ -172,14 +174,14 @@ class LDManagerApp(
             return
         self.emulator_controller = EmulatorController(self.emulator)
         self.task_controller = TaskController(self.task_service)
-            
+
         # Initialize enhanced components
         self.performance_monitor = PerformanceMonitor()
         self.account_manager = AccountManager(self.paths)
         self.content_manager = ContentManager(self.paths)
         self.backup_manager = BackupManager(self.log, self.paths)
         self.smart_scheduler = SmartScheduler(self.log, self.paths)
-        
+
         # Lifecycle state is owned by AutomationController. The two
         # attributes below remain as direct references to the controller's
         # events so the many existing call sites that read
@@ -193,7 +195,7 @@ class LDManagerApp(
         self.schedule_running = False
         self.schedule_settings_file = self.paths.schedule_settings_file
         self.settings_file = self.paths.settings_file
-        
+
         # Initialize settings variables
         self.parallel_ld = tk.IntVar(value=2)
         self.boot_delay = tk.IntVar(value=10)
@@ -235,15 +237,13 @@ class LDManagerApp(
         self.ui_density = tk.StringVar(value=self.appearance.ui_density)
         self.ui_scale = tk.StringVar(value=self.appearance.ui_scale)
         # Comma-separated list of blocked ISO country codes for IP guard.
-        self.blocked_countries = tk.StringVar(
-            value="US,KH,CN,TH,VN,PH,ID,MY,LA,MM"
-        )
-        
+        self.blocked_countries = tk.StringVar(value="US,KH,CN,TH,VN,PH,ID,MY,LA,MM")
+
         # Task type variables
         self.task_type_var = tk.StringVar(value="scroll")
         self.task_template_var = tk.StringVar(value="custom")
         self.task_type_var.trace_add("write", lambda *_: self._handle_task_type_change())
-        
+
         # Days of week for scheduling
         self.schedule_days = {
             "Monday": tk.BooleanVar(value=False),
@@ -252,9 +252,9 @@ class LDManagerApp(
             "Thursday": tk.BooleanVar(value=False),
             "Friday": tk.BooleanVar(value=False),
             "Saturday": tk.BooleanVar(value=False),
-            "Sunday": tk.BooleanVar(value=False)
+            "Sunday": tk.BooleanVar(value=False),
         }
-        
+
         self.setup_enhanced_ui()
         self._command_palette_commands = self._build_command_palette_commands()
         self._bind_command_palette_shortcut()
@@ -316,10 +316,7 @@ class LDManagerApp(
             if isinstance(raw, dict):
                 name = str(raw.get("name") or "").strip()
                 serial = str(
-                    raw.get("serial")
-                    or raw.get("adb_serial")
-                    or raw.get("device_serial")
-                    or ""
+                    raw.get("serial") or raw.get("adb_serial") or raw.get("device_serial") or ""
                 ).strip()
             else:
                 name = str(raw or "").strip()
@@ -350,7 +347,7 @@ class LDManagerApp(
 
     def setup_enhanced_ui(self):
         self.create_enhanced_menu_bar()
-        
+
         # Main shell with sidebar + content area.
         shell = tb.Frame(self.root, style="CardInner.TFrame")
         shell.pack(fill="both", expand=True)
@@ -369,7 +366,7 @@ class LDManagerApp(
         content = tb.Frame(main_container, style="CardInner.TFrame", padding=(0, 8, 0, 0))
         content.pack(fill="both", expand=True)
         self.create_right_notebook_panel(content)
-        
+
         # Status bar
         self.create_status_bar()
 
@@ -389,7 +386,9 @@ class LDManagerApp(
         except Exception:
             self.style = tb.Style(theme=self.appearance.ttk_theme)
 
-        configure_styles(self.root, self.style, self.palette, self.display_font, self.mono_font, self.appearance)
+        configure_styles(
+            self.root, self.style, self.palette, self.display_font, self.mono_font, self.appearance
+        )
         self._refresh_appearance_on_existing_widgets(old_palette, self.palette)
         self._refresh_tree_appearance()
         self._refresh_log_appearance()
@@ -569,7 +568,6 @@ class LDManagerApp(
             logs_text.tag_configure("EMPTY", foreground=self.palette["muted"])
         except Exception:
             pass
-
 
     def _bind_command_palette_shortcut(self):
         """Bind the global command palette launcher."""
@@ -878,7 +876,9 @@ class LDManagerApp(
     def _set_system_status(self, status):
         label = status_label(status)
         if hasattr(self, "top_status_label"):
-            self.top_status_label.config(text=f"System: {label}  |  {datetime.now().strftime('%A, %d %b %Y')}")
+            self.top_status_label.config(
+                text=f"System: {label}  |  {datetime.now().strftime('%A, %d %b %Y')}"
+            )
         if hasattr(self, "status_sys_pill"):
             self.status_sys_pill.set_status(status, text=f"System: {label}")
 
@@ -900,28 +900,22 @@ class LDManagerApp(
             pady=(0, 0),
             expand=True,
         )
-        
+
         # Control buttons frame
         controls_frame = tb.Frame(table_frame)
         controls_frame.pack(fill="x", pady=(0, 10))
-        
+
         # Control buttons
         control_configs = [
             ("Refresh", self.refresh_emulator_list, "outline-primary"),
             ("Select All", self.select_all, "outline-success"),
             ("Select Online", self.select_online, "outline-info"),
             ("Clear", self.deselect_all, "outline-danger"),
-            ("Invert", self.invert_selection, "outline-warning")
+            ("Invert", self.invert_selection, "outline-warning"),
         ]
-        
+
         for text, command, style in control_configs:
-            btn = tb.Button(
-                controls_frame,
-                text=text,
-                command=command,
-                bootstyle=style,
-                width=11
-            )
+            btn = tb.Button(controls_frame, text=text, command=command, bootstyle=style, width=11)
             btn.pack(side="left", padx=3)
 
         filter_frame = tb.Frame(table_frame)
@@ -937,7 +931,7 @@ class LDManagerApp(
             textvariable=self.ld_status_filter_var,
             values=status_filter_values(),
             state="readonly",
-            width=11
+            width=11,
         )
         status_combo.pack(side="left", padx=(6, 12))
         status_combo.bind("<<ComboboxSelected>>", lambda _e: self._render_ld_table())
@@ -948,7 +942,7 @@ class LDManagerApp(
             textvariable=self.ld_account_filter_var,
             values=("All", "Has Account", "No Account"),
             state="readonly",
-            width=12
+            width=12,
         )
         account_combo.pack(side="left", padx=(6, 12))
         account_combo.bind("<<ComboboxSelected>>", lambda _e: self._render_ld_table())
@@ -959,10 +953,12 @@ class LDManagerApp(
             textvariable=self.ld_group_filter_var,
             values=("All Groups", "Ungrouped"),
             state="readonly",
-            width=14
+            width=14,
         )
         self.group_filter_combo.pack(side="left", padx=(6, 12))
-        self.group_filter_combo.bind("<<ComboboxSelected>>", lambda _e: self._set_ld_group_filter(self.ld_group_filter_var.get()))
+        self.group_filter_combo.bind(
+            "<<ComboboxSelected>>", lambda _e: self._set_ld_group_filter(self.ld_group_filter_var.get())
+        )
 
         tb.Label(filter_frame, text="Sort", style="Subtitle.TLabel").pack(side="left")
         sort_combo = tb.Combobox(
@@ -970,7 +966,7 @@ class LDManagerApp(
             textvariable=self.ld_sort_var,
             values=("Status", "Name", "ADB", "Account", "Group"),
             state="readonly",
-            width=11
+            width=11,
         )
         sort_combo.pack(side="left", padx=(6, 0))
         sort_combo.bind("<<ComboboxSelected>>", lambda _e: self._render_ld_table())
@@ -979,38 +975,75 @@ class LDManagerApp(
             text="Create Group",
             bootstyle="outline-primary",
             command=self.create_ld_group,
-            width=12
+            width=12,
         ).pack(side="right", padx=(8, 0))
         tb.Button(
             filter_frame,
             text="Clear Filters",
             bootstyle="outline-secondary",
             command=self.clear_ld_filters,
-            width=12
+            width=12,
         ).pack(side="right")
 
         # Selection info
         self.selection_info = tb.Label(
-            controls_frame,
-            text="Selected: 0/0",
-            bootstyle="secondary",
-            style="Chip.TLabel"
+            controls_frame, text="Selected: 0/0", bootstyle="secondary", style="Chip.TLabel"
         )
         self.selection_info.pack(side="right", padx=5)
 
         fleet_stats = tb.Frame(table_frame)
         fleet_stats.pack(fill="x", pady=(0, 10))
-        self.fleet_total_chip = StatusPill(fleet_stats, "Info", palette=self.palette, text="Total: 0", font=(self.display_font, 9), padx=8, pady=3)
+        self.fleet_total_chip = StatusPill(
+            fleet_stats,
+            "Info",
+            palette=self.palette,
+            text="Total: 0",
+            font=(self.display_font, 9),
+            padx=8,
+            pady=3,
+        )
         self.fleet_total_chip.pack(side="left", padx=(0, 6))
-        self.fleet_online_chip = StatusPill(fleet_stats, "Active", palette=self.palette, text="Online: 0", font=(self.display_font, 9), padx=8, pady=3)
+        self.fleet_online_chip = StatusPill(
+            fleet_stats,
+            "Active",
+            palette=self.palette,
+            text="Online: 0",
+            font=(self.display_font, 9),
+            padx=8,
+            pady=3,
+        )
         self.fleet_online_chip.pack(side="left", padx=(0, 6))
-        self.fleet_running_chip = StatusPill(fleet_stats, "Running", palette=self.palette, text="Running: 0", font=(self.display_font, 9), padx=8, pady=3)
+        self.fleet_running_chip = StatusPill(
+            fleet_stats,
+            "Running",
+            palette=self.palette,
+            text="Running: 0",
+            font=(self.display_font, 9),
+            padx=8,
+            pady=3,
+        )
         self.fleet_running_chip.pack(side="left", padx=(0, 6))
-        self.fleet_account_chip = StatusPill(fleet_stats, "Ready", palette=self.palette, text="With Account: 0", font=(self.display_font, 9), padx=8, pady=3)
+        self.fleet_account_chip = StatusPill(
+            fleet_stats,
+            "Ready",
+            palette=self.palette,
+            text="With Account: 0",
+            font=(self.display_font, 9),
+            padx=8,
+            pady=3,
+        )
         self.fleet_account_chip.pack(side="left", padx=(0, 6))
-        self.fleet_visible_chip = StatusPill(fleet_stats, "Idle", palette=self.palette, text="Visible: 0", font=(self.display_font, 9), padx=8, pady=3)
+        self.fleet_visible_chip = StatusPill(
+            fleet_stats,
+            "Idle",
+            palette=self.palette,
+            text="Visible: 0",
+            font=(self.display_font, 9),
+            padx=8,
+            pady=3,
+        )
         self.fleet_visible_chip.pack(side="right")
-        
+
         # Treeview with custom style
         self.create_enhanced_treeview(table_frame)
 
@@ -1035,10 +1068,10 @@ class LDManagerApp(
         tree_frame = tb.Frame(parent)
         self.ld_table_frame = tree_frame
         tree_frame.pack(fill="both", expand=True)
-        
+
         # Define columns
         columns = ("name", "serial", "status", "task", "progress", "account", "groups")
-        
+
         # Create Treeview with custom style
         self.ld_table = CheckboxTreeview(
             tree_frame,
@@ -1047,7 +1080,7 @@ class LDManagerApp(
             selectmode="none",
             height=15,
             palette=self.palette,
-            style="Custom.Treeview"
+            style="Custom.Treeview",
         )
 
         self.ld_table.heading("#0", text="Sel", anchor="center")
@@ -1056,10 +1089,10 @@ class LDManagerApp(
         # Configure columns
         self.ld_table.heading("name", text="LD Name", anchor="w")
         self.ld_table.column("name", width=118, anchor="w")
-        
+
         self.ld_table.heading("serial", text="ADB Serial", anchor="w")
         self.ld_table.column("serial", width=128, anchor="w")
-        
+
         self.ld_table.heading("status", text="Status", anchor="w")
         self.ld_table.column("status", width=92, anchor="w")
 
@@ -1068,15 +1101,15 @@ class LDManagerApp(
 
         self.ld_table.heading("progress", text="Progress", anchor="w")
         self.ld_table.column("progress", width=84, anchor="w")
-        
+
         self.ld_table.heading("account", text="Account", anchor="w")
         self.ld_table.column("account", width=124, anchor="w")
 
         self.ld_table.heading("groups", text="Groups", anchor="w")
         self.ld_table.column("groups", width=180, anchor="w")
-        
+
         configure_status_tree_tags(self.ld_table, self.palette, include_zebra=True)
-        
+
         # Scrollbars
         v_scrollbar = tb.Scrollbar(
             tree_frame,
@@ -1085,7 +1118,7 @@ class LDManagerApp(
             style="Vertical.TScrollbar",
         )
         v_scrollbar.pack(side="right", fill="y")
-        
+
         h_scrollbar = tb.Scrollbar(
             tree_frame,
             orient="horizontal",
@@ -1093,12 +1126,9 @@ class LDManagerApp(
             style="Horizontal.TScrollbar",
         )
         h_scrollbar.pack(side="bottom", fill="x")
-        
-        self.ld_table.configure(
-            yscrollcommand=v_scrollbar.set,
-            xscrollcommand=h_scrollbar.set
-        )
-        
+
+        self.ld_table.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+
         self.ld_table.pack(fill="both", expand=True)
         self.ld_table.bind("<ButtonPress-1>", self._on_ld_drag_toggle_start, add="+")
         self.ld_table.bind("<B1-Motion>", self._on_ld_drag_toggle_motion, add="+")
@@ -1117,8 +1147,12 @@ class LDManagerApp(
         self.instance_context_menu.add_command(label="Restart", command=self._context_restart_instance)
         self.instance_context_menu.add_command(label="Rename...", command=self._context_rename_instance)
         self.instance_context_menu.add_command(label="Delete...", command=self._context_delete_instance)
-        self.instance_context_menu.add_command(label="Shared Folder...", command=self._context_set_shared_folder)
-        self.instance_context_menu.add_command(label="Health Check & Recover", command=self._context_health_check)
+        self.instance_context_menu.add_command(
+            label="Shared Folder...", command=self._context_set_shared_folder
+        )
+        self.instance_context_menu.add_command(
+            label="Health Check & Recover", command=self._context_health_check
+        )
         self.instance_context_menu.add_separator()
         self.instance_group_menu = tk.Menu(self.instance_context_menu, tearoff=0)
         self.instance_context_menu.add_cascade(label="Groups", menu=self.instance_group_menu)
@@ -1133,7 +1167,7 @@ class LDManagerApp(
         # Create Notebook
         self.notebook = tb.Notebook(parent, style="Hidden.TNotebook")
         self.notebook.pack(side="right", fill="both", expand=True)
-        
+
         # Create tabs
         self.create_dashboard_tab()
         self.create_dashboard_hub_tab()
@@ -1232,7 +1266,9 @@ class LDManagerApp(
                 merged.update(payload)
             merged.update(kwargs)
             try:
-                self.root.after(0, lambda name=ld_name, data=merged: self.update_device_runtime_state(name, data))
+                self.root.after(
+                    0, lambda name=ld_name, data=merged: self.update_device_runtime_state(name, data)
+                )
             except Exception:
                 pass
             return
@@ -1261,7 +1297,9 @@ class LDManagerApp(
             )
         for name in list(self._device_runtime_state.keys()):
             if name not in selected_set and self._device_runtime_state[name].get("state") == "Queued":
-                self.update_device_runtime_state(name, state="Idle", task="Waiting for selection", progress=0, queue_label="-")
+                self.update_device_runtime_state(
+                    name, state="Idle", task="Waiting for selection", progress=0, queue_label="-"
+                )
 
     def _get_checked_names(self):
         return set(self._ld_checked_names)
@@ -1295,7 +1333,9 @@ class LDManagerApp(
         normalized = {}
         changed = False
         for group_name, members in self._normalize_ld_groups().items():
-            kept = list(members) if not snapshot_names else [name for name in members if name in snapshot_names]
+            kept = (
+                list(members) if not snapshot_names else [name for name in members if name in snapshot_names]
+            )
             normalized[group_name] = kept
             if kept != members:
                 changed = True
@@ -1400,13 +1440,9 @@ class LDManagerApp(
                 "info", text=f"{len(group_names)} group{'s' if len(group_names) != 1 else ''}"
             )
         if hasattr(self, "device_group_assigned_chip"):
-            self.device_group_assigned_chip.set_status(
-                "success", text=f"{assigned_total} assigned"
-            )
+            self.device_group_assigned_chip.set_status("success", text=f"{assigned_total} assigned")
         if hasattr(self, "device_group_unassigned_chip"):
-            self.device_group_unassigned_chip.set_status(
-                "muted", text=f"{ungrouped_total} ungrouped"
-            )
+            self.device_group_unassigned_chip.set_status("muted", text=f"{ungrouped_total} ungrouped")
         if hasattr(self, "device_group_summary"):
             try:
                 self.device_group_summary.config(
@@ -1504,7 +1540,9 @@ class LDManagerApp(
         if not current_name:
             MessageBox.showerror("Rename Group", "Select a group first.")
             return
-        new_name = simpledialog.askstring("Rename Group", "New group name:", initialvalue=current_name, parent=self.root)
+        new_name = simpledialog.askstring(
+            "Rename Group", "New group name:", initialvalue=current_name, parent=self.root
+        )
         new_name = (new_name or "").strip()
         if not new_name or new_name == current_name:
             return
@@ -1538,7 +1576,9 @@ class LDManagerApp(
         self.update_selection_info()
         target_group = self._get_active_group_name()
         if not target_group:
-            target_group = simpledialog.askstring("Assign Group", "Assign selected LDs to group:", parent=self.root)
+            target_group = simpledialog.askstring(
+                "Assign Group", "Assign selected LDs to group:", parent=self.root
+            )
             target_group = (target_group or "").strip()
         if not target_group:
             return
@@ -1653,7 +1693,15 @@ class LDManagerApp(
                 "",
                 "end",
                 text="☑" if is_checked else "☐",
-                values=(name, serial, self._status_text(status), task_text, progress_text, account_text, group_text),
+                values=(
+                    name,
+                    serial,
+                    self._status_text(status),
+                    task_text,
+                    progress_text,
+                    account_text,
+                    group_text,
+                ),
             )
             self.ld_table.checkboxes[item_id] = is_checked
             base_tags = [zebra_tag, self._status_tag(status)]
@@ -1716,7 +1764,11 @@ class LDManagerApp(
                 title="No devices match the current filters",
                 message="Clear search, status, account, or group filters to see the full fleet.",
                 actions=[
-                    {"text": "Clear Filters", "command": self.clear_ld_filters, "bootstyle": "outline-secondary"},
+                    {
+                        "text": "Clear Filters",
+                        "command": self.clear_ld_filters,
+                        "bootstyle": "outline-secondary",
+                    },
                 ],
             )
             self.ld_table_state_view.pack(fill="x", pady=(0, 10))
@@ -1838,7 +1890,9 @@ class LDManagerApp(
             item = self.ld_table.identify_row(event.y)
             if not item:
                 return
-            previous = getattr(self, "_ld_drag_toggle_last", None) or getattr(self, "_ld_drag_toggle_anchor", None)
+            previous = getattr(self, "_ld_drag_toggle_last", None) or getattr(
+                self, "_ld_drag_toggle_anchor", None
+            )
             for row in self._ld_table_items_between(previous, item):
                 self._toggle_ld_row_selection(row, self._ld_drag_toggle_target)
             self._ld_drag_toggle_last = item
@@ -1888,7 +1942,7 @@ class LDManagerApp(
         end = items.index(end_item)
         if start > end:
             start, end = end, start
-        return items[start:end + 1]
+        return items[start : end + 1]
 
     def _clear_ld_table_selection(self):
         try:
@@ -2019,13 +2073,17 @@ class LDManagerApp(
             self.instance_group_menu.add_command(label="No groups yet", state="disabled")
         else:
             for group_name in sorted(self._ld_groups.keys(), key=str.lower):
-                prefix = "Remove from" if len(target_names) == 1 and group_name in current_groups else "Assign to"
+                prefix = (
+                    "Remove from" if len(target_names) == 1 and group_name in current_groups else "Assign to"
+                )
                 self.instance_group_menu.add_command(
                     label=f"{prefix} {group_name}",
                     command=lambda group=group_name: self._toggle_context_group(group),
                 )
         self.instance_group_menu.add_separator()
-        self.instance_group_menu.add_command(label="Remove From All Groups", command=self._remove_context_ld_from_groups)
+        self.instance_group_menu.add_command(
+            label="Remove From All Groups", command=self._remove_context_ld_from_groups
+        )
 
     def _context_target_ld_names(self):
         selected_names = sorted(self._collect_selected_ld_names(), key=str.lower)
@@ -2055,7 +2113,10 @@ class LDManagerApp(
         self._refresh_group_ui()
         self.save_settings()
         self._render_ld_table()
-        self.log(f"{action} {len(target_names)} LD(s) {'from' if action == 'Removed' else 'to'} group: {group_name}", "INFO")
+        self.log(
+            f"{action} {len(target_names)} LD(s) {'from' if action == 'Removed' else 'to'} group: {group_name}",
+            "INFO",
+        )
 
     def _remove_context_ld_from_groups(self):
         target_names = set(self._context_target_ld_names())
@@ -2093,7 +2154,9 @@ class LDManagerApp(
         name = self._context_ld_name
         if not name:
             return
-        threading.Thread(target=lambda: self._run_single_instance_action(name, "restart"), daemon=True).start()
+        threading.Thread(
+            target=lambda: self._run_single_instance_action(name, "restart"), daemon=True
+        ).start()
 
     def _context_rename_instance(self):
         old_name = self._context_ld_name
@@ -2259,8 +2322,7 @@ class LDManagerApp(
                 preview += f", ... (+{len(target_names) - 5} more)"
             if not MessageBox.askyesno(
                 "Set Shared Folder",
-                f"Apply shared folder to {len(target_names)} LDs?\n\n"
-                f"{preview}\n\nFolder: {folder}",
+                f"Apply shared folder to {len(target_names)} LDs?\n\n{preview}\n\nFolder: {folder}",
                 parent=self.root,
             ):
                 return
@@ -2286,8 +2348,7 @@ class LDManagerApp(
 
             if updated:
                 self.log(
-                    f"Set shared folder for {len(updated)} LD(s) → {folder}: "
-                    f"{', '.join(updated)}",
+                    f"Set shared folder for {len(updated)} LD(s) → {folder}: {', '.join(updated)}",
                     "SUCCESS",
                 )
                 self.log(
@@ -2322,8 +2383,7 @@ class LDManagerApp(
             if len(target_names) > 5:
                 preview += f", ... (+{len(target_names) - 5} more)"
             prompt = (
-                f"Permanently delete {len(target_names)} LD instances?\n\n"
-                f"{preview}\n\nThis cannot be undone."
+                f"Permanently delete {len(target_names)} LD instances?\n\n{preview}\n\nThis cannot be undone."
             )
         if not MessageBox.askyesno("Delete LD Instance", prompt, parent=self.root):
             return
@@ -2447,7 +2507,6 @@ class LDManagerApp(
         except Exception as exc:
             self.log(f"Instance action failed for {name}: {exc}", "ERROR")
 
-
     def create_backup(self):
         """Create a backup ZIP of current app data."""
         try:
@@ -2538,7 +2597,7 @@ class LDManagerApp(
         for task in tasks:
             if "max_videos" in task:
                 try:
-                    self.max_videos.set(max(1, int(task["max_videos"])) )
+                    self.max_videos.set(max(1, int(task["max_videos"])))
                 except Exception:
                     pass
                 break
@@ -2670,9 +2729,7 @@ class LDManagerApp(
             ui_scale=str(self.ui_scale.get()),
             ld_groups=self._normalize_ld_groups(),
             blocked_countries=[
-                code.strip().upper()
-                for code in self.blocked_countries.get().split(",")
-                if code.strip()
+                code.strip().upper() for code in self.blocked_countries.get().split(",") if code.strip()
             ],
         )
 
@@ -2689,8 +2746,16 @@ class LDManagerApp(
                     title="Could not load schedule settings",
                     message=str(exc) or "The schedule configuration could not be read.",
                     actions=[
-                        {"text": "Retry", "command": self.load_schedule_settings, "bootstyle": "outline-danger"},
-                        {"text": "Settings", "command": self.show_settings_dialog, "bootstyle": "outline-secondary"},
+                        {
+                            "text": "Retry",
+                            "command": self.load_schedule_settings,
+                            "bootstyle": "outline-danger",
+                        },
+                        {
+                            "text": "Settings",
+                            "command": self.show_settings_dialog,
+                            "bootstyle": "outline-secondary",
+                        },
                     ],
                 )
             self.log(f"Failed to load schedule settings: {exc}", "ERROR", category="Schedule")
@@ -2746,8 +2811,9 @@ class LDManagerApp(
                             status_cache[name] = self._ld_status_cache.get(name, "Inactive")
                     account_cache = self._build_ld_account_cache(snapshot)
                     self.root.after_idle(
-                        lambda data=snapshot, statuses=status_cache, accounts=account_cache:
-                        self._sync_emulator_table(data, statuses, accounts)
+                        lambda data=snapshot, statuses=status_cache, accounts=account_cache: (
+                            self._sync_emulator_table(data, statuses, accounts)
+                        )
                     )
                 except Exception:
                     pass
@@ -2761,8 +2827,9 @@ class LDManagerApp(
             try:
                 self.root.after(
                     0,
-                    lambda msg=message, lvl=level, dev=device, cat=category, ctx=context:
-                        self.log(msg, lvl, device=dev, category=cat, **ctx),
+                    lambda msg=message, lvl=level, dev=device, cat=category, ctx=context: self.log(
+                        msg, lvl, device=dev, category=cat, **ctx
+                    ),
                 )
             except Exception:
                 pass
@@ -2784,7 +2851,7 @@ class LDManagerApp(
 
         self.log_records.append(record)
         if len(self.log_records) > self._max_log_records:
-            self.log_records = self.log_records[-self._max_log_records:]
+            self.log_records = self.log_records[-self._max_log_records :]
 
         self._record_dashboard_event(timestamp, message, normalized_level)
         if hasattr(self, "_refresh_log_filter_options"):
@@ -2797,24 +2864,30 @@ class LDManagerApp(
                     self.root.after_cancel(pending)
                 except Exception:
                     pass
+
             def _do_render():
                 self._log_render_job = None
                 self._render_logs_view()
+
             self._log_render_job = self.root.after(80, _do_render)
 
         # Keep the system pill reserved for mode state; important messages live in logs/events.
         if normalized_level in ["SUCCESS", "ERROR", "WARNING"]:
             mode_text = "Idle"
             if getattr(self, "running_event", None) and self.running_event.is_set():
-                mode_text = "Paused" if getattr(self, "pause_event", None) and not self.pause_event.is_set() else "Running"
-            self._update_header_chips(
-                mode_text=mode_text
-            )
+                mode_text = (
+                    "Paused"
+                    if getattr(self, "pause_event", None) and not self.pause_event.is_set()
+                    else "Running"
+                )
+            self._update_header_chips(mode_text=mode_text)
 
         logger_context = dict(context)
         logger_context.setdefault("device", log_device)
         logger_context.setdefault("category", log_category)
-        logger_context.setdefault("running", bool(getattr(self, "running_event", None) and self.running_event.is_set()))
+        logger_context.setdefault(
+            "running", bool(getattr(self, "running_event", None) and self.running_event.is_set())
+        )
         logger_context.setdefault("schedule_running", bool(getattr(self, "schedule_running", False)))
         self.app_logger.log(normalized_level, message, **logger_context)
 
@@ -2879,11 +2952,13 @@ class LDManagerApp(
 
         if not hasattr(self, "dashboard_events"):
             self.dashboard_events = []
-        self.dashboard_events.append({
-            "time": timestamp,
-            "level": normalized_level,
-            "message": normalized_message[:160],
-        })
+        self.dashboard_events.append(
+            {
+                "time": timestamp,
+                "level": normalized_level,
+                "message": normalized_message[:160],
+            }
+        )
         self.dashboard_events = self.dashboard_events[-80:]
         if hasattr(self, "dashboard_recent_events_frame"):
             self._render_recent_events()
@@ -2892,9 +2967,7 @@ class LDManagerApp(
         """Show time picker dialog"""
         # Simplified time picker
         time_str = simpledialog.askstring(
-            "Time Picker",
-            "Enter time (HH:MM):",
-            initialvalue=self.schedule_time.get()
+            "Time Picker", "Enter time (HH:MM):", initialvalue=self.schedule_time.get()
         )
         if time_str:
             self.schedule_time.set(time_str)
@@ -2903,22 +2976,22 @@ class LDManagerApp(
         """Show detailed content statistics"""
         stats = self.content_manager.get_queue_stats()
         details = self.content_manager.get_queue_details()
-        
+
         stats_text = f"""
  Content Queue Statistics:
 ===========================
-Total Items: {stats['total']}
-Available: {stats['available']}
-Used: {stats['used']}
-Queue Size: {stats['queue_size']}
+Total Items: {stats["total"]}
+Available: {stats["available"]}
+Used: {stats["used"]}
+Queue Size: {stats["queue_size"]}
 
 Recent Items:
 -------------
 """
         for item in details[:10]:  # Show first 10 items
-            filename = os.path.basename(item['path'])
+            filename = os.path.basename(item["path"])
             stats_text += f" {filename}\n"
-        
+
         MessageBox.showinfo("Content Statistics", stats_text)
 
     def batch_restart(self):
@@ -2927,10 +3000,10 @@ Recent Items:
         if not selected_items:
             MessageBox.showerror("Error", "No LDs selected. Please select at least one LD to restart.")
             return
-            
+
         selected_ld_names = [self.ld_table.item(item)["values"][0] for item in selected_items]
         self._mark_selected_devices_as_queued(selected_ld_names)
-        
+
         def restart_thread():
             for name in selected_ld_names:
                 if not self.running_event.is_set():
@@ -2940,7 +3013,7 @@ Recent Items:
                     time.sleep(self.boot_delay.get())
                     self.update_status(name, "Active")
                     self.log(f" Restarted LD: {name}", "INFO")
-            
+
         threading.Thread(target=restart_thread, daemon=True).start()
 
     def update_progress(self, value):
@@ -2955,7 +3028,7 @@ Recent Items:
             self.footer_progress.set(value)
         if hasattr(self, "footer_progress_label"):
             self.footer_progress_label.config(text=f"{int(value)}%")
-        
+
     def update_selection_info(self):
         """Update the selection info label"""
         visible_rows = {}
@@ -2964,9 +3037,7 @@ Recent Items:
             if values:
                 visible_rows[item] = values[0]
         checked_visible = {
-            visible_rows[item]
-            for item in self.ld_table.get_checked_items()
-            if item in visible_rows
+            visible_rows[item] for item in self.ld_table.get_checked_items() if item in visible_rows
         }
         self._ld_checked_names.difference_update(visible_rows.values())
         self._ld_checked_names.update(checked_visible)
@@ -2975,7 +3046,7 @@ Recent Items:
         selected_visible = len(checked_visible)
         selected_all = len(self._ld_checked_names)
         self.selection_info.config(text=f"Selected: {selected_visible}/{total}  Fleet: {selected_all}")
-        
+
         # Update status bar
         if hasattr(self, "footer_selected_label"):
             self.footer_selected_label.config(text=f"Selected: {selected_all} / {len(self._ld_snapshot)}")
@@ -2987,8 +3058,14 @@ Recent Items:
         total = len(self._ld_snapshot)
         online = sum(1 for status in self._ld_status_cache.values() if status in ("Active", "Running"))
         running = sum(1 for status in self._ld_status_cache.values() if status == "Running")
-        errors = sum(1 for status in self._ld_status_cache.values() if status not in ("Active", "Running", "Inactive", "Paused", "Completed"))
-        with_account = sum(1 for account in self._ld_account_cache.values() if account and account != "No account")
+        errors = sum(
+            1
+            for status in self._ld_status_cache.values()
+            if status not in ("Active", "Running", "Inactive", "Paused", "Completed")
+        )
+        with_account = sum(
+            1 for account in self._ld_account_cache.values() if account and account != "No account"
+        )
         visible = len(filtered_rows)
         if hasattr(self, "fleet_total_chip"):
             self.fleet_total_chip.config(text=f"Total: {total}")
@@ -3004,7 +3081,9 @@ Recent Items:
             "analytics": str(total),
             "devices": str(online),
             "automation": str(running),
-            "queue": str(len(self.content_manager.get_queue_items())) if hasattr(self, "content_manager") else "0",
+            "queue": str(len(self.content_manager.get_queue_items()))
+            if hasattr(self, "content_manager")
+            else "0",
             "schedule": "ON" if self.schedule_running else "OFF",
         }
         for key, value in badge_values.items():
@@ -3117,9 +3196,9 @@ Recent Items:
         if not selected_items:
             MessageBox.showerror("Error", "No LDs selected. Please select at least one LD to start.")
             return
-            
+
         selected_ld_names = [self.ld_table.item(item)["values"][0] for item in selected_items]
-        
+
         def start_thread():
             for name in selected_ld_names:
                 if not self.running_event.is_set():
@@ -3127,7 +3206,7 @@ Recent Items:
                     time.sleep(self.boot_delay.get())
                     self.update_status(name, "Active")
                     self.log(f" Started LD: {name}", "SUCCESS")
-            
+
         threading.Thread(target=start_thread, daemon=True).start()
 
     def batch_stop(self):
@@ -3138,15 +3217,15 @@ Recent Items:
             return
         if not MessageBox.askyesno("Stop LDs", "Stop all selected LD instances?"):
             return
-            
+
         selected_ld_names = [self.ld_table.item(item)["values"][0] for item in selected_items]
-        
+
         def stop_thread():
             for name in selected_ld_names:
                 self.emulator_controller.stop_emulator(name)
                 self.update_status(name, "Inactive")
                 self.log(f" Stopped LD: {name}", "INFO")
-            
+
         threading.Thread(target=stop_thread, daemon=True).start()
 
     def update_status(self, ld_name, status):
@@ -3165,16 +3244,18 @@ Recent Items:
         elif status == "Active":
             runtime_defaults.update({"task": "Device active", "progress": 30})
         elif status == "Running":
-            runtime_defaults.update({
-                "task": {
-                    "scroll": "Scroll Feed",
-                    "reels": "Watch Reels",
-                    "reg_account": "Register Account",
-                    "login": "Login Account",
-                    "test_feature": "Test Feature",
-                }.get(self.task_type_var.get(), self.task_type_var.get().title()),
-                "progress": 72,
-            })
+            runtime_defaults.update(
+                {
+                    "task": {
+                        "scroll": "Scroll Feed",
+                        "reels": "Watch Reels",
+                        "reg_account": "Register Account",
+                        "login": "Login Account",
+                        "test_feature": "Test Feature",
+                    }.get(self.task_type_var.get(), self.task_type_var.get().title()),
+                    "progress": 72,
+                }
+            )
         elif status == "Completed":
             runtime_defaults.update({"task": "Task completed", "progress": 100})
         self.update_device_runtime_state(ld_name, runtime_defaults)
@@ -3200,12 +3281,25 @@ Recent Items:
                     }.get(self.task_type_var.get(), self.task_type_var.get().title())
                 self.ld_table.item(
                     item,
-                    values=(values[0], values[1], self._status_text(status), task_text, progress_text, account_text, group_text),
+                    values=(
+                        values[0],
+                        values[1],
+                        self._status_text(status),
+                        task_text,
+                        progress_text,
+                        account_text,
+                        group_text,
+                    ),
                 )
-                
+
                 # Update tags
                 tags = list(self.ld_table.item(item, "tags"))
-                tags = [t for t in tags if t not in ("active", "inactive", "running", "paused", "completed", "queued", "attention")]
+                tags = [
+                    t
+                    for t in tags
+                    if t
+                    not in ("active", "inactive", "running", "paused", "completed", "queued", "attention")
+                ]
                 tags.append(self._status_tag(status))
                 self.ld_table.item(item, tags=tags)
                 break
@@ -3247,9 +3341,7 @@ Recent Items:
             pause_event=self.pause_event,
             running_flag=lambda: self.running_event.is_set(),
             blocked_countries=[
-                code.strip().upper()
-                for code in self.blocked_countries.get().split(",")
-                if code.strip()
+                code.strip().upper() for code in self.blocked_countries.get().split(",") if code.strip()
             ],
             auto_arrange_ld=bool(self.auto_arrange_ld.get()),
             state_callback=self.update_device_runtime_state,
@@ -3269,7 +3361,7 @@ Recent Items:
         except UnsupportedTaskTypeError:
             MessageBox.showwarning(
                 "Task Not Implemented",
-                "This task type is UI-only right now. Please use Scroll Feed, Register Account, Watch Reels, or Test Feature."
+                "This task type is UI-only right now. Please use Scroll Feed, Register Account, Watch Reels, or Test Feature.",
             )
             return
 
@@ -3361,7 +3453,11 @@ Recent Items:
 
     def stop_automation(self, confirm=True):
         """Stop automation process. Delegates state change to AutomationController."""
-        if confirm and self.running_event.is_set() and not MessageBox.askyesno("Stop Automation", "Stop current automation run?"):
+        if (
+            confirm
+            and self.running_event.is_set()
+            and not MessageBox.askyesno("Stop Automation", "Stop current automation run?")
+        ):
             return
 
         self.automation_controller.stop()
@@ -3372,7 +3468,9 @@ Recent Items:
         for name in list(self._device_runtime_state.keys()):
             current_state = self._device_runtime_state[name].get("state", "")
             if current_state not in ("Completed", "Idle"):
-                self.update_device_runtime_state(name, state="Idle", task="Waiting for next run", progress=0, queue_label="-")
+                self.update_device_runtime_state(
+                    name, state="Idle", task="Waiting for next run", progress=0, queue_label="-"
+                )
 
     def on_schedule_type_change(self):
         """Show/hide days of week based on schedule type"""
@@ -3392,7 +3490,7 @@ Recent Items:
         """Start scheduling"""
         if not self.validate_schedule():
             return
-            
+
         self.schedule_running = True
         if hasattr(self, "schedule_enabled_ui"):
             self.schedule_enabled_ui.set(True)
@@ -3411,7 +3509,7 @@ Recent Items:
         self.log("Scheduling enabled", "SUCCESS")
 
         self.save_schedule_settings()
-        
+
         if self.schedule_thread is None or not self.schedule_thread.is_alive():
             self.schedule_thread = threading.Thread(target=self.schedule_monitor, daemon=True)
             self.schedule_thread.start()
@@ -3442,16 +3540,16 @@ Recent Items:
         except ValueError:
             MessageBox.showerror("Error", "Invalid time format. Please use HH:MM format.")
             return False
-            
+
         repeat_hours = self.schedule_repeat_hours.get()
         if repeat_hours < 0:
             MessageBox.showerror("Error", "Repeat interval must be a positive number.")
             return False
-            
+
         if not self.schedule_daily.get() and not any(var.get() for var in self.schedule_days.values()):
             MessageBox.showerror("Error", "Please select at least one day for scheduling.")
             return False
-            
+
         return True
 
     def schedule_monitor(self):
@@ -3478,13 +3576,11 @@ Recent Items:
                     if decision.next_time:
                         self.schedule_time.set(decision.next_time)
                         self.log(f"Next run scheduled for {decision.next_time}", "INFO")
-                
+
                 time.sleep(30)
             except Exception as e:
                 self.log(f"Error in schedule monitor: {e}", "ERROR")
                 time.sleep(60)
-
-   
 
     def refresh_all(self):
         """Refresh everything"""

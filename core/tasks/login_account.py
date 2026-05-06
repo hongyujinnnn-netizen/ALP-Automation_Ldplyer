@@ -41,10 +41,7 @@ class LoginAccountTaskHandler(LoginHandlerMixin, RegAccountTaskHandler):
         verify_2fa = bool(kwargs.get("verify_2fa", True))
         twofa_email = (kwargs.get("twofa_email") or "").strip()
         twofa_secret = (
-            kwargs.get("twofa_secret")
-            or kwargs.get("twofa")
-            or kwargs.get("two_factor_secret")
-            or ""
+            kwargs.get("twofa_secret") or kwargs.get("twofa") or kwargs.get("two_factor_secret") or ""
         )
         twofa_secret = str(twofa_secret or "").strip()
 
@@ -140,17 +137,17 @@ class LoginAccountTaskHandler(LoginHandlerMixin, RegAccountTaskHandler):
                 if not handled_2fa:
                     self.log(f"Failed to submit Facebook 2FA code for {name}")
                     return False
-            else:    
+            else:
                 self.log(f"Failed to handle Facebook 2FA for {name}")
                 return False
-        
+
         if login_status == "Checkpoint":
             self.log(f"Login blocked by checkpoint/human-verify for {name}")
             return False
-        
-        if login_status == "SussaveLogininfo" :
+
+        if login_status == "SussaveLogininfo":
             self.log(f"Login is succeeded for {name}, status: {login_status}")
-            
+
         time.sleep(2)
         self._handle_save_login_info_prompt(d)
         time.sleep(4)

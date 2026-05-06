@@ -1,4 +1,4 @@
-﻿import json
+import json
 import os
 import random
 import re
@@ -6,11 +6,13 @@ import subprocess
 import time
 from typing import Any, Callable, TYPE_CHECKING
 
+
 def get_app_paths():
     """Resolve through task_reels so existing tests can patch that module."""
     from core.tasks import task_reels
 
     return task_reels.get_app_paths()
+
 
 class ReelsHandlerMixin:
     def end_to_accoutn_profile(self, d, name):
@@ -139,9 +141,7 @@ class ReelsHandlerMixin:
 
                     try:
                         d.click(center_x, center_y)
-                        self.log(
-                            f"Clicked Storage row on {name} at ({center_x}, {center_y})"
-                        )
+                        self.log(f"Clicked Storage row on {name} at ({center_x}, {center_y})")
                         return True
                     except Exception:
                         continue
@@ -225,7 +225,7 @@ class ReelsHandlerMixin:
             except Exception:
                 pass
 
-    #def handle_facebook_reels_post(self, d, video_data=None):
+    # def handle_facebook_reels_post(self, d, video_data=None):
     def handle_reels_description(self, d, video_data=None):
         """
         Handle the Facebook Reels description and audience selection screen
@@ -234,14 +234,22 @@ class ReelsHandlerMixin:
         try:
             # Wait for the reels description screen to load
             time.sleep(5)
-            
+
             # FIRST: Check for and click OK button if it exists
             ok_button_found = False
             ok_button_texts = [
-                "OK", "Okay", "Xong", "Ã§Â¡Â®Ã¨Â®Â¤", "Ã­â„¢â€¢Ã¬ÂÂ¸", "Aceptar", 
-                "Accepter", "Accetta", "Einverstanden", "OKE"
+                "OK",
+                "Okay",
+                "Xong",
+                "Ã§Â¡Â®Ã¨Â®Â¤",
+                "Ã­â„¢â€¢Ã¬ÂÂ¸",
+                "Aceptar",
+                "Accepter",
+                "Accetta",
+                "Einverstanden",
+                "OKE",
             ]
-            
+
             # Try to find and click OK button
             for text in ok_button_texts:
                 try:
@@ -253,12 +261,12 @@ class ReelsHandlerMixin:
                         break
                 except:
                     continue
-            
+
             # If OK button was found and clicked, we're done
             if ok_button_found:
                 self.log(" OK button handled successfully")
                 return True
-            
+
             # NEW: Try to add description with appropriate caption method
             description_added = False
             try:
@@ -270,9 +278,9 @@ class ReelsHandlerMixin:
                     d(textContains="Describe your reel"),
                     d(textContains="Add a description"),
                     d(textContains="Write a caption"),
-                    d(description="Description input field")
+                    d(description="Description input field"),
                 ]
-                
+
                 description_field = None
                 for selector in description_selectors:
                     try:
@@ -281,30 +289,30 @@ class ReelsHandlerMixin:
                             break
                     except:
                         continue
-                
+
                 if description_field:
                     description_field.click()
                     time.sleep(1)
-                    
+
                     # Clear any existing text first
                     d.clear_text()
                     time.sleep(1)
-                    
+
                     # Use content from video_data if available
-                    if video_data and video_data.get('caption'):
-                        caption = video_data['caption']
-                        if video_data.get('hashtags'):
-                            caption += " " + video_data['hashtags']
+                    if video_data and video_data.get("caption"):
+                        caption = video_data["caption"]
+                        if video_data.get("hashtags"):
+                            caption += " " + video_data["hashtags"]
                         self.log(f" Using content manager caption: {caption}")
                     else:
                         # Fallback to original method
                         device_key = f"{d.serial}_last_video_title"
                         video_title = getattr(self, device_key, None)
-                        
+
                         if video_title:
                             # Remove file extension from video title
                             video_title_without_ext = self._remove_file_extension(video_title)
-                            
+
                             # Use the video title without extension as caption
                             caption = video_title_without_ext
                             self.log(f" Using video title as caption:{video_title_without_ext}")
@@ -312,11 +320,11 @@ class ReelsHandlerMixin:
                             # Video has no title, use generated caption
                             caption = self._generate_video_caption()
                             self.log(" Using generated caption for untitled video")
-                    
+
                     # Add the caption to description
                     d.send_keys(caption)
                     time.sleep(1)
-                    
+
                     # Hide keyboard
                     d.press("back")
                     time.sleep(1)
@@ -331,17 +339,28 @@ class ReelsHandlerMixin:
             time.sleep(1)
             d.swipe_ext("up", scale=0.7)
             time.sleep(1)
-            
+
             # Look for the final share/post button with more flexible detection
             self.log(" Looking for Share...")
             time.sleep(3)
             share_button_found = False
             share_button_texts = [
-                "Share", "Post", "Share now", "Publish", "Ã„ÂÃ„Æ’ng", "Publicar",
-                "Ã¥Ââ€˜Ã¥Â¸Æ’", "Ã¥â€¦Â±Ã¦Å“â€°", "Partager", "Compartir", "Condividi", "Teilen",
-                "Share reel", "Post reel"  # Added more specific options
+                "Share",
+                "Post",
+                "Share now",
+                "Publish",
+                "Ã„ÂÃ„Æ’ng",
+                "Publicar",
+                "Ã¥Ââ€˜Ã¥Â¸Æ’",
+                "Ã¥â€¦Â±Ã¦Å“â€°",
+                "Partager",
+                "Compartir",
+                "Condividi",
+                "Teilen",
+                "Share reel",
+                "Post reel",  # Added more specific options
             ]
-            
+
             # Try multiple approaches to find the share button
             attempts = [
                 # 1. Text-based detection
@@ -351,9 +370,9 @@ class ReelsHandlerMixin:
                 # 3. Resource ID detection (common Facebook buttons)
                 lambda: self._find_button_by_resource_id(d, ["share", "post", "publish"]),
                 # 4. Position-based detection (bottom of screen)
-                lambda: self._find_button_by_position(d)
+                lambda: self._find_button_by_position(d),
             ]
-            
+
             for attempt in attempts:
                 try:
                     if attempt():
@@ -362,7 +381,7 @@ class ReelsHandlerMixin:
                 except Exception as e:
                     self.log(f" Button detection attempt failed: {e}")
                     continue
-            
+
             if share_button_found:
                 self.log("Ã¢Å“â€¦ Reel posted successfully")
                 return True
@@ -371,7 +390,7 @@ class ReelsHandlerMixin:
                 # Even if we can't find the share button, if we detected the reels screen,
                 # consider it a success since we reached the intended UI
                 return True
-                
+
         except Exception as e:
             self.log(f" Error in handle_reels_description: {e}")
             return False
@@ -384,10 +403,10 @@ class ReelsHandlerMixin:
             intensity_params = {
                 "light": {"swipe_time": (500, 700), "delay": (3.0, 4.0)},
                 "medium": {"swipe_time": (400, 600), "delay": (2.0, 3.0)},
-                "heavy": {"swipe_time": (300, 500), "delay": (1.0, 2.0)}
+                "heavy": {"swipe_time": (300, 500), "delay": (1.0, 2.0)},
             }
             params = intensity_params.get(intensity, intensity_params["medium"])
-            
+
             start_time = time.time()
             successful_swipes = 0
 
@@ -403,21 +422,32 @@ class ReelsHandlerMixin:
                     if randomizer is not None
                     else base_swipe
                 )
-                
+
                 start_x = w // 2
                 start_y = int(h * 0.8)
-                end_y   = int(h * 0.25)
+                end_y = int(h * 0.25)
 
                 # Use adb instead of u2.swipe()
-                subprocess.run([
-                    "adb", "-s", serial, "shell", "input", "swipe",
-                    str(start_x), str(start_y),
-                    str(start_x), str(end_y),
-                    str(int(swipe_time))
-                ], capture_output=True, text=True)
+                subprocess.run(
+                    [
+                        "adb",
+                        "-s",
+                        serial,
+                        "shell",
+                        "input",
+                        "swipe",
+                        str(start_x),
+                        str(start_y),
+                        str(start_x),
+                        str(end_y),
+                        str(int(swipe_time)),
+                    ],
+                    capture_output=True,
+                    text=True,
+                )
 
                 successful_swipes += 1
-                
+
                 # Delay between swipes
                 base_delay = random.uniform(*params["delay"])
                 delay = (
@@ -428,7 +458,7 @@ class ReelsHandlerMixin:
                 if successful_swipes % 3 == 0:
                     delay += random.uniform(1.0, 3.0)
                 time.sleep(delay)
-            
+
             self.log(f"Ã°Å¸Å½Â¬ Finished scrolling Reels: {successful_swipes} swipes")
             return True
 
@@ -449,8 +479,8 @@ class ReelsHandlerMixin:
         try:
             w, h = d.window_size()
             b = node.info.get("bounds", {})
-            l, t, r, btm = b.get("left",0), b.get("top",0), b.get("right",0), b.get("bottom",0)
-            return t < h*top_ratio and r > w*(1-right_ratio)
+            l, t, r, btm = b.get("left", 0), b.get("top", 0), b.get("right", 0), b.get("bottom", 0)
+            return t < h * top_ratio and r > w * (1 - right_ratio)
         except Exception:
             return False
 
@@ -461,13 +491,11 @@ class ReelsHandlerMixin:
         # 1) Obvious switcher/avatar button (home screen)
         # Known ids/descriptions across builds
         ids = [
-            r".*profile_switcher.*", r".*account_switcher.*", r".*menu_tab_profile.*",
+            r".*profile_switcher.*",
+            r".*account_switcher.*",
+            r".*menu_tab_profile.*",
         ]
-        descs = [
-            r"(?i)(account|profile).*(switch|changer)",
-            r"(?i)switch.*(account|profile)",
-            r"(?i)Menu"
-        ]
+        descs = [r"(?i)(account|profile).*(switch|changer)", r"(?i)switch.*(account|profile)", r"(?i)Menu"]
         for i in ids:
             node = d(resourceIdMatches=i)
             if node.exists and self._in_top_right(d, node):
@@ -483,16 +511,14 @@ class ReelsHandlerMixin:
         w, h = d.window_size()
         for _ in range(2):
             time.sleep(2)
-            d.click(w*0.93, h*0.09)
+            d.click(w * 0.93, h * 0.09)
             # give the Menu a moment to render
             if d(textMatches=r"(?i)Menu").exists or d(descriptionMatches=r"(?i)Settings|Search").exists:
                 return True
             time.sleep(0.4)
 
         # 3) Try bottom Menu tab (some builds show a bottom nav)
-        possible_tabs = [
-            r".*tab_bar_menu.*", r".*tab_menu.*", r".*menu_tab.*"
-        ]
+        possible_tabs = [r".*tab_bar_menu.*", r".*tab_menu.*", r".*menu_tab.*"]
         for i in possible_tabs:
             node = d(resourceIdMatches=i)
             if node.exists and self._tap(node):
@@ -621,7 +647,7 @@ class ReelsHandlerMixin:
             self.log(f"Failed to open Facebook: {e}")
             return False
 
-    #function clear app    
+    # function clear app
     def clear_app(self, d, package_name: str) -> bool:
         try:
             # Force stop the app first
@@ -633,8 +659,8 @@ class ReelsHandlerMixin:
         except Exception as e:
             self.log(f"Ã¢ÂÅ’ Failed to clear app {package_name}: {e}")
             return False
-        
-    #function delete video
+
+    # function delete video
     def delete_video(self, d):
         try:
             # Long press video
@@ -643,7 +669,7 @@ class ReelsHandlerMixin:
 
             # Find and click "Delete" option
             for element in d(className="android.widget.TextView"):
-                text = element.info.get('text', '')
+                text = element.info.get("text", "")
                 if text and "Delete" in text:
                     element.click()
                     time.sleep(2)  # Wait for confirmation dialog
@@ -667,17 +693,17 @@ class ReelsHandlerMixin:
         Remove file extension from filename
         """
         # List of common video extensions to remove
-        video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.m4v', '.wmv', '.3gp']
-        
+        video_extensions = [".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv", ".m4v", ".wmv", ".3gp"]
+
         # Remove any video extension found
         for ext in video_extensions:
             if filename.lower().endswith(ext):
-                return filename[:-len(ext)]
-        
+                return filename[: -len(ext)]
+
         # If no known extension found, try to remove anything after the last dot
-        if '.' in filename:
-            return filename.rsplit('.', 1)[0]
-        
+        if "." in filename:
+            return filename.rsplit(".", 1)[0]
+
         return filename
 
     def _generate_video_caption(self):
@@ -695,25 +721,25 @@ class ReelsHandlerMixin:
             "This is too good not to share! Ã°Å¸â€˜Â",
             "Viral moment captured on camera! Ã°Å¸â€œÂ¹",
             "Trending content you need to see! Ã°Å¸â€˜â‚¬",
-            "Amazing video that you'll love! Ã¢ÂÂ¤Ã¯Â¸Â"
+            "Amazing video that you'll love! Ã¢ÂÂ¤Ã¯Â¸Â",
         ]
-        
+
         # List of popular hashtags for reels
         hashtag_groups = [
             "#reels #viral #trending #fyp #foryou #foryoupage #explorepage #instagramreels #reelitfeelit #reelkarofeelkaro #reelsindia #reelsteady #reelsvideo #reelsinsta #reelslovers #reelsofinstagram #reelsviral #reelsdance #reelsmusic #reelsfunny",
             "#viralvideo #trendingnow #fypÃ£â€šÂ· #foryourpage #explore #instareels #reelit #reelkarofeelkaro #reelsindia #reelsteadygo #reelsvideoviral #reelsinstagram #reelslover #reelsofig #reelsviraltrick #reelsdancevideo #reelsmusicvideo #reelsfunnyvideos #contentcreator #digitalcreator",
-            "#reels #viral #fyp #trending #foryou #instagramreels #reelitfeelit #reelsindia #reelsteady #reelsvideo #explorepage #foryoupage #reelsinsta #reelslovers #reelsofinstagram #reelsviral #reelsdance #reelsmusic #reelsfunny #contentcreation"
+            "#reels #viral #fyp #trending #foryou #instagramreels #reelitfeelit #reelsindia #reelsteady #reelsvideo #explorepage #foryoupage #reelsinsta #reelslovers #reelsofinstagram #reelsviral #reelsdance #reelsmusic #reelsfunny #contentcreation",
         ]
-        
+
         # Select a random base caption
         base_caption = random.choice(base_captions)
-        
+
         # Select a random hashtag group
         hashtags = random.choice(hashtag_groups)
-        
+
         # Combine caption and hashtags
         full_caption = f"{base_caption} {hashtags}"
-        
+
         return full_caption
 
     # Add these helper methods to the ReelsTaskHandler class:
@@ -735,7 +761,7 @@ class ReelsHandlerMixin:
         try:
             buttons = d(className=class_name)
             for button in buttons:
-                bounds = button.info.get('bounds', {})
+                bounds = button.info.get("bounds", {})
                 if bounds:
                     # Look for buttons at the bottom of the screen
                     screen_height = d.info.get("displayHeight", 1920)
@@ -753,9 +779,9 @@ class ReelsHandlerMixin:
         try:
             all_elements = d(className="android.view.View")
             for element in all_elements:
-                resource_id = element.info.get('resourceId', '').lower()
+                resource_id = element.info.get("resourceId", "").lower()
                 if any(keyword in resource_id for keyword in keywords):
-                    bounds = element.info.get('bounds', {})
+                    bounds = element.info.get("bounds", {})
                     if bounds:
                         element.click()
                         self.log(f"Ã¢Å“â€¦ Clicked button by resource ID: {resource_id}")
@@ -770,14 +796,14 @@ class ReelsHandlerMixin:
         try:
             screen_width = d.info.get("displayWidth", 1080)
             screen_height = d.info.get("displayHeight", 1920)
-            
+
             # Common positions for action buttons
             positions = [
                 (screen_width * 0.9, screen_height * 0.95),  # Bottom right
                 (screen_width * 0.85, screen_height * 0.93),  # Slightly left of corner
-                (screen_width * 0.95, screen_height * 0.9),   # Right side
+                (screen_width * 0.95, screen_height * 0.9),  # Right side
             ]
-            
+
             for x, y in positions:
                 try:
                     d.click(x, y)
@@ -794,55 +820,57 @@ class ReelsHandlerMixin:
         """Long-press top video in file manager after navigating to the Page-1 folder"""
         try:
             time.sleep(2)
-            
+
             # First, make sure we're in the Page-1 folder by checking if we can see video files
             # If we see folder names instead, we need to click into the Page-1 folder first
-            video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv']
-            
+            video_extensions = [".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv"]
+
             # Check if we're already in a folder with video files
             text_elements = d(className="android.widget.TextView")
             video_files_found = False
-            
+
             if text_elements:
                 for element in text_elements:
-                    text = element.info.get('text', '')
+                    text = element.info.get("text", "")
                     if any(ext in text.lower() for ext in video_extensions):
                         video_files_found = True
                         break
-            
+
             # If we don't see video files, we might still be in the folder selection view
             # Try to click on Page-1 folder again if it exists
             if not video_files_found:
                 if not self.navigate_to_page(d):
                     return False
                 time.sleep(2)
-            
+
             # Now we should be in the folder with video files
             # Try to find and long-press the first video file
             text_elements = d(className="android.widget.TextView")
-            
+
             if text_elements:
                 # Look for the first text element that contains a video extension
                 for element in text_elements:
-                    text = element.info.get('text', '')
+                    text = element.info.get("text", "")
                     if any(ext in text.lower() for ext in video_extensions):
                         # Found a video file - store the title in thread-local storage
                         # Use the device serial as a key to make it unique per device
                         device_key = f"{d.serial}_last_video_title"
                         setattr(self, device_key, text)
                         self.log(f"Ã°Å¸â€œÂ¹ Found video: {text}")
-                        
+
                         # Long press it
                         element.long_click(duration=hold_time)
                         return True
-                
+
                 # If no video files found by extension, try pressing the first file-like element
                 for i, element in enumerate(text_elements):
-                    text = element.info.get('text', '')
+                    text = element.info.get("text", "")
                     # Skip elements that look like dates, sizes, or other metadata
-                    if (re.search(r'\d{1,2}/\d{1,2}/\d{2,4}', text) or  # Dates
-                        re.search(r'\d+\.?\d*\s*(MB|KB|GB)', text) or    # File sizes
-                        len(text.strip()) < 2):                          # Very short text
+                    if (
+                        re.search(r"\d{1,2}/\d{1,2}/\d{2,4}", text)  # Dates
+                        or re.search(r"\d+\.?\d*\s*(MB|KB|GB)", text)  # File sizes
+                        or len(text.strip()) < 2
+                    ):  # Very short text
                         continue
 
                     # This looks like a filename - store it in thread-local storage and long press
@@ -851,7 +879,7 @@ class ReelsHandlerMixin:
                     self.log(f"Ã°Å¸â€œÂ¹ Found possible video file: {text}")
                     element.long_click(duration=hold_time)
                     return True
-            
+
             # Fallback to thumbnail view
             image_items = d(className="android.widget.ImageView")
             if image_items:
@@ -863,17 +891,19 @@ class ReelsHandlerMixin:
                             x = (bounds["left"] + bounds["right"]) // 2
                             y = (bounds["top"] + bounds["bottom"]) // 2
                             d.long_click(x, y, duration=hold_time)
-                            self.log(f"Ã°Å¸Å½Â¥ Long-pressed thumbnail #{i+1}")
-                            
+                            self.log(f"Ã°Å¸Å½Â¥ Long-pressed thumbnail #{i + 1}")
+
                             # Try to find associated text for the thumbnail
                             text_elements_nearby = d(className="android.widget.TextView")
                             for text_element in text_elements_nearby:
                                 text_bounds = text_element.info.get("bounds")
                                 if text_bounds:
                                     # Check if this text is near the thumbnail
-                                    if (abs(text_bounds["top"] - bounds["bottom"]) < 50 or
-                                        abs(text_bounds["bottom"] - bounds["top"]) < 50):
-                                        text = text_element.info.get('text', '')
+                                    if (
+                                        abs(text_bounds["top"] - bounds["bottom"]) < 50
+                                        or abs(text_bounds["bottom"] - bounds["top"]) < 50
+                                    ):
+                                        text = text_element.info.get("text", "")
                                         if text and any(ext in text.lower() for ext in video_extensions):
                                             device_key = f"{d.serial}_last_video_title"
                                             setattr(self, device_key, text)
@@ -885,7 +915,7 @@ class ReelsHandlerMixin:
 
             self.log(" No video files found to long-press in Page-1 folder")
             return False
-            
+
         except Exception as e:
             self.log(f" Error holding video: {e}")
             return False
@@ -896,10 +926,9 @@ class ReelsHandlerMixin:
         """
         try:
             menu_hints = ("Share", "Open with", "Delete", "Details", "Open")
-            menu_present = any(
-                d(textContains=hint).exists(timeout=timeout)
-                for hint in menu_hints
-            ) or d(resourceId="android:id/title").exists(timeout=timeout)
+            menu_present = any(d(textContains=hint).exists(timeout=timeout) for hint in menu_hints) or d(
+                resourceId="android:id/title"
+            ).exists(timeout=timeout)
 
             if not menu_present:
                 self.log(f"Long-press did not open expected menu on {name}")
@@ -916,114 +945,114 @@ class ReelsHandlerMixin:
             time.sleep(2)
             # First, check if we're seeing the Facebook permission dialog
             if self.check_and_handle_facebook_permission(d):
-                    return True 
+                return True
             # If not in permission dialog, continue with original logic
             # First, get all available options for debugging
             all_options = []
             for element in d(className="android.widget.TextView"):
-                text = element.info.get('text', '')
+                text = element.info.get("text", "")
                 if text:
                     all_options.append(text)
-            
+
             # Check if we're in the initial context menu (with Send option)
             if "Send" in all_options:
-                
                 # Click the Send option
                 for element in d(className="android.widget.TextView"):
-                    text = element.info.get('text', '')
+                    text = element.info.get("text", "")
                     if text and "Send" in text:
                         element.click()
                         time.sleep(3)  # Wait for Share dialog to appear
                         break
-                
+
                 # Check for permission dialog again after clicking Send
                 if self.check_and_handle_facebook_permission(d):
                     return True
-                
+
                 # Now look for the Share with dialog
                 share_options = []
                 for element in d(className="android.widget.TextView"):
-                    text = element.info.get('text', '')
+                    text = element.info.get("text", "")
                     if text:
                         share_options.append(text)
-                
+
                 # Check if we're now in the Share with dialog
-                if "Share with" in share_options or any("Bluetooth" in opt or "Nearby Share" in opt or "News Feed" in opt for opt in share_options):
-                    
+                if "Share with" in share_options or any(
+                    "Bluetooth" in opt or "Nearby Share" in opt or "News Feed" in opt for opt in share_options
+                ):
                     # Look for Reels option (may need to scroll)
                     reels_option = None
                     for element in d(className="android.widget.TextView"):
-                        text = element.info.get('text', '')
+                        text = element.info.get("text", "")
                         if text and "reels" in text.lower():
                             reels_option = element
                             break
-                    
+
                     # If Reels not found, scroll down
                     if not reels_option:
                         d.swipe(0.5, 0.7, 0.5, 0.3, 0.5)
                         time.sleep(1)
-                        
+
                         # Look for Reels again after scrolling
                         for element in d(className="android.widget.TextView"):
-                            text = element.info.get('text', '')
+                            text = element.info.get("text", "")
                             if text and "reels" in text.lower():
                                 reels_option = element
                                 break
-                    
+
                     # If Reels found, click it
                     if reels_option:
                         reels_option.click()
                         time.sleep(3)
-                        
+
                         # Wait for the "Always/Just once" dialog to appear
                         time.sleep(2)
-                        
+
                         # Look for "Always" or "Just once" options - check all possible UI elements
                         always_found = False
-                        
+
                         # Method 1: Look for buttons with specific text
                         for option_text in ["Always", "Just once"]:
                             for element in d(className="android.widget.Button"):  # Try Button class first
-                                text = element.info.get('text', '')
+                                text = element.info.get("text", "")
                                 if text and option_text.lower() in text.lower():
                                     element.click()
                                     time.sleep(2)
-                                    
+
                                     # Check for permission dialog after clicking Always/Just once
                                     if self.check_and_handle_facebook_permission(d):
                                         return True
-                                    
+
                                     always_found = True
                                     return True
-                        
+
                         # Method 2: Look for TextView with specific text if buttons not found
                         if not always_found:
                             for option_text in ["Always", "Just once"]:
                                 for element in d(className="android.widget.TextView"):
-                                    text = element.info.get('text', '')
+                                    text = element.info.get("text", "")
                                     if text and option_text.lower() in text.lower():
                                         # Check if this looks like a clickable element (reasonable size)
                                         bounds = element.info.get("bounds")
                                         if bounds and (bounds["bottom"] - bounds["top"]) > 40:
                                             element.click()
                                             time.sleep(2)
-                                            
+
                                             # Check for permission dialog after clicking Always/Just once
                                             if self.check_and_handle_facebook_permission(d):
                                                 return True
-                                            
+
                                             self.log(f"Clicked '{option_text}' text view")
                                             always_found = True
                                             return True
-                        
+
                         # Method 3: Look for any clickable element that might be the Always option
                         if not always_found:
                             clickable_elements = d(className="android.widget.Button")
                             if not clickable_elements.exists:
                                 clickable_elements = d(className="android.widget.TextView")
-                            
+
                             for element in clickable_elements:
-                                text = element.info.get('text', '')
+                                text = element.info.get("text", "")
                                 bounds = element.info.get("bounds")
                                 if text and bounds and (bounds["bottom"] - bounds["top"]) > 40:
                                     # Check if it looks like a dialog button (not too wide, reasonable height)
@@ -1032,105 +1061,107 @@ class ReelsHandlerMixin:
                                     if height > 40 and width < 500:  # Reasonable button dimensions
                                         element.click()
                                         time.sleep(2)
-                                        
+
                                         # Check for permission dialog after clicking Always/Just once
                                         if self.check_and_handle_facebook_permission(d):
                                             return True
-                                        
+
                                         self.log(f"Clicked possible option: {text}")
                                         return True
-                        
+
                         self.log("Always/Just once option not found after clicking Reels")
                         return False
-                    
+
                     self.log("Reels option not found even after scrolling")
                     return False
-                
+
                 return True
-            
+
             # Check if we're already in the Share with dialog (directly)
-            elif "Share with" in all_options or any("Bluetooth" in opt or "Nearby Share" in opt or "News Feed" in opt for opt in all_options):
+            elif "Share with" in all_options or any(
+                "Bluetooth" in opt or "Nearby Share" in opt or "News Feed" in opt for opt in all_options
+            ):
                 # Look for Reels option (may need to scroll)
                 reels_option = None
                 for element in d(className="android.widget.TextView"):
-                    text = element.info.get('text', '')
+                    text = element.info.get("text", "")
                     if text and "reels" in text.lower():
                         reels_option = element
                         break
-                
+
                 # If Reels not found, scroll down
                 if not reels_option:
                     d.swipe(0.5, 0.7, 0.5, 0.3, 0.5)
                     time.sleep(1)
-                    
+
                     # Look for Reels again after scrolling
                     for element in d(className="android.widget.TextView"):
-                        text = element.info.get('text', '')
+                        text = element.info.get("text", "")
                         if text and "reels" in text.lower():
                             reels_option = element
                             break
-                
+
                 # If Reels found, click it
                 if reels_option:
                     reels_option.click()
                     time.sleep(3)
-                    
+
                     # Check for permission dialog again after clicking Reels
                     if self.check_and_handle_facebook_permission(d):
                         return True
-                    
+
                     self.log("Clicked Reels option")
-                    
+
                     # Wait for the "Always/Just once" dialog to appear
                     time.sleep(2)
-                    
+
                     # Look for "Always" or "Just once" options
                     always_found = False
-                    
+
                     # Method 1: Look for buttons with specific text
                     for option_text in ["Always", "Just once"]:
                         for element in d(className="android.widget.Button"):
-                            text = element.info.get('text', '')
+                            text = element.info.get("text", "")
                             if text and option_text.lower() in text.lower():
                                 element.click()
                                 time.sleep(2)
-                                
+
                                 # Check for permission dialog after clicking Always/Just once
                                 if self.check_and_handle_facebook_permission(d):
                                     return True
-                                
+
                                 self.log(f"Clicked '{option_text}' button")
                                 always_found = True
                                 return True
-                    
+
                     # Method 2: Look for TextView with specific text if buttons not found
                     if not always_found:
                         for option_text in ["Always", "Just once"]:
                             for element in d(className="android.widget.TextView"):
-                                text = element.info.get('text', '')
+                                text = element.info.get("text", "")
                                 if text and option_text.lower() in text.lower():
                                     # Check if this looks like a clickable element
                                     bounds = element.info.get("bounds")
                                     if bounds and (bounds["bottom"] - bounds["top"]) > 40:
                                         element.click()
                                         time.sleep(2)
-                                        
+
                                         # Check for permission dialog after clicking Always/Just once
                                         if self.check_and_handle_facebook_permission(d):
                                             return True
-                                        
+
                                         self.log(f"Clicked '{option_text}' text view")
                                         always_found = True
                                         return True
-                    
+
                     # Method 3: Look for any clickable element
                     if not always_found:
                         clickable_elements = d(className="android.widget.Button")
                         if not clickable_elements.exists:
                             clickable_elements = d(className="android.widget.TextView")
-                        
+
                         for element in clickable_elements:
-                            text = element.info.get('text', '')
+                            text = element.info.get("text", "")
                             bounds = element.info.get("bounds")
                             if text and bounds and (bounds["bottom"] - bounds["top"]) > 40:
                                 width = bounds["right"] - bounds["left"]
@@ -1138,36 +1169,36 @@ class ReelsHandlerMixin:
                                 if height > 40 and width < 500:
                                     element.click()
                                     time.sleep(2)
-                                    
+
                                     # Check for permission dialog after clicking Always/Just once
                                     if self.check_and_handle_facebook_permission(d):
                                         return True
-                                    
+
                                     self.log(f"Clicked possible option: {text}")
                                     return True
                     return False
                 return False
             # Standard send/share options for other contexts
             send_options = ["send", "share", "gÃ¡Â»Â­i", "chia sÃ¡ÂºÂ»", "send to", "share with"]
-            
+
             for option in send_options:
                 # Look for elements that contain the option text (case insensitive)
                 for element in d(className="android.widget.TextView"):
-                    text = element.info.get('text', '').lower()
+                    text = element.info.get("text", "").lower()
                     if option in text:
                         element.click()
                         time.sleep(2)
-                        
+
                         # Check for permission dialog after clicking send/share option
                         if self.check_and_handle_facebook_permission(d):
                             return True
-                        
+
                         self.log(f"Clicked option: {text}")
                         return True
-            
+
             self.log("Ã¢ÂÅ’ No suitable context option found to click")
             return False
-            
+
         except Exception as e:
             self.log(f"Error clicking context option: {e}")
             return False
@@ -1179,24 +1210,45 @@ class ReelsHandlerMixin:
             facebook_opened = False
             for _ in range(25):
                 current_app = d.app_current()
-                if "facebook" in current_app.get('package', '').lower():
+                if "facebook" in current_app.get("package", "").lower():
                     facebook_opened = True
                     break
                 time.sleep(1)
-            
+
             if not facebook_opened:
                 self.log("Facebook app did not open")
                 return False
 
             # Wait additional time for UI to fully load
             time.sleep(3)
-            
+
             # Candidate button texts in multiple languages
             post_button_texts = [
-                "Next", "Post", "Share", "Share now", "Done", "Publish",
-                "TiÃ¡ÂºÂ¿p", "Ã Â¸â€¢Ã Â¹Ë†Ã Â¸Â­Ã Â¹â€žÃ Â¸â€º", "Siguiente", "Weiter", "Suivant", "Publicar",
-                "Ã¦Â¬Â¡Ã£ÂÂ¸", "Ã«â€¹Â¤Ã¬ÂÅ’", "Ã¤Â¸â€¹Ã¤Â¸â‚¬Ã¦Â­Â¥", "Ã„Â°leri", "Avanti", "PrÃƒÂ³ximo", "Ã¥Ââ€˜Ã¥Â¸Æ’",
-                "Ã„ÂÃ„Æ’ng", "Partager", "Compartir", "Condividi", "Teilen", "Ã¥â€¦Â±Ã¦Å“â€°"
+                "Next",
+                "Post",
+                "Share",
+                "Share now",
+                "Done",
+                "Publish",
+                "TiÃ¡ÂºÂ¿p",
+                "Ã Â¸â€¢Ã Â¹Ë†Ã Â¸Â­Ã Â¹â€žÃ Â¸â€º",
+                "Siguiente",
+                "Weiter",
+                "Suivant",
+                "Publicar",
+                "Ã¦Â¬Â¡Ã£ÂÂ¸",
+                "Ã«â€¹Â¤Ã¬ÂÅ’",
+                "Ã¤Â¸â€¹Ã¤Â¸â‚¬Ã¦Â­Â¥",
+                "Ã„Â°leri",
+                "Avanti",
+                "PrÃƒÂ³ximo",
+                "Ã¥Ââ€˜Ã¥Â¸Æ’",
+                "Ã„ÂÃ„Æ’ng",
+                "Partager",
+                "Compartir",
+                "Condividi",
+                "Teilen",
+                "Ã¥â€¦Â±Ã¦Å“â€°",
             ]
 
             # Try text-based detection first
@@ -1214,36 +1266,40 @@ class ReelsHandlerMixin:
                 d(className="android.widget.Button"),
                 d(className="android.widget.TextView"),
                 d(className="android.widget.ImageView"),  # For icon buttons
-                d(className="android.widget.ImageButton")
+                d(className="android.widget.ImageButton"),
             ]
-            
+
             for selector in button_selectors:
                 try:
                     for button in selector:
                         try:
-                            rid = button.info.get('resourceId', '').lower()
-                            txt = button.info.get('text', '').lower()
-                            content_desc = button.info.get('contentDescription', '').lower()
-                            bounds = button.info.get('bounds', {})
-                            
+                            rid = button.info.get("resourceId", "").lower()
+                            txt = button.info.get("text", "").lower()
+                            content_desc = button.info.get("contentDescription", "").lower()
+                            bounds = button.info.get("bounds", {})
+
                             # Check if this looks like a post button
                             button_keywords = ["next", "post", "share", "publish", "done", "continue", "send"]
                             is_post_button = (
-                                any(kw in rid for kw in button_keywords) or
-                                any(kw in txt for kw in button_keywords) or
-                                any(kw in content_desc for kw in button_keywords)
+                                any(kw in rid for kw in button_keywords)
+                                or any(kw in txt for kw in button_keywords)
+                                or any(kw in content_desc for kw in button_keywords)
                             )
-                            
+
                             # Additional check for button position (usually at bottom right)
                             if is_post_button and bounds:
                                 screen_width = d.info.get("displayWidth", 1080)
                                 screen_height = d.info.get("displayHeight", 1920)
-                                
+
                                 # Check if button is in bottom-right quadrant
-                                if (bounds["right"] > screen_width * 0.6 and 
-                                    bounds["top"] > screen_height * 0.7):
+                                if (
+                                    bounds["right"] > screen_width * 0.6
+                                    and bounds["top"] > screen_height * 0.7
+                                ):
                                     button.click()
-                                    self.log(f"Ã¢Å“â€¦ Clicked bottom-right button: {txt or content_desc or rid}")
+                                    self.log(
+                                        f"Ã¢Å“â€¦ Clicked bottom-right button: {txt or content_desc or rid}"
+                                    )
                                     time.sleep(2)
                                     return True
                         except:
@@ -1259,9 +1315,10 @@ class ReelsHandlerMixin:
                     try:
                         # Check if element has a blue background (common for Facebook buttons)
                         # This is a heuristic approach
-                        bounds = element.info.get('bounds', {})
-                        if bounds and (bounds["bottom"] - bounds["top"] > 40 and
-                                    bounds["right"] - bounds["left"] > 100):
+                        bounds = element.info.get("bounds", {})
+                        if bounds and (
+                            bounds["bottom"] - bounds["top"] > 40 and bounds["right"] - bounds["left"] > 100
+                        ):
                             # Check if it's positioned at the bottom
                             screen_height = d.info.get("displayHeight", 1920)
                             if bounds["top"] > screen_height * 0.7:
@@ -1277,14 +1334,14 @@ class ReelsHandlerMixin:
             # Final fallback: try clicking at common post button positions
             screen_width = d.info.get("displayWidth", 1080)
             screen_height = d.info.get("displayHeight", 1920)
-            
+
             # Common positions for post buttons (bottom right area)
             click_positions = [
                 (screen_width * 0.9, screen_height * 0.95),  # Bottom right corner
                 (screen_width * 0.85, screen_height * 0.93),  # Slightly left of corner
-                (screen_width * 0.95, screen_height * 0.9),   # Right side
+                (screen_width * 0.95, screen_height * 0.9),  # Right side
             ]
-            
+
             for x, y in click_positions:
                 try:
                     d.click(x, y)
@@ -1311,7 +1368,7 @@ class ReelsHandlerMixin:
                 "com.google.android.documentsui",  # Android's Files app
                 "com.cyanogenmod.filemanager",
                 "com.estrongs.android.pop",  # ES File Explorer
-                "com.mediatek.filemanager"  # MediaTek file manager
+                "com.mediatek.filemanager",  # MediaTek file manager
             ]
             # Try each package name
             for pkg in possible_packages:
@@ -1323,7 +1380,7 @@ class ReelsHandlerMixin:
                         return True
                 except:
                     continue
-                      
+
         except Exception as e:
             self.log(f"Error opening File Manager: {e}")
 
@@ -1360,74 +1417,62 @@ class ReelsHandlerMixin:
                 "allow facebook.*access.*photos.*media.*files",
                 "facebook.*permission.*access.*media",
                 "allow.*facebook.*access.*storage",
-                "facebook.*access.*photos"
+                "facebook.*access.*photos",
             ]
-            
-            allow_button_patterns = [
-                "allow",
-                "always allow",
-                "yes",
-                "agree",
-                "accept"
-            ]
-            
-            deny_button_patterns = [
-                "deny",
-                "don't allow",
-                "never",
-                "no",
-                "reject"
-            ]
-            
+
+            allow_button_patterns = ["allow", "always allow", "yes", "agree", "accept"]
+
+            deny_button_patterns = ["deny", "don't allow", "never", "no", "reject"]
+
             # Get all text elements to check for the permission dialog
             all_texts = []
             for element in d(className="android.widget.TextView"):
-                text = element.info.get('text', '')
+                text = element.info.get("text", "")
                 if text:
                     all_texts.append(text.lower())
-            
+
             # Check if we're in a Facebook permission dialog using flexible matching
             is_permission_dialog = False
             for pattern in permission_patterns:
                 if any(re.search(pattern, text, re.IGNORECASE) for text in all_texts):
                     is_permission_dialog = True
                     break
-            
+
             if is_permission_dialog:
                 self.log("Found Facebook permission dialog - looking for ALLOW button")
-                
+
                 # Look for the ALLOW button and click it - check multiple element types
                 elements_to_check = []
-                
+
                 # First check buttons
                 for element in d(className="android.widget.Button"):
                     elements_to_check.append(element)
-                
+
                 # Then check text views that might be clickable
                 for element in d(className="android.widget.TextView"):
                     bounds = element.info.get("bounds")
                     if bounds and (bounds["bottom"] - bounds["top"]) > 40:  # Reasonable size for a button
                         elements_to_check.append(element)
-                
+
                 # Look for ALLOW button with flexible matching
                 for element in elements_to_check:
-                    text = element.info.get('text', '').lower()
+                    text = element.info.get("text", "").lower()
                     bounds = element.info.get("bounds")
-                    
+
                     if not text or not bounds:
                         continue
-                    
+
                     # Check if this looks like an ALLOW button
                     is_allow_button = any(pattern in text for pattern in allow_button_patterns)
                     is_deny_button = any(pattern in text for pattern in deny_button_patterns)
-                    
+
                     # Prioritize clicking ALLOW buttons
                     if is_allow_button:
                         try:
                             # Make sure it's clickable (reasonable size)
                             width = bounds["right"] - bounds["left"]
                             height = bounds["bottom"] - bounds["top"]
-                            
+
                             if height > 30 and width > 50:  # Reasonable button dimensions
                                 element.click()
                                 time.sleep(3)
@@ -1437,17 +1482,17 @@ class ReelsHandlerMixin:
                         except Exception as e:
                             self.log(f"Error clicking ALLOW button: {e}")
                             continue
-                
+
                 # If no ALLOW button found by text, try to find by position
                 # (Usually ALLOW is on the right side, DENY on the left)
                 right_side_elements = []
                 screen_width = d.info.get("displayWidth", 1080)  # Default to common width
-                
+
                 for element in elements_to_check:
                     bounds = element.info.get("bounds")
                     if bounds and bounds["right"] > screen_width * 0.6:  # Right side of screen
                         right_side_elements.append(element)
-                
+
                 # Try clicking elements on the right side
                 for element in right_side_elements:
                     try:
@@ -1461,7 +1506,7 @@ class ReelsHandlerMixin:
                     except Exception as e:
                         self.log(f"Error clicking right-side element: {e}")
                         continue
-                
+
                 self.log("Could not find ALLOW button in permission dialog")
                 return False
             return False
@@ -1471,14 +1516,14 @@ class ReelsHandlerMixin:
 
     def click_facebook_menu(self, d, timeout=10):
         """Click the Menu tab in Facebook's bottom nav bar.
-        
+
         Tries multiple strategies in order of reliability.
         """
         # Make sure tab bar is visible
         time.sleep(0.4)
         d.swipe_ext("down", scale=0.75, duration=0.08)
         time.sleep(0.5)
-        
+
         # Strategy 1: selector-based
         try:
             xpath = '//*[@content-desc="Menu"]'
@@ -1490,7 +1535,7 @@ class ReelsHandlerMixin:
                     return True
         except Exception as e:
             self.log(f"[click_facebook_menu] Selector strategy failed: {e}")
-        
+
         # Strategy 2: XPath with index [6]
         try:
             xpath = '(//android.view.View[@resource-id="com.facebook.katana:id/(name removed)"])[6]'
@@ -1502,7 +1547,7 @@ class ReelsHandlerMixin:
                     return True
         except Exception as e:
             print(f"[click_facebook_menu] XPath [6] failed: {e}")
-        
+
         # Strategy 3: try other indices (tab order changes across versions)
         for idx in [5, 7, 4, 3]:
             try:
@@ -1516,7 +1561,7 @@ class ReelsHandlerMixin:
                         return True
             except Exception:
                 continue
-        
+
         # Strategy 4: tap the rightmost tab by coordinates
         try:
             info = d.info
@@ -1531,10 +1576,9 @@ class ReelsHandlerMixin:
                 return True
         except Exception as e:
             print(f"[click_facebook_menu] Coordinate tap failed: {e}")
-        
+
         print("[click_facebook_menu] All strategies failed")
         return False
-
 
     def _verify_menu_opened(self, d, timeout=3):
         """
@@ -1559,7 +1603,6 @@ class ReelsHandlerMixin:
             {"text": "Marketplace"},
             {"text": "Groups"},
             {"text": "See more"},
-
             # Extra fallback indicators
             {"textMatches": r"(?i)your shortcuts"},
             {"textMatches": r"(?i)pages"},
@@ -1568,7 +1611,6 @@ class ReelsHandlerMixin:
             {"textMatches": r"(?i)marketplace"},
             {"textMatches": r"(?i)groups"},
             {"textMatches": r"(?i)see\s*more"},
-
             # Sometimes Facebook uses content-desc
             {"descriptionContains": "Pages"},
             {"descriptionContains": "Saved"},
@@ -1745,7 +1787,7 @@ class ReelsHandlerMixin:
                 d(text="Page 1").click()
                 time.sleep(2)
                 return True
-            
+
             return False
         except Exception as e:
             self.log(f"Error clicking Page-1: {e}")
@@ -1761,9 +1803,7 @@ class ReelsHandlerMixin:
                 instance_name = None
 
             account_name = self._get_dashboard_account_name(instance_name)
-            xpaths = [
-                '//android.widget.Button[contains(@content-desc,"switch into your profile")]'
-            ]
+            xpaths = ['//android.widget.Button[contains(@content-desc,"switch into your profile")]']
 
             if account_name:
                 switch_desc = self._xpath_literal(f"{account_name}, switch into your profile")
@@ -1811,7 +1851,7 @@ class ReelsHandlerMixin:
         except Exception as e:
             self.log(f"Failed to tap account profile: {e}")
             return False
-        
+
     def detect_facebook_page(self, d):
         """
         Detect Facebook Pages from Facebook account/page switcher.
@@ -2033,7 +2073,9 @@ class ReelsHandlerMixin:
 
             account["pages"] = existing_pages
             path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-            self.log(f"Updated dashboard config for {instance_name}: account '{account_name}', {len(page_names)} page(s)")
+            self.log(
+                f"Updated dashboard config for {instance_name}: account '{account_name}', {len(page_names)} page(s)"
+            )
             return True
         except Exception as exc:
             self.log(f"Failed to update dashboard config for {instance_name}: {exc}")
@@ -2055,6 +2097,7 @@ class ReelsHandlerMixin:
             "caption_template": "",
             "source_folder": "",
         }
+
     def _open_file_manager_with_retry(self, d, attempts=2, delay=2):
         """Open file manager with bounded retries."""
         for attempt in range(1, attempts + 1):
@@ -2119,4 +2162,3 @@ class ReelsHandlerMixin:
         except Exception as e:
             self.log(f"Failed to clear recent apps: {e}")
             return False
-

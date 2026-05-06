@@ -4,6 +4,8 @@ import xml.etree.ElementTree as ET
 import re
 import random
 from core.task_base import BaseTaskHandler, U2_AVAILABLE, u2
+
+
 class TestFeatureTaskHandler(BaseTaskHandler):
     """Simple test task: start one LD, wait until ready, and open Facebook."""
 
@@ -68,8 +70,10 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                 return False
 
             # kwargs for potential future use:
-            ld_page = 2 #default page index to click for LD selection in case of multiple pages, can be overridden by kwargs if needed
-            video_page = 2 #default page index to click for video upload test, can be overridden by kwargs if needed
+            ld_page = 2  # default page index to click for LD selection in case of multiple pages, can be overridden by kwargs if needed
+            video_page = (
+                2  # default page index to click for video upload test, can be overridden by kwargs if needed
+            )
 
             time.sleep(5)
             if not self.click_facebook_menu(d):
@@ -82,16 +86,13 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                     progress=0,
                 )
                 return False
-            
+
             time.sleep(4)
             self.click_profile_dropdown(d)
 
             time.sleep(4)
             try:
-                page = self.get_name_pages_by_bounds(d, [
-                    "[168,702][336,743]",
-                    "[168,851][328,892]"
-                    ])
+                page = self.get_name_pages_by_bounds(d, ["[168,702][336,743]", "[168,851][328,892]"])
             except Exception as e:
                 self.log(f"Error occurred while detecting page names on {name}: {e}")
                 return False
@@ -112,7 +113,7 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                 return False
 
             time.sleep(15)
-            # Try multiple times to open file manager, as it can be flaky on some devices 
+            # Try multiple times to open file manager, as it can be flaky on some devices
             if not self._open_file_manager_with_retry(d):
                 self.log(f"Failed to open File Manager on {name}")
                 self.push_runtime_state(
@@ -123,7 +124,7 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                     progress=0,
                 )
                 return False
-            
+
             time.sleep(5)
             if not self.navigate_to_pictures(d):
                 self.log(f"Failed to navigate to Pictures in File Manager on {name}")
@@ -135,7 +136,7 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                     progress=0,
                 )
                 return False
- 
+
             time.sleep(5)
             if not self.click_folder_post_page(d, index=f_index):
                 self.log(f"Failed to click folder post page on {name}")
@@ -147,7 +148,7 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                     progress=0,
                 )
                 return False
-            
+
             time.sleep(5)
             if not self.hold_on_video(d):
                 self.log(f"Failed to long-press video file on {name}")
@@ -159,7 +160,7 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                     progress=0,
                 )
                 return False
-            
+
             time.sleep(5)
             if not self.handle_context_menu_after_long_press(d, name):
                 self.log(f"Failed to handle context menu after long-press on {name}")
@@ -171,10 +172,10 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                     progress=0,
                 )
                 return False
-            
+
             time.sleep(5)
             self.check_and_handle_facebook_permission(d)
-                
+
             time.sleep(5)
             if not self.facebook_first_next(d):
                 self.log("Failed to click first next button after permission dialog")
@@ -194,19 +195,19 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                 self.log(f"Failed to delete video file after test on {name}")
                 try:
                     if not self._open_file_manager_with_retry(d, attempts=2, delay=1):
-                            self.log(f"âŒ Failed to open file manager on {name}")
-                            time.sleep(1)
-                    if not self.delete_video(d):   
+                        self.log(f"âŒ Failed to open file manager on {name}")
+                        time.sleep(1)
+                    if not self.delete_video(d):
                         self.log("âš ï¸ Failed to delete video, continuing")
                 except Exception as e:
                     self.log(f"Error pushing runtime state for video deletion failure on {name}: {e}")
                     self.push_runtime_state(
-                    name,
-                    phase="task",
-                    state="Attention",
-                    task="could not delete video file",
-                    progress=0,
-                )    
+                        name,
+                        phase="task",
+                        state="Attention",
+                        task="could not delete video file",
+                        progress=0,
+                    )
                 return False
 
             return True
@@ -214,9 +215,8 @@ class TestFeatureTaskHandler(BaseTaskHandler):
             self.log(f"Test feature failed on {name}: {exc}")
             return False
 
+    # The following methods are helper functions for interacting with the Facebook app's UI. They include strategies for clicking the menu button, tapping labels that may require expanding and scrolling, detecting page names based on screen coordinates, and clicking on pages using XPath or bounds as a fallback. These methods use uiautomator2 to interact with the Android UI and include logging and error handling to improve robustness across different Facebook layouts and versions.
 
-# The following methods are helper functions for interacting with the Facebook app's UI. They include strategies for clicking the menu button, tapping labels that may require expanding and scrolling, detecting page names based on screen coordinates, and clicking on pages using XPath or bounds as a fallback. These methods use uiautomator2 to interact with the Android UI and include logging and error handling to improve robustness across different Facebook layouts and versions.
-    
     # Click Facebook menu with multiple strategies across older and newer layouts.
     def click_facebook_menu(self, d, timeout=10):
 
@@ -225,10 +225,8 @@ class TestFeatureTaskHandler(BaseTaskHandler):
             {"descriptionContains": "menu"},
             {"descriptionContains": "Menu"},
             {"descriptionContains": "More"},
-
             # Sometimes Facebook uses resource-id
             {"resourceIdMatches": ".*menu.*"},
-
             # Fallback by class (top-left clickable button)
             {"className": "android.widget.ImageView"},
             {"className": "android.widget.Button"},
@@ -258,7 +256,7 @@ class TestFeatureTaskHandler(BaseTaskHandler):
         self.log("Menu button not found")
         self.log("skipping Facebook menu click")
         return False
-    
+
     # Detect presence of page names in the list by looking for common patterns in the text of visible items.
     def click_profile_dropdown(self, d):
         x, y = 544, 146
@@ -277,10 +275,12 @@ class TestFeatureTaskHandler(BaseTaskHandler):
         if not m:
             return None
         return tuple(map(int, m.groups()))
+
     @staticmethod
     def _center_of(bounds):
         x1, y1, x2, y2 = bounds
         return ((x1 + x2) // 2, (y1 + y2) // 2)
+
     @staticmethod
     def _point_inside(px, py, bounds):
         x1, y1, x2, y2 = bounds
@@ -388,6 +388,7 @@ class TestFeatureTaskHandler(BaseTaskHandler):
             candidate["label"]
             for candidate in self._managed_page_candidates_from_hierarchy(xml, screen_height=screen_height)
         ]
+
     # This method tries to find the text of items at specific screen locations by parsing the UI hierarchy and matching bounds. It first looks for any text whose bounds contain the center of the target area, and if not found, it looks for the text with the largest overlapping area. This is a heuristic to detect page names in the Facebook profile dropdown.
     def get_name_pages_by_bounds(self, d, bounds_list):
         """
@@ -415,10 +416,12 @@ class TestFeatureTaskHandler(BaseTaskHandler):
             parsed = self._parse_bounds(bounds_text)
 
             if text and parsed:
-                text_nodes.append({
-                    "text": text,
-                    "bounds": parsed,
-                })
+                text_nodes.append(
+                    {
+                        "text": text,
+                        "bounds": parsed,
+                    }
+                )
 
         result = []
 
@@ -535,6 +538,7 @@ class TestFeatureTaskHandler(BaseTaskHandler):
             if attempt < attempts:
                 time.sleep(delay)
         return False
+
     def open_file_manager(self, d):
         """Open File Manager using multiple approaches"""
         try:
@@ -545,7 +549,7 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                 "com.google.android.documentsui",  # Android's Files app
                 "com.cyanogenmod.filemanager",
                 "com.estrongs.android.pop",  # ES File Explorer
-                "com.mediatek.filemanager"  # MediaTek file manager
+                "com.mediatek.filemanager",  # MediaTek file manager
             ]
             # Try each package name
             for pkg in possible_packages:
@@ -557,13 +561,12 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                         return True
                 except:
                     continue
-                      
+
         except Exception as e:
             self.log(f"Error opening File Manager: {e}")
 
         self.log("Failed to open File Manager")
         return False
-    
 
     # This method tries to navigate to the Pictures folder in the file manager by first looking for a text element with "Pictures". If it's not immediately visible, it attempts to scroll and look again. It includes logging and error handling to improve robustness across different file manager layouts.
     def navigate_to_pictures(self, d):
@@ -602,18 +605,18 @@ class TestFeatureTaskHandler(BaseTaskHandler):
         """Long-press top video in file manager after navigating to the Page-1 folder"""
         try:
             time.sleep(2)
-            
+
             # First, make sure we're in the Page-1 folder by checking if we can see video files
             # If we see folder names instead, we need to click into the Page-1 folder first
-            video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv']
-            
+            video_extensions = [".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv"]
+
             # Check if we're already in a folder with video files
             text_elements = d(className="android.widget.TextView")
             video_files_found = False
-            
+
             if text_elements:
                 for element in text_elements:
-                    text = element.info.get('text', '')
+                    text = element.info.get("text", "")
                     if any(ext in text.lower() for ext in video_extensions):
                         video_files_found = True
                         break
@@ -621,29 +624,31 @@ class TestFeatureTaskHandler(BaseTaskHandler):
             # Now we should be in the folder with video files
             # Try to find and long-press the first video file
             text_elements = d(className="android.widget.TextView")
-            
+
             if text_elements:
                 # Look for the first text element that contains a video extension
                 for element in text_elements:
-                    text = element.info.get('text', '')
+                    text = element.info.get("text", "")
                     if any(ext in text.lower() for ext in video_extensions):
                         # Found a video file - store the title in thread-local storage
                         # Use the device serial as a key to make it unique per device
                         device_key = f"{d.serial}_last_video_title"
                         setattr(self, device_key, text)
                         self.log(f"ðŸ“¹ Found video: {text}")
-                        
+
                         # Long press it
                         element.long_click(duration=hold_time)
                         return True
-                
+
                 # If no video files found by extension, try pressing the first file-like element
                 for i, element in enumerate(text_elements):
-                    text = element.info.get('text', '')
+                    text = element.info.get("text", "")
                     # Skip elements that look like dates, sizes, or other metadata
-                    if (re.search(r'\d{1,2}/\d{1,2}/\d{2,4}', text) or  # Dates
-                        re.search(r'\d+\.?\d*\s*(MB|KB|GB)', text) or    # File sizes
-                        len(text.strip()) < 2):                          # Very short text
+                    if (
+                        re.search(r"\d{1,2}/\d{1,2}/\d{2,4}", text)  # Dates
+                        or re.search(r"\d+\.?\d*\s*(MB|KB|GB)", text)  # File sizes
+                        or len(text.strip()) < 2
+                    ):  # Very short text
                         continue
 
                     # This looks like a filename - store it in thread-local storage and long press
@@ -652,7 +657,7 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                     self.log(f"ðŸ“¹ Found possible video file: {text}")
                     element.long_click(duration=hold_time)
                     return True
-            
+
             # Fallback to thumbnail view
             image_items = d(className="android.widget.ImageView")
             if image_items:
@@ -664,17 +669,19 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                             x = (bounds["left"] + bounds["right"]) // 2
                             y = (bounds["top"] + bounds["bottom"]) // 2
                             d.long_click(x, y, duration=hold_time)
-                            self.log(f"ðŸŽ¥ Long-pressed thumbnail #{i+1}")
-                            
+                            self.log(f"ðŸŽ¥ Long-pressed thumbnail #{i + 1}")
+
                             # Try to find associated text for the thumbnail
                             text_elements_nearby = d(className="android.widget.TextView")
                             for text_element in text_elements_nearby:
                                 text_bounds = text_element.info.get("bounds")
                                 if text_bounds:
                                     # Check if this text is near the thumbnail
-                                    if (abs(text_bounds["top"] - bounds["bottom"]) < 50 or
-                                        abs(text_bounds["bottom"] - bounds["top"]) < 50):
-                                        text = text_element.info.get('text', '')
+                                    if (
+                                        abs(text_bounds["top"] - bounds["bottom"]) < 50
+                                        or abs(text_bounds["bottom"] - bounds["top"]) < 50
+                                    ):
+                                        text = text_element.info.get("text", "")
                                         if text and any(ext in text.lower() for ext in video_extensions):
                                             device_key = f"{d.serial}_last_video_title"
                                             setattr(self, device_key, text)
@@ -686,11 +693,11 @@ class TestFeatureTaskHandler(BaseTaskHandler):
 
             self.log(" No video files found to long-press in Page-1 folder")
             return False
-            
+
         except Exception as e:
             self.log(f" Error holding video: {e}")
             return False
-        
+
     # After long-pressing a video file, this method checks if the expected context menu is visible by looking for common menu options. If the menu is present, it tries to click on a valid option (e.g., share to Facebook) using another helper method. It includes logging and error handling to improve robustness across different file manager layouts and context menu designs.
     def handle_context_menu_after_long_press(self, d, name, timeout=0.8):
         """
@@ -698,10 +705,9 @@ class TestFeatureTaskHandler(BaseTaskHandler):
         """
         try:
             menu_hints = ("Share", "Open with", "Delete", "Details", "Open")
-            menu_present = any(
-                d(textContains=hint).exists(timeout=timeout)
-                for hint in menu_hints
-            ) or d(resourceId="android:id/title").exists(timeout=timeout)
+            menu_present = any(d(textContains=hint).exists(timeout=timeout) for hint in menu_hints) or d(
+                resourceId="android:id/title"
+            ).exists(timeout=timeout)
 
             if not menu_present:
                 self.log(f"Long-press did not open expected menu on {name}")
@@ -710,8 +716,8 @@ class TestFeatureTaskHandler(BaseTaskHandler):
             return self.click_context_option(d)
         except Exception as e:
             self.log(f"Error handling context menu on {name}: {e}")
-            return False                
-    
+            return False
+
     # This method tries to click on a context menu option that would allow sharing the video to Facebook. It first checks if we're seeing a Facebook permission dialog and handles it if present. Then it looks for the "Send" option in the context menu, clicks it, and checks for the "Share with" dialog. If found, it looks for the "Reels" option, clicks it, and then looks for the "Always/Just once" dialog to confirm the share action. It includes multiple strategies for finding and clicking these options, as well as logging and error handling to improve robustness across different Android versions and Facebook layouts.
     def click_context_option(self, d):
         """Click on a context menu option that might be a send/share button"""
@@ -719,114 +725,114 @@ class TestFeatureTaskHandler(BaseTaskHandler):
             time.sleep(2)
             # First, check if we're seeing the Facebook permission dialog
             if self.check_and_handle_facebook_permission(d):
-                    return True 
+                return True
             # If not in permission dialog, continue with original logic
             # First, get all available options for debugging
             all_options = []
             for element in d(className="android.widget.TextView"):
-                text = element.info.get('text', '')
+                text = element.info.get("text", "")
                 if text:
                     all_options.append(text)
-            
+
             # Check if we're in the initial context menu (with Send option)
             if "Send" in all_options:
-                
                 # Click the Send option
                 for element in d(className="android.widget.TextView"):
-                    text = element.info.get('text', '')
+                    text = element.info.get("text", "")
                     if text and "Send" in text:
                         element.click()
                         time.sleep(3)  # Wait for Share dialog to appear
                         break
-                
+
                 # Check for permission dialog again after clicking Send
                 if self.check_and_handle_facebook_permission(d):
                     return True
-                
+
                 # Now look for the Share with dialog
                 share_options = []
                 for element in d(className="android.widget.TextView"):
-                    text = element.info.get('text', '')
+                    text = element.info.get("text", "")
                     if text:
                         share_options.append(text)
-                
+
                 # Check if we're now in the Share with dialog
-                if "Share with" in share_options or any("Bluetooth" in opt or "Nearby Share" in opt or "News Feed" in opt for opt in share_options):
-                    
+                if "Share with" in share_options or any(
+                    "Bluetooth" in opt or "Nearby Share" in opt or "News Feed" in opt for opt in share_options
+                ):
                     # Look for Reels option (may need to scroll)
                     reels_option = None
                     for element in d(className="android.widget.TextView"):
-                        text = element.info.get('text', '')
+                        text = element.info.get("text", "")
                         if text and "reels" in text.lower():
                             reels_option = element
                             break
-                    
+
                     # If Reels not found, scroll down
                     if not reels_option:
                         d.swipe(0.5, 0.7, 0.5, 0.3, 0.5)
                         time.sleep(1)
-                        
+
                         # Look for Reels again after scrolling
                         for element in d(className="android.widget.TextView"):
-                            text = element.info.get('text', '')
+                            text = element.info.get("text", "")
                             if text and "reels" in text.lower():
                                 reels_option = element
                                 break
-                    
+
                     # If Reels found, click it
                     if reels_option:
                         reels_option.click()
                         time.sleep(3)
-                        
+
                         # Wait for the "Always/Just once" dialog to appear
                         time.sleep(2)
-                        
+
                         # Look for "Always" or "Just once" options - check all possible UI elements
                         always_found = False
-                        
+
                         # Method 1: Look for buttons with specific text
                         for option_text in ["Always", "Just once"]:
                             for element in d(className="android.widget.Button"):  # Try Button class first
-                                text = element.info.get('text', '')
+                                text = element.info.get("text", "")
                                 if text and option_text.lower() in text.lower():
                                     element.click()
                                     time.sleep(2)
-                                    
+
                                     # Check for permission dialog after clicking Always/Just once
                                     if self.check_and_handle_facebook_permission(d):
                                         return True
-                                    
+
                                     always_found = True
                                     return True
-                        
+
                         # Method 2: Look for TextView with specific text if buttons not found
                         if not always_found:
                             for option_text in ["Always", "Just once"]:
                                 for element in d(className="android.widget.TextView"):
-                                    text = element.info.get('text', '')
+                                    text = element.info.get("text", "")
                                     if text and option_text.lower() in text.lower():
                                         # Check if this looks like a clickable element (reasonable size)
                                         bounds = element.info.get("bounds")
                                         if bounds and (bounds["bottom"] - bounds["top"]) > 40:
                                             element.click()
                                             time.sleep(2)
-                                            
+
                                             # Check for permission dialog after clicking Always/Just once
                                             if self.check_and_handle_facebook_permission(d):
                                                 return True
-                                            
+
                                             self.log(f"Clicked '{option_text}' text view")
                                             always_found = True
                                             return True
-                        
+
                         # Method 3: Look for any clickable element that might be the Always option
                         if not always_found:
                             clickable_elements = d(className="android.widget.Button")
                             if not clickable_elements.exists:
                                 clickable_elements = d(className="android.widget.TextView")
-                            
+
                             for element in clickable_elements:
-                                text = element.info.get('text', '')
+                                text = element.info.get("text", "")
                                 bounds = element.info.get("bounds")
                                 if text and bounds and (bounds["bottom"] - bounds["top"]) > 40:
                                     # Check if it looks like a dialog button (not too wide, reasonable height)
@@ -835,105 +841,107 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                                     if height > 40 and width < 500:  # Reasonable button dimensions
                                         element.click()
                                         time.sleep(2)
-                                        
+
                                         # Check for permission dialog after clicking Always/Just once
                                         if self.check_and_handle_facebook_permission(d):
                                             return True
-                                        
+
                                         self.log(f"Clicked possible option: {text}")
                                         return True
-                        
+
                         self.log("Always/Just once option not found after clicking Reels")
                         return False
-                    
+
                     self.log("Reels option not found even after scrolling")
                     return False
-                
+
                 return True
-            
+
             # Check if we're already in the Share with dialog (directly)
-            elif "Share with" in all_options or any("Bluetooth" in opt or "Nearby Share" in opt or "News Feed" in opt for opt in all_options):
+            elif "Share with" in all_options or any(
+                "Bluetooth" in opt or "Nearby Share" in opt or "News Feed" in opt for opt in all_options
+            ):
                 # Look for Reels option (may need to scroll)
                 reels_option = None
                 for element in d(className="android.widget.TextView"):
-                    text = element.info.get('text', '')
+                    text = element.info.get("text", "")
                     if text and "reels" in text.lower():
                         reels_option = element
                         break
-                
+
                 # If Reels not found, scroll down
                 if not reels_option:
                     d.swipe(0.5, 0.7, 0.5, 0.3, 0.5)
                     time.sleep(1)
-                    
+
                     # Look for Reels again after scrolling
                     for element in d(className="android.widget.TextView"):
-                        text = element.info.get('text', '')
+                        text = element.info.get("text", "")
                         if text and "reels" in text.lower():
                             reels_option = element
                             break
-                
+
                 # If Reels found, click it
                 if reels_option:
                     reels_option.click()
                     time.sleep(3)
-                    
+
                     # Check for permission dialog again after clicking Reels
                     if self.check_and_handle_facebook_permission(d):
                         return True
-                    
+
                     self.log("Clicked Reels option")
-                    
+
                     # Wait for the "Always/Just once" dialog to appear
                     time.sleep(2)
-                    
+
                     # Look for "Always" or "Just once" options
                     always_found = False
-                    
+
                     # Method 1: Look for buttons with specific text
                     for option_text in ["Always", "Just once"]:
                         for element in d(className="android.widget.Button"):
-                            text = element.info.get('text', '')
+                            text = element.info.get("text", "")
                             if text and option_text.lower() in text.lower():
                                 element.click()
                                 time.sleep(2)
-                                
+
                                 # Check for permission dialog after clicking Always/Just once
                                 if self.check_and_handle_facebook_permission(d):
                                     return True
-                                
+
                                 self.log(f"Clicked '{option_text}' button")
                                 always_found = True
                                 return True
-                    
+
                     # Method 2: Look for TextView with specific text if buttons not found
                     if not always_found:
                         for option_text in ["Always", "Just once"]:
                             for element in d(className="android.widget.TextView"):
-                                text = element.info.get('text', '')
+                                text = element.info.get("text", "")
                                 if text and option_text.lower() in text.lower():
                                     # Check if this looks like a clickable element
                                     bounds = element.info.get("bounds")
                                     if bounds and (bounds["bottom"] - bounds["top"]) > 40:
                                         element.click()
                                         time.sleep(2)
-                                        
+
                                         # Check for permission dialog after clicking Always/Just once
                                         if self.check_and_handle_facebook_permission(d):
                                             return True
-                                        
+
                                         self.log(f"Clicked '{option_text}' text view")
                                         always_found = True
                                         return True
-                    
+
                     # Method 3: Look for any clickable element
                     if not always_found:
                         clickable_elements = d(className="android.widget.Button")
                         if not clickable_elements.exists:
                             clickable_elements = d(className="android.widget.TextView")
-                        
+
                         for element in clickable_elements:
-                            text = element.info.get('text', '')
+                            text = element.info.get("text", "")
                             bounds = element.info.get("bounds")
                             if text and bounds and (bounds["bottom"] - bounds["top"]) > 40:
                                 width = bounds["right"] - bounds["left"]
@@ -941,41 +949,41 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                                 if height > 40 and width < 500:
                                     element.click()
                                     time.sleep(2)
-                                    
+
                                     # Check for permission dialog after clicking Always/Just once
                                     if self.check_and_handle_facebook_permission(d):
                                         return True
-                                    
+
                                     self.log(f"Clicked possible option: {text}")
                                     return True
                     return False
                 return False
             # Standard send/share options for other contexts
             send_options = ["send", "share", "gá»­i", "chia sáº»", "send to", "share with"]
-            
+
             for option in send_options:
                 # Look for elements that contain the option text (case insensitive)
                 for element in d(className="android.widget.TextView"):
-                    text = element.info.get('text', '').lower()
+                    text = element.info.get("text", "").lower()
                     if option in text:
                         element.click()
                         time.sleep(2)
-                        
+
                         # Check for permission dialog after clicking send/share option
                         if self.check_and_handle_facebook_permission(d):
                             return True
-                        
+
                         self.log(f"Clicked option: {text}")
                         return True
-            
+
             self.log("âŒ No suitable context option found to click")
             return False
-            
+
         except Exception as e:
             self.log(f"Error clicking context option: {e}")
             return False
-        
-    #handle Facebook permission dialog if it appears, with flexible text matching and multiple strategies for finding the ALLOW button. This is important because Facebook's permission dialogs can vary widely in text and layout across different versions and languages, so we need a robust method to detect and interact with them. 
+
+    # handle Facebook permission dialog if it appears, with flexible text matching and multiple strategies for finding the ALLOW button. This is important because Facebook's permission dialogs can vary widely in text and layout across different versions and languages, so we need a robust method to detect and interact with them.
     def check_and_handle_facebook_permission(self, d):
         """Check for Facebook permission dialog, click ALLOW if found, and continue flow."""
         try:
@@ -984,74 +992,62 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                 "allow facebook.*access.*photos.*media.*files",
                 "facebook.*permission.*access.*media",
                 "allow.*facebook.*access.*storage",
-                "facebook.*access.*photos"
+                "facebook.*access.*photos",
             ]
-            
-            allow_button_patterns = [
-                "allow",
-                "always allow",
-                "yes",
-                "agree",
-                "accept"
-            ]
-            
-            deny_button_patterns = [
-                "deny",
-                "don't allow",
-                "never",
-                "no",
-                "reject"
-            ]
-            
+
+            allow_button_patterns = ["allow", "always allow", "yes", "agree", "accept"]
+
+            deny_button_patterns = ["deny", "don't allow", "never", "no", "reject"]
+
             # Get all text elements to check for the permission dialog
             all_texts = []
             for element in d(className="android.widget.TextView"):
-                text = element.info.get('text', '')
+                text = element.info.get("text", "")
                 if text:
                     all_texts.append(text.lower())
-            
+
             # Check if we're in a Facebook permission dialog using flexible matching
             is_permission_dialog = False
             for pattern in permission_patterns:
                 if any(re.search(pattern, text, re.IGNORECASE) for text in all_texts):
                     is_permission_dialog = True
                     break
-            
+
             if is_permission_dialog:
                 self.log("Found Facebook permission dialog - looking for ALLOW button")
-                
+
                 # Look for the ALLOW button and click it - check multiple element types
                 elements_to_check = []
-                
+
                 # First check buttons
                 for element in d(className="android.widget.Button"):
                     elements_to_check.append(element)
-                
+
                 # Then check text views that might be clickable
                 for element in d(className="android.widget.TextView"):
                     bounds = element.info.get("bounds")
                     if bounds and (bounds["bottom"] - bounds["top"]) > 40:  # Reasonable size for a button
                         elements_to_check.append(element)
-                
+
                 # Look for ALLOW button with flexible matching
                 for element in elements_to_check:
-                    text = element.info.get('text', '').lower()
+                    text = element.info.get("text", "").lower()
                     bounds = element.info.get("bounds")
-                    
+
                     if not text or not bounds:
                         continue
-                    
+
                     # Check if this looks like an ALLOW button
                     is_allow_button = any(pattern in text for pattern in allow_button_patterns)
                     is_deny_button = any(pattern in text for pattern in deny_button_patterns)
-                    
+
                     # Prioritize clicking ALLOW buttons
                     if is_allow_button:
                         try:
                             # Make sure it's clickable (reasonable size)
                             width = bounds["right"] - bounds["left"]
                             height = bounds["bottom"] - bounds["top"]
-                            
+
                             if height > 30 and width > 50:  # Reasonable button dimensions
                                 element.click()
                                 time.sleep(3)
@@ -1061,17 +1057,17 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                         except Exception as e:
                             self.log(f"Error clicking ALLOW button: {e}")
                             continue
-                
+
                 # If no ALLOW button found by text, try to find by position
                 # (Usually ALLOW is on the right side, DENY on the left)
                 right_side_elements = []
                 screen_width = d.info.get("displayWidth", 1080)  # Default to common width
-                
+
                 for element in elements_to_check:
                     bounds = element.info.get("bounds")
                     if bounds and bounds["right"] > screen_width * 0.6:  # Right side of screen
                         right_side_elements.append(element)
-                
+
                 # Try clicking elements on the right side
                 for element in right_side_elements:
                     try:
@@ -1085,14 +1081,14 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                     except Exception as e:
                         self.log(f"Error clicking right-side element: {e}")
                         continue
-                
+
                 self.log("Could not find ALLOW button in permission dialog")
                 return False
             return False
         except Exception as e:
             self.log(f"Error checking Facebook permission: {e}")
             return False
-        
+
     def handle_reels_description(self, d, video_data=None):
         """
         Handle the Facebook Reels description and audience selection screen
@@ -1101,14 +1097,22 @@ class TestFeatureTaskHandler(BaseTaskHandler):
         try:
             # Wait for the reels description screen to load
             time.sleep(5)
-            
+
             # FIRST: Check for and click OK button if it exists
             ok_button_found = False
             ok_button_texts = [
-                "OK", "Okay", "Xong", "ç¡®è®¤", "í™•ì¸", "Aceptar", 
-                "Accepter", "Accetta", "Einverstanden", "OKE"
+                "OK",
+                "Okay",
+                "Xong",
+                "ç¡®è®¤",
+                "í™•ì¸",
+                "Aceptar",
+                "Accepter",
+                "Accetta",
+                "Einverstanden",
+                "OKE",
             ]
-            
+
             # Try to find and click OK button
             for text in ok_button_texts:
                 try:
@@ -1120,12 +1124,12 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                         break
                 except:
                     continue
-            
+
             # If OK button was found and clicked, we're done
             if ok_button_found:
                 self.log(" OK button handled successfully")
                 return True
-            
+
             # NEW: Try to add description with appropriate caption method
             description_added = False
             try:
@@ -1137,9 +1141,9 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                     d(textContains="Describe your reel"),
                     d(textContains="Add a description"),
                     d(textContains="Write a caption"),
-                    d(description="Description input field")
+                    d(description="Description input field"),
                 ]
-                
+
                 description_field = None
                 for selector in description_selectors:
                     try:
@@ -1148,30 +1152,30 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                             break
                     except:
                         continue
-                
+
                 if description_field:
                     description_field.click()
                     time.sleep(1)
-                    
+
                     # Clear any existing text first
                     d.clear_text()
                     time.sleep(1)
-                    
+
                     # Use content from video_data if available
-                    if video_data and video_data.get('caption'):
-                        caption = video_data['caption']
-                        if video_data.get('hashtags'):
-                            caption += " " + video_data['hashtags']
+                    if video_data and video_data.get("caption"):
+                        caption = video_data["caption"]
+                        if video_data.get("hashtags"):
+                            caption += " " + video_data["hashtags"]
                         self.log(f" Using content manager caption: {caption}")
                     else:
                         # Fallback to original method
                         device_key = f"{d.serial}_last_video_title"
                         video_title = getattr(self, device_key, None)
-                        
+
                         if video_title:
                             # Remove file extension from video title
                             video_title_without_ext = self._remove_file_extension(video_title)
-                            
+
                             # Use the video title without extension as caption
                             caption = video_title_without_ext
                             self.log(f" Using video title as caption:{video_title_without_ext}")
@@ -1179,11 +1183,11 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                             # Video has no title, use generated caption
                             caption = self._generate_video_caption()
                             self.log(" Using generated caption for untitled video")
-                    
+
                     # Add the caption to description
                     d.send_keys(caption)
                     time.sleep(1)
-                    
+
                     # Hide keyboard
                     d.press("back")
                     time.sleep(1)
@@ -1191,17 +1195,28 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                     self.log(f" Description added: {caption}")
             except Exception as e:
                 self.log(f"Could not add description: {e}")
-            
+
             # Look for the final share/post button with more flexible detection
             self.log(" Looking for Share/Post button...")
             time.sleep(3)
             share_button_found = False
             share_button_texts = [
-                "Share", "Post", "Share now", "Publish", "ÄÄƒng", "Publicar",
-                "å‘å¸ƒ", "å…±æœ‰", "Partager", "Compartir", "Condividi", "Teilen",
-                "Share reel", "Post reel"  # Added more specific options
+                "Share",
+                "Post",
+                "Share now",
+                "Publish",
+                "ÄÄƒng",
+                "Publicar",
+                "å‘å¸ƒ",
+                "å…±æœ‰",
+                "Partager",
+                "Compartir",
+                "Condividi",
+                "Teilen",
+                "Share reel",
+                "Post reel",  # Added more specific options
             ]
-            
+
             # Try multiple approaches to find the share button
             attempts = [
                 # 1. Text-based detection
@@ -1211,9 +1226,9 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                 # 3. Resource ID detection (common Facebook buttons)
                 lambda: self._find_button_by_resource_id(d, ["share", "post", "publish"]),
                 # 4. Position-based detection (bottom of screen)
-                lambda: self._find_button_by_position(d)
+                lambda: self._find_button_by_position(d),
             ]
-            
+
             for attempt in attempts:
                 try:
                     if attempt():
@@ -1222,7 +1237,7 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                 except Exception as e:
                     self.log(f" Button detection attempt failed: {e}")
                     continue
-            
+
             if share_button_found:
                 self.log("âœ… Reel posted successfully")
                 return True
@@ -1231,10 +1246,11 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                 # Even if we can't find the share button, if we detected the reels screen,
                 # consider it a success since we reached the intended UI
                 return True
-                
+
         except Exception as e:
             self.log(f" Error in handle_reels_description: {e}")
-            return False       
+            return False
+
     def _find_button_by_text(self, d, button_texts):
         """Find button by text content"""
         for text in button_texts:
@@ -1247,12 +1263,13 @@ class TestFeatureTaskHandler(BaseTaskHandler):
             except:
                 continue
         return False
+
     def _find_button_by_class(self, d, class_name):
         """Find button by class name"""
         try:
             buttons = d(className=class_name)
             for button in buttons:
-                bounds = button.info.get('bounds', {})
+                bounds = button.info.get("bounds", {})
                 if bounds:
                     # Look for buttons at the bottom of the screen
                     screen_height = d.info.get("displayHeight", 1920)
@@ -1264,14 +1281,15 @@ class TestFeatureTaskHandler(BaseTaskHandler):
         except:
             pass
         return False
+
     def _find_button_by_resource_id(self, d, keywords):
         """Find button by resource ID containing keywords"""
         try:
             all_elements = d(className="android.view.View")
             for element in all_elements:
-                resource_id = element.info.get('resourceId', '').lower()
+                resource_id = element.info.get("resourceId", "").lower()
                 if any(keyword in resource_id for keyword in keywords):
-                    bounds = element.info.get('bounds', {})
+                    bounds = element.info.get("bounds", {})
                     if bounds:
                         element.click()
                         self.log(f"âœ… Clicked button by resource ID: {resource_id}")
@@ -1280,19 +1298,20 @@ class TestFeatureTaskHandler(BaseTaskHandler):
         except:
             pass
         return False
+
     def _find_button_by_position(self, d):
         """Find button by common screen positions"""
         try:
             screen_width = d.info.get("displayWidth", 1080)
             screen_height = d.info.get("displayHeight", 1920)
-            
+
             # Common positions for action buttons
             positions = [
                 (screen_width * 0.9, screen_height * 0.95),  # Bottom right
                 (screen_width * 0.85, screen_height * 0.93),  # Slightly left of corner
-                (screen_width * 0.95, screen_height * 0.9),   # Right side
+                (screen_width * 0.95, screen_height * 0.9),  # Right side
             ]
-            
+
             for x, y in positions:
                 try:
                     d.click(x, y)
@@ -1303,24 +1322,26 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                     continue
         except:
             pass
-        return False 
+        return False
+
     def _remove_file_extension(self, filename):
         """
         Remove file extension from filename
         """
         # List of common video extensions to remove
-        video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.m4v', '.wmv', '.3gp']
-        
+        video_extensions = [".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv", ".m4v", ".wmv", ".3gp"]
+
         # Remove any video extension found
         for ext in video_extensions:
             if filename.lower().endswith(ext):
-                return filename[:-len(ext)]
-        
+                return filename[: -len(ext)]
+
         # If no known extension found, try to remove anything after the last dot
-        if '.' in filename:
-            return filename.rsplit('.', 1)[0]
-        
+        if "." in filename:
+            return filename.rsplit(".", 1)[0]
+
         return filename
+
     def _generate_video_caption(self):
         """
         Generate engaging caption for videos without proper titles
@@ -1336,27 +1357,27 @@ class TestFeatureTaskHandler(BaseTaskHandler):
             "This is too good not to share! ðŸ‘",
             "Viral moment captured on camera! ðŸ“¹",
             "Trending content you need to see! ðŸ‘€",
-            "Amazing video that you'll love! â¤ï¸"
+            "Amazing video that you'll love! â¤ï¸",
         ]
-        
+
         # List of popular hashtags for reels
         hashtag_groups = [
             "#reels #viral #trending #fyp #foryou #foryoupage #explorepage #instagramreels #reelitfeelit #reelkarofeelkaro #reelsindia #reelsteady #reelsvideo #reelsinsta #reelslovers #reelsofinstagram #reelsviral #reelsdance #reelsmusic #reelsfunny",
             "#viralvideo #trendingnow #fypã‚· #foryourpage #explore #instareels #reelit #reelkarofeelkaro #reelsindia #reelsteadygo #reelsvideoviral #reelsinstagram #reelslover #reelsofig #reelsviraltrick #reelsdancevideo #reelsmusicvideo #reelsfunnyvideos #contentcreator #digitalcreator",
-            "#reels #viral #fyp #trending #foryou #instagramreels #reelitfeelit #reelsindia #reelsteady #reelsvideo #explorepage #foryoupage #reelsinsta #reelslovers #reelsofinstagram #reelsviral #reelsdance #reelsmusic #reelsfunny #contentcreation"
+            "#reels #viral #fyp #trending #foryou #instagramreels #reelitfeelit #reelsindia #reelsteady #reelsvideo #explorepage #foryoupage #reelsinsta #reelslovers #reelsofinstagram #reelsviral #reelsdance #reelsmusic #reelsfunny #contentcreation",
         ]
-        
+
         # Select a random base caption
         base_caption = random.choice(base_captions)
-        
+
         # Select a random hashtag group
         hashtags = random.choice(hashtag_groups)
-        
+
         # Combine caption and hashtags
         full_caption = f"{base_caption} {hashtags}"
-        
+
         return full_caption
-    
+
     # This method is designed to handle the Facebook posting process with improved error recovery and UI detection. It includes multiple strategies to find and click the post button, which can vary widely across different Facebook versions and languages. The method also includes enhanced logging for better debugging and understanding of the flow.
     def facebook_first_next(self, d):
         """Handle Facebook posting with better error recovery and UI detection"""
@@ -1365,24 +1386,45 @@ class TestFeatureTaskHandler(BaseTaskHandler):
             facebook_opened = False
             for _ in range(25):
                 current_app = d.app_current()
-                if "facebook" in current_app.get('package', '').lower():
+                if "facebook" in current_app.get("package", "").lower():
                     facebook_opened = True
                     break
                 time.sleep(1)
-            
+
             if not facebook_opened:
                 self.log("Facebook app did not open")
                 return False
 
             # Wait additional time for UI to fully load
             time.sleep(3)
-            
+
             # Candidate button texts in multiple languages
             post_button_texts = [
-                "Next", "Post", "Share", "Share now", "Done", "Publish",
-                "Tiáº¿p", "à¸•à¹ˆà¸­à¹„à¸›", "Siguiente", "Weiter", "Suivant", "Publicar",
-                "æ¬¡ã¸", "ë‹¤ìŒ", "ä¸‹ä¸€æ­¥", "Ä°leri", "Avanti", "PrÃ³ximo", "å‘å¸ƒ",
-                "ÄÄƒng", "Partager", "Compartir", "Condividi", "Teilen", "å…±æœ‰"
+                "Next",
+                "Post",
+                "Share",
+                "Share now",
+                "Done",
+                "Publish",
+                "Tiáº¿p",
+                "à¸•à¹ˆà¸­à¹„à¸›",
+                "Siguiente",
+                "Weiter",
+                "Suivant",
+                "Publicar",
+                "æ¬¡ã¸",
+                "ë‹¤ìŒ",
+                "ä¸‹ä¸€æ­¥",
+                "Ä°leri",
+                "Avanti",
+                "PrÃ³ximo",
+                "å‘å¸ƒ",
+                "ÄÄƒng",
+                "Partager",
+                "Compartir",
+                "Condividi",
+                "Teilen",
+                "å…±æœ‰",
             ]
 
             # Try text-based detection first
@@ -1400,34 +1442,36 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                 d(className="android.widget.Button"),
                 d(className="android.widget.TextView"),
                 d(className="android.widget.ImageView"),  # For icon buttons
-                d(className="android.widget.ImageButton")
+                d(className="android.widget.ImageButton"),
             ]
-            
+
             for selector in button_selectors:
                 try:
                     for button in selector:
                         try:
-                            rid = button.info.get('resourceId', '').lower()
-                            txt = button.info.get('text', '').lower()
-                            content_desc = button.info.get('contentDescription', '').lower()
-                            bounds = button.info.get('bounds', {})
-                            
+                            rid = button.info.get("resourceId", "").lower()
+                            txt = button.info.get("text", "").lower()
+                            content_desc = button.info.get("contentDescription", "").lower()
+                            bounds = button.info.get("bounds", {})
+
                             # Check if this looks like a post button
                             button_keywords = ["next", "post", "share", "publish", "done", "continue", "send"]
                             is_post_button = (
-                                any(kw in rid for kw in button_keywords) or
-                                any(kw in txt for kw in button_keywords) or
-                                any(kw in content_desc for kw in button_keywords)
+                                any(kw in rid for kw in button_keywords)
+                                or any(kw in txt for kw in button_keywords)
+                                or any(kw in content_desc for kw in button_keywords)
                             )
-                            
+
                             # Additional check for button position (usually at bottom right)
                             if is_post_button and bounds:
                                 screen_width = d.info.get("displayWidth", 1080)
                                 screen_height = d.info.get("displayHeight", 1920)
-                                
+
                                 # Check if button is in bottom-right quadrant
-                                if (bounds["right"] > screen_width * 0.6 and 
-                                    bounds["top"] > screen_height * 0.7):
+                                if (
+                                    bounds["right"] > screen_width * 0.6
+                                    and bounds["top"] > screen_height * 0.7
+                                ):
                                     button.click()
                                     self.log(f"âœ… Clicked bottom-right button: {txt or content_desc or rid}")
                                     time.sleep(2)
@@ -1445,9 +1489,10 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                     try:
                         # Check if element has a blue background (common for Facebook buttons)
                         # This is a heuristic approach
-                        bounds = element.info.get('bounds', {})
-                        if bounds and (bounds["bottom"] - bounds["top"] > 40 and
-                                    bounds["right"] - bounds["left"] > 100):
+                        bounds = element.info.get("bounds", {})
+                        if bounds and (
+                            bounds["bottom"] - bounds["top"] > 40 and bounds["right"] - bounds["left"] > 100
+                        ):
                             # Check if it's positioned at the bottom
                             screen_height = d.info.get("displayHeight", 1920)
                             if bounds["top"] > screen_height * 0.7:
@@ -1463,14 +1508,14 @@ class TestFeatureTaskHandler(BaseTaskHandler):
             # Final fallback: try clicking at common post button positions
             screen_width = d.info.get("displayWidth", 1080)
             screen_height = d.info.get("displayHeight", 1920)
-            
+
             # Common positions for post buttons (bottom right area)
             click_positions = [
                 (screen_width * 0.9, screen_height * 0.95),  # Bottom right corner
                 (screen_width * 0.85, screen_height * 0.93),  # Slightly left of corner
-                (screen_width * 0.95, screen_height * 0.9),   # Right side
+                (screen_width * 0.95, screen_height * 0.9),  # Right side
             ]
-            
+
             for x, y in click_positions:
                 try:
                     d.click(x, y)
@@ -1487,7 +1532,7 @@ class TestFeatureTaskHandler(BaseTaskHandler):
             self.log(f"âŒ Error in facebook_post: {e}")
             return False
 
-    #handle video deletion with improved error handling and logging. This method will long-press on the video to open the context menu, look for the "Delete" option, and handle the confirmation dialog if it appears. It includes enhanced logging for better debugging and understanding of the flow. 
+    # handle video deletion with improved error handling and logging. This method will long-press on the video to open the context menu, look for the "Delete" option, and handle the confirmation dialog if it appears. It includes enhanced logging for better debugging and understanding of the flow.
     def delete_video(self, d):
         try:
             # Long press video
@@ -1496,7 +1541,7 @@ class TestFeatureTaskHandler(BaseTaskHandler):
 
             # Find and click "Delete" option
             for element in d(className="android.widget.TextView"):
-                text = element.info.get('text', '')
+                text = element.info.get("text", "")
                 if text and "Delete" in text:
                     element.click()
                     time.sleep(2)  # Wait for confirmation dialog
@@ -1513,6 +1558,4 @@ class TestFeatureTaskHandler(BaseTaskHandler):
 
         except Exception as e:
             self.log(f"âŒError while deleting video: {e}")
-            return False    
-        
-
+            return False

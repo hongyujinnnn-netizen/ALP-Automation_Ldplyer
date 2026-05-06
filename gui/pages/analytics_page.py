@@ -188,7 +188,11 @@ class AnalyticsPageMixin:
                 "queue_size": int(stats.get("queue_size", stats.get("total", 0))),
             }
         except Exception:
-            items = self.content_manager.get_queue_items() if hasattr(self.content_manager, "get_queue_items") else []
+            items = (
+                self.content_manager.get_queue_items()
+                if hasattr(self.content_manager, "get_queue_items")
+                else []
+            )
             total = len(items)
             used = sum(1 for item in items if item.get("used"))
             return {"total": total, "used": used, "available": total - used, "queue_size": total}
@@ -216,63 +220,89 @@ class AnalyticsPageMixin:
             runtime = self._device_runtime_state.get(name, {})
             runtime_state = str(runtime.get("state", "")).lower()
             task = str(runtime.get("task", "")).lower()
-            if runtime_state in ("attention", "error", "failed") or status not in ("Running", "Active", "Inactive", "Paused", "Completed"):
+            if runtime_state in ("attention", "error", "failed") or status not in (
+                "Running",
+                "Active",
+                "Inactive",
+                "Paused",
+                "Completed",
+            ):
                 failure_names.append(name)
             if "otp" in task or "verification code" in task:
-                updated = self._parse_dashboard_timestamp(runtime.get("updated_at") or runtime.get("started_at"))
+                updated = self._parse_dashboard_timestamp(
+                    runtime.get("updated_at") or runtime.get("started_at")
+                )
                 if updated and now - updated > timedelta(minutes=6):
                     otp_waiting.append(name)
 
         if failure_names:
-            alerts.append({
-                "severity": "critical",
-                "title": "Devices need attention",
-                "detail": self._format_device_list(failure_names, "runtime issue"),
-            })
+            alerts.append(
+                {
+                    "severity": "critical",
+                    "title": "Devices need attention",
+                    "detail": self._format_device_list(failure_names, "runtime issue"),
+                }
+            )
         if otp_waiting:
-            alerts.append({
-                "severity": "critical",
-                "title": "OTP flow may be stuck",
-                "detail": self._format_device_list(otp_waiting, "waiting over 6 min"),
-            })
+            alerts.append(
+                {
+                    "severity": "critical",
+                    "title": "OTP flow may be stuck",
+                    "detail": self._format_device_list(otp_waiting, "waiting over 6 min"),
+                }
+            )
         if running and counts["Inactive"]:
-            alerts.append({
-                "severity": "warning",
-                "title": "Offline devices during active run",
-                "detail": f"{counts['Inactive']} inactive device(s) may reduce throughput.",
-            })
+            alerts.append(
+                {
+                    "severity": "warning",
+                    "title": "Offline devices during active run",
+                    "detail": f"{counts['Inactive']} inactive device(s) may reduce throughput.",
+                }
+            )
 
         no_account = [
-            name for name in self._ld_snapshot
+            name
+            for name in self._ld_snapshot
             if not self._ld_account_cache.get(name) or self._ld_account_cache.get(name) == "No account"
         ]
         if no_account:
-            alerts.append({
-                "severity": "warning",
-                "title": "Accounts missing",
-                "detail": self._format_device_list(no_account, "without assigned account"),
-            })
+            alerts.append(
+                {
+                    "severity": "warning",
+                    "title": "Accounts missing",
+                    "detail": self._format_device_list(no_account, "without assigned account"),
+                }
+            )
 
-        if bool(getattr(self, "use_content_queue", None) and self.use_content_queue.get()) and queue_stats.get("available", 0) == 0:
-            alerts.append({
-                "severity": "warning",
-                "title": "Content queue empty",
-                "detail": "Queue-backed tasks have no available content to consume.",
-            })
+        if (
+            bool(getattr(self, "use_content_queue", None) and self.use_content_queue.get())
+            and queue_stats.get("available", 0) == 0
+        ):
+            alerts.append(
+                {
+                    "severity": "warning",
+                    "title": "Content queue empty",
+                    "detail": "Queue-backed tasks have no available content to consume.",
+                }
+            )
 
         if total and not self.schedule_running and not running:
-            alerts.append({
-                "severity": "info",
-                "title": "Schedule is disabled",
-                "detail": "Automation will only run manually until scheduling is enabled.",
-            })
+            alerts.append(
+                {
+                    "severity": "info",
+                    "title": "Schedule is disabled",
+                    "detail": "Automation will only run manually until scheduling is enabled.",
+                }
+            )
         elif self.schedule_running:
             summary = self._get_dashboard_schedule_summary()
-            alerts.append({
-                "severity": "info",
-                "title": "Next scheduled run",
-                "detail": summary["next_run"],
-            })
+            alerts.append(
+                {
+                    "severity": "info",
+                    "title": "Next scheduled run",
+                    "detail": summary["next_run"],
+                }
+            )
 
         return alerts[:5]
 
@@ -343,7 +373,9 @@ class AnalyticsPageMixin:
                 pady=2,
             ).pack(side="left")
             tb.Label(header, text=str(count), style="MetricSub.TLabel", foreground=color).pack(side="right")
-            bar = GradientProgressBar(row, bg=self.palette["surface_alt"], color_start=color, color_end=color, height=5)
+            bar = GradientProgressBar(
+                row, bg=self.palette["surface_alt"], color_start=color, color_end=color, height=5
+            )
             bar.pack(fill="x", pady=(3, 0))
             bar.set(percent)
 
@@ -379,7 +411,13 @@ class AnalyticsPageMixin:
                 padx=8,
                 pady=2,
             ).pack(side="right")
-            bar = GradientProgressBar(card.body, bg=self.palette["surface_alt"], color_start=item["accent"], color_end=item["accent"], height=4)
+            bar = GradientProgressBar(
+                card.body,
+                bg=self.palette["surface_alt"],
+                color_start=item["accent"],
+                color_end=item["accent"],
+                height=4,
+            )
             bar.pack(fill="x", pady=(5, 0))
             bar.set(item["progress"])
 
@@ -417,15 +455,17 @@ class AnalyticsPageMixin:
             queue = str(runtime.get("queue_label") or "")
             queue = "" if queue == "-" else queue
             state_key = state.lower()
-            rows.append({
-                "name": name,
-                "state": status_label(state),
-                "task": task,
-                "progress": progress,
-                "queue": queue,
-                "accent": status_color(state_key, self.palette),
-                "sort": min(priority.get(state_key, 7), status_sort_key(state_key)),
-            })
+            rows.append(
+                {
+                    "name": name,
+                    "state": status_label(state),
+                    "task": task,
+                    "progress": progress,
+                    "queue": queue,
+                    "accent": status_color(state_key, self.palette),
+                    "sort": min(priority.get(state_key, 7), status_sort_key(state_key)),
+                }
+            )
         rows.sort(key=lambda item: (item["sort"], item["name"].lower()))
         return rows[:6]
 
@@ -523,7 +563,7 @@ class AnalyticsPageMixin:
         current_page = min(max(0, getattr(self, "dashboard_recent_events_page", 0)), total_pages - 1)
         self.dashboard_recent_events_page = current_page
         start = current_page * per_page
-        visible_events = events[start:start + per_page]
+        visible_events = events[start : start + per_page]
 
         for event in visible_events:
             color = self._event_color(event["level"])

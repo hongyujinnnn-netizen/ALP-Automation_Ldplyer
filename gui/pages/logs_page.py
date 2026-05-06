@@ -24,11 +24,13 @@ def _blend_color(top, base, ratio):
     """Mix ``top`` over ``base`` at ``ratio`` (0..1).  Used for soft tints."""
     tr, tg, tb_ = _hex_to_rgb(top)
     br, bg, bb = _hex_to_rgb(base)
-    return _rgb_to_hex((
-        br + (tr - br) * ratio,
-        bg + (tg - bg) * ratio,
-        bb + (tb_ - bb) * ratio,
-    ))
+    return _rgb_to_hex(
+        (
+            br + (tr - br) * ratio,
+            bg + (tg - bg) * ratio,
+            bb + (tb_ - bb) * ratio,
+        )
+    )
 
 
 class LogsPageMixin:
@@ -38,11 +40,11 @@ class LogsPageMixin:
 
     # Visual mapping for level: (display label, level tag, optional row-tint tag)
     LOG_LEVEL_VISUALS = {
-        "INFO":    ("INFO", "LVL_INFO",    None),
+        "INFO": ("INFO", "LVL_INFO", None),
         "SUCCESS": ("DONE", "LVL_SUCCESS", None),
         "WARNING": ("WARN", "LVL_WARNING", "ROW_WARN"),
-        "ERROR":   ("FAIL", "LVL_ERROR",   "ROW_ERROR"),
-        "DEBUG":   ("DBUG", "LVL_DEBUG",   None),
+        "ERROR": ("FAIL", "LVL_ERROR", "ROW_ERROR"),
+        "DEBUG": ("DBUG", "LVL_DEBUG", None),
     }
 
     def create_logs_tab(self):
@@ -127,7 +129,9 @@ class LogsPageMixin:
         summary.pack(fill="x", padx=10, pady=(0, 8))
         self.log_count_label = tb.Label(summary, text="0 of 0 records", style="MetricSub.TLabel")
         self.log_count_label.pack(side="left")
-        self.log_scope_label = tb.Label(summary, text="Scope: All levels / All devices", style="MetricSub.TLabel")
+        self.log_scope_label = tb.Label(
+            summary, text="Scope: All levels / All devices", style="MetricSub.TLabel"
+        )
         self.log_scope_label.pack(side="right")
 
         logs_container = tb.Frame(logs_card)
@@ -189,18 +193,18 @@ class LogsPageMixin:
         emu_color = "#60A5FA"
 
         # ── Row backgrounds (defined first so level/foreground tags win on conflict) ── #
-        text.tag_configure("ROW_WARN",  background=_blend_color(warning, surface, 0.10))
-        text.tag_configure("ROW_ERROR", background=_blend_color(danger,  surface, 0.14))
+        text.tag_configure("ROW_WARN", background=_blend_color(warning, surface, 0.10))
+        text.tag_configure("ROW_ERROR", background=_blend_color(danger, surface, 0.14))
 
         # ── Level badges — tinted background pill with bold colored text ── #
         badge_font = (self.mono_font, 9, "bold")
         for tag, color in (
-            ("LVL_INFO",    primary),
+            ("LVL_INFO", primary),
             ("LVL_SUCCESS", success),
             ("LVL_WARNING", warning),
-            ("LVL_ERROR",   danger),
-            ("LVL_DEBUG",   debug_color),
-            ("LVL_EMU",     emu_color),
+            ("LVL_ERROR", danger),
+            ("LVL_DEBUG", debug_color),
+            ("LVL_EMU", emu_color),
         ):
             text.tag_configure(
                 tag,
@@ -211,31 +215,35 @@ class LogsPageMixin:
 
         # ── Field accents ── #
         text.tag_configure("TIMESTAMP", foreground=_blend_color(text_fg, surface, 0.45))
-        text.tag_configure("DEVICE",    foreground=primary, font=(self.mono_font, 10, "bold"))
-        text.tag_configure("CATEGORY",  foreground=muted)
-        text.tag_configure("MESSAGE",   foreground=text_fg)
-        text.tag_configure("MESSAGE_WARN",  foreground=_blend_color(warning, text_fg, 0.65))
-        text.tag_configure("MESSAGE_ERROR", foreground=_blend_color(danger,  text_fg, 0.55))
+        text.tag_configure("DEVICE", foreground=primary, font=(self.mono_font, 10, "bold"))
+        text.tag_configure("CATEGORY", foreground=muted)
+        text.tag_configure("MESSAGE", foreground=text_fg)
+        text.tag_configure("MESSAGE_WARN", foreground=_blend_color(warning, text_fg, 0.65))
+        text.tag_configure("MESSAGE_ERROR", foreground=_blend_color(danger, text_fg, 0.55))
         text.tag_configure("SEPARATOR", foreground=_blend_color(muted, surface, 0.55))
-        text.tag_configure("GUTTER",    foreground=_blend_color(muted, surface, 0.45))
-        text.tag_configure("EMPTY",     foreground=muted, justify="center")
+        text.tag_configure("GUTTER", foreground=_blend_color(muted, surface, 0.45))
+        text.tag_configure("EMPTY", foreground=muted, justify="center")
 
         # Make level badges win the background-color conflict over row tints.
         for tag in ("LVL_INFO", "LVL_SUCCESS", "LVL_WARNING", "LVL_ERROR", "LVL_DEBUG", "LVL_EMU"):
             text.tag_raise(tag)
 
         # ── Legacy tag aliases (kept for any external callers / older records) ── #
-        text.tag_configure("INFO",           foreground=primary)
-        text.tag_configure("SUCCESS",        foreground=success)
-        text.tag_configure("WARNING",        foreground=warning)
-        text.tag_configure("ERROR",          foreground=danger)
-        text.tag_configure("DEBUG",          foreground=debug_color)
+        text.tag_configure("INFO", foreground=primary)
+        text.tag_configure("SUCCESS", foreground=success)
+        text.tag_configure("WARNING", foreground=warning)
+        text.tag_configure("ERROR", foreground=danger)
+        text.tag_configure("DEBUG", foreground=debug_color)
         text.tag_configure("EMULATOR_COUNT", foreground=emu_color)
 
     def _refresh_log_filter_options(self):
         if not hasattr(self, "log_device_combo"):
             return
-        current = self.log_device_filter_var.get() if hasattr(self, "log_device_filter_var") else self.ALL_DEVICES_LABEL
+        current = (
+            self.log_device_filter_var.get()
+            if hasattr(self, "log_device_filter_var")
+            else self.ALL_DEVICES_LABEL
+        )
         devices = set(getattr(self, "_ld_snapshot", {}).keys())
         devices.update(getattr(self, "_device_runtime_state", {}).keys())
         for record in getattr(self, "log_records", []):
@@ -254,8 +262,16 @@ class LogsPageMixin:
     def _filter_log_records(self):
         records = list(getattr(self, "log_records", []))
         query = self.log_search_var.get().strip().lower() if hasattr(self, "log_search_var") else ""
-        level_filter = self.log_level_filter_var.get().strip().upper() if hasattr(self, "log_level_filter_var") else "ALL"
-        device_filter = self.log_device_filter_var.get().strip() if hasattr(self, "log_device_filter_var") else self.ALL_DEVICES_LABEL
+        level_filter = (
+            self.log_level_filter_var.get().strip().upper()
+            if hasattr(self, "log_level_filter_var")
+            else "ALL"
+        )
+        device_filter = (
+            self.log_device_filter_var.get().strip()
+            if hasattr(self, "log_device_filter_var")
+            else self.ALL_DEVICES_LABEL
+        )
 
         filtered = []
         for record in records:
@@ -271,7 +287,10 @@ class LogsPageMixin:
                 continue
             if device_filter == self.GENERAL_LOG_LABEL and device:
                 continue
-            if device_filter not in ("", self.ALL_DEVICES_LABEL, self.GENERAL_LOG_LABEL) and device != device_filter:
+            if (
+                device_filter not in ("", self.ALL_DEVICES_LABEL, self.GENERAL_LOG_LABEL)
+                and device != device_filter
+            ):
                 continue
             if query:
                 haystack = f"{level} {device} {category} {message}".lower()
@@ -287,18 +306,30 @@ class LogsPageMixin:
         filtered = self._filter_log_records()
         total = len(getattr(self, "log_records", []))
         level_scope = self.log_level_filter_var.get() if hasattr(self, "log_level_filter_var") else "All"
-        device_scope = self.log_device_filter_var.get() if hasattr(self, "log_device_filter_var") else self.ALL_DEVICES_LABEL
+        device_scope = (
+            self.log_device_filter_var.get()
+            if hasattr(self, "log_device_filter_var")
+            else self.ALL_DEVICES_LABEL
+        )
 
         self.logs_text.config(state="normal")
         self.logs_text.delete("1.0", "end")
 
         if not filtered:
             has_records = bool(getattr(self, "log_records", []))
-            has_filters = any([
-                self.log_search_var.get().strip() if hasattr(self, "log_search_var") else "",
-                (self.log_level_filter_var.get() if hasattr(self, "log_level_filter_var") else "All") != "All",
-                (self.log_device_filter_var.get() if hasattr(self, "log_device_filter_var") else self.ALL_DEVICES_LABEL) != self.ALL_DEVICES_LABEL,
-            ])
+            has_filters = any(
+                [
+                    self.log_search_var.get().strip() if hasattr(self, "log_search_var") else "",
+                    (self.log_level_filter_var.get() if hasattr(self, "log_level_filter_var") else "All")
+                    != "All",
+                    (
+                        self.log_device_filter_var.get()
+                        if hasattr(self, "log_device_filter_var")
+                        else self.ALL_DEVICES_LABEL
+                    )
+                    != self.ALL_DEVICES_LABEL,
+                ]
+            )
             if hasattr(self, "logs_state_view"):
                 if has_records and has_filters:
                     self.logs_state_view.set(
@@ -306,7 +337,11 @@ class LogsPageMixin:
                         title="No logs match the current filters",
                         message="Try a broader search, a different level, or All Devices.",
                         actions=[
-                            {"text": "Clear Filters", "command": self.clear_log_filters, "bootstyle": "outline-secondary"},
+                            {
+                                "text": "Clear Filters",
+                                "command": self.clear_log_filters,
+                                "bootstyle": "outline-secondary",
+                            },
                         ],
                     )
                 else:
@@ -407,7 +442,9 @@ class LogsPageMixin:
 
     def clear_logs(self):
         """Clear in-memory UI logs with confirmation."""
-        if not MessageBox.askyesno("Clear Logs", "Clear the in-app log viewer? This does not delete app.jsonl."):
+        if not MessageBox.askyesno(
+            "Clear Logs", "Clear the in-app log viewer? This does not delete app.jsonl."
+        ):
             return
 
         self.log_records.clear()

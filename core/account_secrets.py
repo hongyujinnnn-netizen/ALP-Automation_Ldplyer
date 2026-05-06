@@ -36,10 +36,7 @@ def derive_dashboard_account_id(account: dict) -> str:
 
 
 def _non_empty_secret_fields(record: dict) -> list[str]:
-    return [
-        field for field in SECRET_ACCOUNT_FIELDS
-        if str((record or {}).get(field) or "").strip()
-    ]
+    return [field for field in SECRET_ACCOUNT_FIELDS if str((record or {}).get(field) or "").strip()]
 
 
 def has_plaintext_secrets(records: list[dict]) -> bool:

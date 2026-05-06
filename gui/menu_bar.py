@@ -6,7 +6,7 @@ class MenuBarMixin:
         """Create enhanced menu bar"""
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
-        
+
         # File menu
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=file_menu)
@@ -16,7 +16,7 @@ class MenuBarMixin:
         file_menu.add_command(label="Settings", command=self.show_settings_dialog)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.on_closing)
-        
+
         # Tools menu
         tools_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Tools", menu=tools_menu)
@@ -27,7 +27,7 @@ class MenuBarMixin:
         tools_menu.add_command(label="System Info", command=self.show_system_info)
         tools_menu.add_separator()
         tools_menu.add_command(label="ADB Tools", command=self.show_adb_tools)
-        
+
         # View menu
         view_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="View", menu=view_menu)
@@ -35,7 +35,7 @@ class MenuBarMixin:
         view_menu.add_separator()
         view_menu.add_command(label="Refresh All", command=self.refresh_all)
         view_menu.add_checkbutton(label="Show Analytics", variable=tk.BooleanVar(value=True))
-        
+
         # Help menu
         help_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=help_menu)

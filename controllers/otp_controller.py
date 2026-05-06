@@ -32,7 +32,12 @@ class OTPController:
         try:
             settings = self.settings_service.load_app_settings()
         except SettingsError as exc:
-            self._emit("WARNING", "otp.settings.load_failed", f"Failed to load email OTP settings: {exc}", error=str(exc))
+            self._emit(
+                "WARNING",
+                "otp.settings.load_failed",
+                f"Failed to load email OTP settings: {exc}",
+                error=str(exc),
+            )
             settings = AppSettings()
         return self._settings_to_models(settings)
 
@@ -55,7 +60,12 @@ class OTPController:
             self._emit("SUCCESS", "otp.settings.saved", "Email OTP settings saved")
             return True
         except SettingsError as exc:
-            self._emit("WARNING", "otp.settings.save_failed", f"Failed to save email OTP settings: {exc}", error=str(exc))
+            self._emit(
+                "WARNING",
+                "otp.settings.save_failed",
+                f"Failed to save email OTP settings: {exc}",
+                error=str(exc),
+            )
             return False
 
     def test_connection(self, config: EmailAccountConfig) -> OTPResult:
@@ -179,7 +189,9 @@ class OTPController:
         return config, request
 
     @staticmethod
-    def _apply_models_to_settings(settings: AppSettings, config: EmailAccountConfig, request: OTPRequest) -> None:
+    def _apply_models_to_settings(
+        settings: AppSettings, config: EmailAccountConfig, request: OTPRequest
+    ) -> None:
         resolved = config.with_provider_defaults()
         settings.email_provider = resolved.provider
         settings.email_address = resolved.email_address

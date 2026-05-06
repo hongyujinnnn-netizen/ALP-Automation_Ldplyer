@@ -29,8 +29,7 @@ class EnhancedErrorHandler:
 
         if self.error_count[key] <= self.max_retries:
             self.log(
-                f"🔄 Retrying {operation} on {device_name} "
-                f"(attempt {self.error_count[key]})",
+                f"🔄 Retrying {operation} on {device_name} (attempt {self.error_count[key]})",
                 "WARNING",
             )
             return True

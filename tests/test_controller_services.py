@@ -124,9 +124,11 @@ class TestControllerAndServices(unittest.TestCase):
         fake.get_password.side_effect = lambda svc, user: fake_vault.get((svc, user))
         fake.delete_password.side_effect = lambda svc, user: fake_vault.pop((svc, user), None)
 
-        with tempfile.TemporaryDirectory() as tmp_dir, \
-             patch.object(credential_store, "keyring", fake), \
-             patch.object(credential_store, "_AVAILABLE", True):
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(credential_store, "keyring", fake),
+            patch.object(credential_store, "_AVAILABLE", True),
+        ):
             paths = build_test_paths(Path(tmp_dir))
             paths.ensure_runtime_dirs()
 
@@ -154,16 +156,20 @@ class TestControllerAndServices(unittest.TestCase):
         fake.get_password.side_effect = lambda svc, user: fake_vault.get((svc, user))
         fake.delete_password.side_effect = lambda svc, user: fake_vault.pop((svc, user), None)
 
-        with tempfile.TemporaryDirectory() as tmp_dir, \
-             patch.object(credential_store, "keyring", fake), \
-             patch.object(credential_store, "_AVAILABLE", True):
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(credential_store, "keyring", fake),
+            patch.object(credential_store, "_AVAILABLE", True),
+        ):
             paths = build_test_paths(Path(tmp_dir))
             paths.ensure_runtime_dirs()
             paths.settings_file.write_text(
-                json.dumps({
-                    "email_address": "bob@example.com",
-                    "email_app_password": "legacy-plain-text",
-                }),
+                json.dumps(
+                    {
+                        "email_address": "bob@example.com",
+                        "email_app_password": "legacy-plain-text",
+                    }
+                ),
                 encoding="utf-8",
             )
 
@@ -178,15 +184,16 @@ class TestControllerAndServices(unittest.TestCase):
         from core import credential_store
         from core.settings import load_app_settings
 
-        with tempfile.TemporaryDirectory() as tmp_dir, \
-             patch.object(credential_store, "_AVAILABLE", False):
+        with tempfile.TemporaryDirectory() as tmp_dir, patch.object(credential_store, "_AVAILABLE", False):
             paths = build_test_paths(Path(tmp_dir))
             paths.ensure_runtime_dirs()
             paths.settings_file.write_text(
-                json.dumps({
-                    "email_address": "carol@example.com",
-                    "email_app_password": "still-plain",
-                }),
+                json.dumps(
+                    {
+                        "email_address": "carol@example.com",
+                        "email_app_password": "still-plain",
+                    }
+                ),
                 encoding="utf-8",
             )
 
@@ -370,6 +377,7 @@ class TestControllerAndServices(unittest.TestCase):
     @staticmethod
     def _fake_keyring():
         from unittest.mock import Mock as _Mock
+
         vault: dict[tuple[str, str], str] = {}
         fake = _Mock()
         fake.set_password.side_effect = lambda svc, user, pwd: vault.__setitem__((svc, user), pwd)
@@ -382,19 +390,23 @@ class TestControllerAndServices(unittest.TestCase):
         from core.managers import AccountManager
 
         fake, vault = self._fake_keyring()
-        with tempfile.TemporaryDirectory() as tmp_dir, \
-             patch.object(credential_store, "keyring", fake), \
-             patch.object(credential_store, "_AVAILABLE", True):
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(credential_store, "keyring", fake),
+            patch.object(credential_store, "_AVAILABLE", True),
+        ):
             paths = build_test_paths(Path(tmp_dir))
             paths.ensure_runtime_dirs()
             manager = AccountManager(paths)
-            created = manager.create_account({
-                "instance": "US - 09",
-                "name": "Eve",
-                "phone": "+15550000000",
-                "password": "VerySecret!",
-                "status": "active",
-            })
+            created = manager.create_account(
+                {
+                    "instance": "US - 09",
+                    "name": "Eve",
+                    "phone": "+15550000000",
+                    "password": "VerySecret!",
+                    "status": "active",
+                }
+            )
             on_disk = paths.accounts_file.read_text(encoding="utf-8")
 
             self.assertNotIn("VerySecret!", on_disk)
@@ -410,17 +422,21 @@ class TestControllerAndServices(unittest.TestCase):
         from core.managers import AccountManager
 
         fake, vault = self._fake_keyring()
-        with tempfile.TemporaryDirectory() as tmp_dir, \
-             patch.object(credential_store, "keyring", fake), \
-             patch.object(credential_store, "_AVAILABLE", True):
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(credential_store, "keyring", fake),
+            patch.object(credential_store, "_AVAILABLE", True),
+        ):
             paths = build_test_paths(Path(tmp_dir))
             paths.ensure_runtime_dirs()
             manager = AccountManager(paths)
-            created = manager.create_account({
-                "instance": "US - 10",
-                "password": "ToBeDeleted!",
-                "phone": "+15551110000",
-            })
+            created = manager.create_account(
+                {
+                    "instance": "US - 10",
+                    "password": "ToBeDeleted!",
+                    "phone": "+15551110000",
+                }
+            )
             account_id = created["account_id"]
             self.assertIn(("alp-automation", f"{account_id}::password"), vault)
 
@@ -433,29 +449,35 @@ class TestControllerAndServices(unittest.TestCase):
         from core.managers import AccountManager
 
         fake, vault = self._fake_keyring()
-        with tempfile.TemporaryDirectory() as tmp_dir, \
-             patch.object(credential_store, "keyring", fake), \
-             patch.object(credential_store, "_AVAILABLE", True):
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(credential_store, "keyring", fake),
+            patch.object(credential_store, "_AVAILABLE", True),
+        ):
             paths = build_test_paths(Path(tmp_dir))
             paths.ensure_runtime_dirs()
             paths.accounts_file.write_text(
-                json.dumps([{
-                    "account_id": "legacy-1",
-                    "facebook_uid": "12345",
-                    "name": "Legacy",
-                    "password": "leaked-plain",
-                    "status": "idle",
-                    "device_name": "US - 11",
-                    "instance": "US - 11",
-                    "email": "",
-                    "phone": "",
-                    "ld_adb": "",
-                    "gender": "",
-                    "notes": "",
-                    "username": "Legacy",
-                    "created_at": "2026-01-01T00:00:00",
-                    "updated_at": "2026-01-01T00:00:00",
-                }]),
+                json.dumps(
+                    [
+                        {
+                            "account_id": "legacy-1",
+                            "facebook_uid": "12345",
+                            "name": "Legacy",
+                            "password": "leaked-plain",
+                            "status": "idle",
+                            "device_name": "US - 11",
+                            "instance": "US - 11",
+                            "email": "",
+                            "phone": "",
+                            "ld_adb": "",
+                            "gender": "",
+                            "notes": "",
+                            "username": "Legacy",
+                            "created_at": "2026-01-01T00:00:00",
+                            "updated_at": "2026-01-01T00:00:00",
+                        }
+                    ]
+                ),
                 encoding="utf-8",
             )
             manager = AccountManager(paths)
@@ -469,28 +491,31 @@ class TestControllerAndServices(unittest.TestCase):
         from core import credential_store
         from core.managers import AccountManager
 
-        with tempfile.TemporaryDirectory() as tmp_dir, \
-             patch.object(credential_store, "_AVAILABLE", False):
+        with tempfile.TemporaryDirectory() as tmp_dir, patch.object(credential_store, "_AVAILABLE", False):
             paths = build_test_paths(Path(tmp_dir))
             paths.ensure_runtime_dirs()
             paths.accounts_file.write_text(
-                json.dumps([{
-                    "account_id": "no-vault-1",
-                    "name": "NoVault",
-                    "password": "still-here",
-                    "status": "idle",
-                    "device_name": "US - 12",
-                    "instance": "US - 12",
-                    "email": "",
-                    "phone": "+15552220000",
-                    "ld_adb": "",
-                    "gender": "",
-                    "notes": "",
-                    "username": "NoVault",
-                    "facebook_uid": "",
-                    "created_at": "2026-01-01T00:00:00",
-                    "updated_at": "2026-01-01T00:00:00",
-                }]),
+                json.dumps(
+                    [
+                        {
+                            "account_id": "no-vault-1",
+                            "name": "NoVault",
+                            "password": "still-here",
+                            "status": "idle",
+                            "device_name": "US - 12",
+                            "instance": "US - 12",
+                            "email": "",
+                            "phone": "+15552220000",
+                            "ld_adb": "",
+                            "gender": "",
+                            "notes": "",
+                            "username": "NoVault",
+                            "facebook_uid": "",
+                            "created_at": "2026-01-01T00:00:00",
+                            "updated_at": "2026-01-01T00:00:00",
+                        }
+                    ]
+                ),
                 encoding="utf-8",
             )
             manager = AccountManager(paths)
@@ -510,9 +535,11 @@ class TestControllerAndServices(unittest.TestCase):
             label = "email"
             password = "LoggedSecret!"
 
-        with tempfile.TemporaryDirectory() as tmp_dir, \
-             patch.object(credential_store, "keyring", fake), \
-             patch.object(credential_store, "_AVAILABLE", True):
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(credential_store, "keyring", fake),
+            patch.object(credential_store, "_AVAILABLE", True),
+        ):
             paths = build_test_paths(Path(tmp_dir))
             paths.ensure_runtime_dirs()
             handler = LoginHandlerMixin.__new__(LoginHandlerMixin)
@@ -535,17 +562,21 @@ class TestControllerAndServices(unittest.TestCase):
             label = "email"
             password = "NewPw!"
 
-        with tempfile.TemporaryDirectory() as tmp_dir, \
-             patch.object(credential_store, "keyring", fake), \
-             patch.object(credential_store, "_AVAILABLE", True):
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(credential_store, "keyring", fake),
+            patch.object(credential_store, "_AVAILABLE", True),
+        ):
             paths = build_test_paths(Path(tmp_dir))
             paths.ensure_runtime_dirs()
             log_path = paths.config_dir / "logged_accounts.json"
             log_path.write_text(
-                json.dumps([
-                    {"facebook_uid": "old-uid-1", "password": ""},
-                    {"facebook_uid": "old-uid-2", "password": ""},
-                ]),
+                json.dumps(
+                    [
+                        {"facebook_uid": "old-uid-1", "password": ""},
+                        {"facebook_uid": "old-uid-2", "password": ""},
+                    ]
+                ),
                 encoding="utf-8",
             )
             handler = LoginHandlerMixin.__new__(LoginHandlerMixin)
@@ -556,14 +587,14 @@ class TestControllerAndServices(unittest.TestCase):
         # Migration optimization: existing entries had empty passwords, so set_password was
         # called only for the newly appended record.
         password_writes = [
-            call for call in fake.set_password.call_args_list
-            if call.args[1].endswith("::password")
+            call for call in fake.set_password.call_args_list if call.args[1].endswith("::password")
         ]
         self.assertEqual(len(password_writes), 1)
         self.assertEqual(password_writes[0].args[1], "fbuid-2::password")
 
     def test_account_manager_imports_json_accounts(self) -> None:
         from core import credential_store
+
         self._kr_patch_a = patch.object(credential_store, "_AVAILABLE", False)
         self._kr_patch_a.start()
         self.addCleanup(self._kr_patch_a.stop)
@@ -598,6 +629,7 @@ class TestControllerAndServices(unittest.TestCase):
 
     def test_account_manager_imports_csv_accounts(self) -> None:
         from core import credential_store
+
         kp = patch.object(credential_store, "_AVAILABLE", False)
         kp.start()
         self.addCleanup(kp.stop)
@@ -606,8 +638,7 @@ class TestControllerAndServices(unittest.TestCase):
             paths.ensure_runtime_dirs()
             source = paths.config_dir / "import_accounts.csv"
             source.write_text(
-                "instance,name,email,password,status\n"
-                "US - 02,Bob,bob@example.com,TopSecret!,idle\n",
+                "instance,name,email,password,status\nUS - 02,Bob,bob@example.com,TopSecret!,idle\n",
                 encoding="utf-8",
             )
 
@@ -622,6 +653,7 @@ class TestControllerAndServices(unittest.TestCase):
 
     def test_account_manager_updates_and_removes_by_uid(self) -> None:
         from core import credential_store
+
         kp = patch.object(credential_store, "_AVAILABLE", False)
         kp.start()
         self.addCleanup(kp.stop)
@@ -656,6 +688,7 @@ class TestControllerAndServices(unittest.TestCase):
 
     def test_account_manager_exports_txt_and_pdf(self) -> None:
         from core import credential_store
+
         kp = patch.object(credential_store, "_AVAILABLE", False)
         kp.start()
         self.addCleanup(kp.stop)

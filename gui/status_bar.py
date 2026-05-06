@@ -13,7 +13,9 @@ class StatusBarMixin:
         font_sizes = getattr(getattr(self, "appearance", None), "font_sizes", {}) or {}
         status_pad = spacing.get("status_pad", (7, 1))
         meta_font = int(font_sizes.get("meta", 9))
-        bar = tk.Frame(self.root, bg=self.palette["surface"], height=int(spacing.get("status_bar_height", 26)))
+        bar = tk.Frame(
+            self.root, bg=self.palette["surface"], height=int(spacing.get("status_bar_height", 26))
+        )
         bar.pack(side="bottom", fill="x")
         bar.pack_propagate(False)
         tk.Frame(bar, bg=self.palette["border"], height=1).pack(side="top", fill="x")
@@ -138,11 +140,17 @@ class StatusBarMixin:
                 if hasattr(self, "footer_mem_label"):
                     self.footer_mem_label.config(text=f"Mem: {mem:.0f}%")
                 if hasattr(self, "sidebar_status_pill"):
-                    adb_online = sum(1 for status in self._ld_status_cache.values() if status in ("Active", "Running"))
+                    adb_online = sum(
+                        1 for status in self._ld_status_cache.values() if status in ("Active", "Running")
+                    )
                     sidebar_status = "Active" if adb_online else "Inactive"
-                    self.sidebar_status_pill.set_status(sidebar_status, text=f"ADB Online | {adb_online} active | CPU {cpu:.0f}%")
+                    self.sidebar_status_pill.set_status(
+                        sidebar_status, text=f"ADB Online | {adb_online} active | CPU {cpu:.0f}%"
+                    )
                 if hasattr(self, "status_adb_lbl"):
-                    adb_online = sum(1 for status in self._ld_status_cache.values() if status in ("Active", "Running"))
+                    adb_online = sum(
+                        1 for status in self._ld_status_cache.values() if status in ("Active", "Running")
+                    )
                     self.status_adb_lbl.set_status(
                         "Active" if adb_online else "Inactive",
                         text=f"ADB: {adb_online} devices",

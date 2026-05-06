@@ -30,14 +30,14 @@ _DEFAULT_LOGO = _PROJECT_ROOT / "assets" / "splash_screen_ryu.png"
 
 # Palette (matches the requested design tokens)
 COLORS = {
-    "bg_outer":      "#020617",
-    "bg_inner":      "#0F172A",
-    "border":        "#2A3550",   # approximation of rgba(255,255,255,0.12) on dark
-    "text_primary":  "#F8FAFC",
-    "text_muted":    "#94A3B8",
-    "accent":        "#38BDF8",
-    "deep_glow":     "#2563EB",
-    "track":         "#1E293B",
+    "bg_outer": "#020617",
+    "bg_inner": "#0F172A",
+    "border": "#2A3550",  # approximation of rgba(255,255,255,0.12) on dark
+    "text_primary": "#F8FAFC",
+    "text_muted": "#94A3B8",
+    "accent": "#38BDF8",
+    "deep_glow": "#2563EB",
+    "track": "#1E293B",
 }
 
 DEFAULT_STATUS_STEPS = (
@@ -69,8 +69,7 @@ class SplashConfig:
 class SplashScreen:
     """A borderless, centered splash window drawn on a single Canvas."""
 
-    def __init__(self, config: Optional[SplashConfig] = None,
-                 master: Optional[tk.Misc] = None) -> None:
+    def __init__(self, config: Optional[SplashConfig] = None, master: Optional[tk.Misc] = None) -> None:
         self.cfg = config or SplashConfig()
 
         # Reuse the caller's Tk root when provided so ttk/ttkbootstrap styles
@@ -173,16 +172,14 @@ class SplashScreen:
         self.canvas.create_rectangle(0, 0, w, h, fill=self._transparent_color, outline="")
 
         # Vertical gradient (bg_outer -> bg_inner -> bg_outer) inside rounded card.
-        self._draw_rounded_gradient(2, 2, w - 2, h - 2, r,
-                                    COLORS["bg_outer"], COLORS["bg_inner"])
+        self._draw_rounded_gradient(2, 2, w - 2, h - 2, r, COLORS["bg_outer"], COLORS["bg_inner"])
 
         # Soft border
         self._draw_rounded_outline(2, 2, w - 2, h - 2, r, COLORS["border"])
 
         # Radial blue glow behind logo
         cx, cy = w // 2, int(h * 0.36)
-        self._draw_radial_glow(cx, cy, radius=170,
-                               inner=COLORS["deep_glow"], outer=COLORS["bg_inner"])
+        self._draw_radial_glow(cx, cy, radius=170, inner=COLORS["deep_glow"], outer=COLORS["bg_inner"])
 
         # Logo (image asset, falls back to canvas drawing)
         self._draw_logo_image(cx, cy)
@@ -190,20 +187,25 @@ class SplashScreen:
         # Title — only render when not already baked into the logo image
         if self.cfg.show_title:
             self.canvas.create_text(
-                w // 2, int(h * 0.58),
+                w // 2,
+                int(h * 0.58),
                 text=self.cfg.title,
                 fill=COLORS["text_primary"],
                 font=("Segoe UI", 22, "bold"),
             )
             self.canvas.create_rectangle(
-                w // 2 - 28, int(h * 0.58) + 22,
-                w // 2 + 28, int(h * 0.58) + 23,
-                fill=COLORS["accent"], outline="",
+                w // 2 - 28,
+                int(h * 0.58) + 22,
+                w // 2 + 28,
+                int(h * 0.58) + 23,
+                fill=COLORS["accent"],
+                outline="",
             )
 
         # Version (bottom center)
         self.canvas.create_text(
-            w // 2, h - 26,
+            w // 2,
+            h - 26,
             text=self.cfg.version,
             fill=COLORS["text_muted"],
             font=("Segoe UI", 9),
@@ -217,7 +219,8 @@ class SplashScreen:
 
         # Status text
         self.canvas.create_text(
-            w // 2, int(h * 0.68),
+            w // 2,
+            int(h * 0.68),
             text=self._status_text,
             fill=COLORS["text_muted"],
             font=("Segoe UI", 11),
@@ -232,8 +235,13 @@ class SplashScreen:
 
         # Track
         self._draw_rounded_rect(
-            bar_x, bar_y, bar_x + bar_w, bar_y + bar_h, bar_h // 2,
-            fill=COLORS["track"], tag="dynamic",
+            bar_x,
+            bar_y,
+            bar_x + bar_w,
+            bar_y + bar_h,
+            bar_h // 2,
+            fill=COLORS["track"],
+            tag="dynamic",
         )
 
         # Fill
@@ -241,18 +249,28 @@ class SplashScreen:
         fill_w = max(int(bar_w * pct), bar_h)
         # Glow underlay (slightly taller, semi-transparent feel via color blend)
         self._draw_rounded_rect(
-            bar_x - 2, bar_y - 3, bar_x + fill_w + 2, bar_y + bar_h + 3,
+            bar_x - 2,
+            bar_y - 3,
+            bar_x + fill_w + 2,
+            bar_y + bar_h + 3,
             (bar_h // 2) + 3,
-            fill=COLORS["deep_glow"], tag="dynamic",
+            fill=COLORS["deep_glow"],
+            tag="dynamic",
         )
         self._draw_rounded_rect(
-            bar_x, bar_y, bar_x + fill_w, bar_y + bar_h, bar_h // 2,
-            fill=COLORS["accent"], tag="dynamic",
+            bar_x,
+            bar_y,
+            bar_x + fill_w,
+            bar_y + bar_h,
+            bar_h // 2,
+            fill=COLORS["accent"],
+            tag="dynamic",
         )
 
         # Percent text on the right
         self.canvas.create_text(
-            bar_x + bar_w + 28, bar_y + bar_h // 2,
+            bar_x + bar_w + 28,
+            bar_y + bar_h // 2,
             text=f"{int(round(self._progress_value))}%",
             fill=COLORS["text_primary"],
             font=("Segoe UI", 10, "bold"),
@@ -264,12 +282,17 @@ class SplashScreen:
         dot_y = bar_y + 28
         dot_cx = w // 2
         for i in range(3):
-            active = (i == self._dot_phase % 3)
+            active = i == self._dot_phase % 3
             color = COLORS["accent"] if active else COLORS["track"]
             x = dot_cx - 14 + i * 14
             self.canvas.create_oval(
-                x - 3, dot_y - 3, x + 3, dot_y + 3,
-                fill=color, outline="", tags="dynamic",
+                x - 3,
+                dot_y - 3,
+                x + 3,
+                dot_y + 3,
+                fill=color,
+                outline="",
+                tags="dynamic",
             )
 
     # ----- primitive drawing ----------------------------------------------
@@ -288,14 +311,16 @@ class SplashScreen:
 
     def _draw_rounded_outline(self, x1, y1, x2, y2, r, color):
         # Thin outline using arcs + lines.
-        self.canvas.create_arc(x1, y1, x1 + 2 * r, y1 + 2 * r, start=90, extent=90,
-                               style="arc", outline=color)
-        self.canvas.create_arc(x2 - 2 * r, y1, x2, y1 + 2 * r, start=0, extent=90,
-                               style="arc", outline=color)
-        self.canvas.create_arc(x1, y2 - 2 * r, x1 + 2 * r, y2, start=180, extent=90,
-                               style="arc", outline=color)
-        self.canvas.create_arc(x2 - 2 * r, y2 - 2 * r, x2, y2, start=270, extent=90,
-                               style="arc", outline=color)
+        self.canvas.create_arc(
+            x1, y1, x1 + 2 * r, y1 + 2 * r, start=90, extent=90, style="arc", outline=color
+        )
+        self.canvas.create_arc(x2 - 2 * r, y1, x2, y1 + 2 * r, start=0, extent=90, style="arc", outline=color)
+        self.canvas.create_arc(
+            x1, y2 - 2 * r, x1 + 2 * r, y2, start=180, extent=90, style="arc", outline=color
+        )
+        self.canvas.create_arc(
+            x2 - 2 * r, y2 - 2 * r, x2, y2, start=270, extent=90, style="arc", outline=color
+        )
         self.canvas.create_line(x1 + r, y1, x2 - r, y1, fill=color)
         self.canvas.create_line(x1 + r, y2, x2 - r, y2, fill=color)
         self.canvas.create_line(x1, y1 + r, x1, y2 - r, fill=color)
@@ -323,8 +348,10 @@ class SplashScreen:
 
         # Re-mask the corners with transparent color to fake rounded edges.
         for cx, cy, sa, ea in (
-            (x1, y1, 0, 90), (x2 - 2 * r, y1, 90, 180),
-            (x1, y2 - 2 * r, 270, 360), (x2 - 2 * r, y2 - 2 * r, 180, 270),
+            (x1, y1, 0, 90),
+            (x2 - 2 * r, y1, 90, 180),
+            (x1, y2 - 2 * r, 270, 360),
+            (x2 - 2 * r, y2 - 2 * r, 180, 270),
         ):
             pass  # corners handled by outline + outer transparent fill
         # Top/bottom rounded mask: cover corners with outer transparent triangles
@@ -334,20 +361,24 @@ class SplashScreen:
         bg = self._transparent_color
         # Top-left
         self.canvas.create_rectangle(x1 - 2, y1 - 2, x1 + r, y1 + r, fill=bg, outline="")
-        self.canvas.create_arc(x1, y1, x1 + 2 * r, y1 + 2 * r, start=90, extent=90,
-                               fill=COLORS["bg_outer"], outline="")
+        self.canvas.create_arc(
+            x1, y1, x1 + 2 * r, y1 + 2 * r, start=90, extent=90, fill=COLORS["bg_outer"], outline=""
+        )
         # Top-right
         self.canvas.create_rectangle(x2 - r, y1 - 2, x2 + 2, y1 + r, fill=bg, outline="")
-        self.canvas.create_arc(x2 - 2 * r, y1, x2, y1 + 2 * r, start=0, extent=90,
-                               fill=COLORS["bg_outer"], outline="")
+        self.canvas.create_arc(
+            x2 - 2 * r, y1, x2, y1 + 2 * r, start=0, extent=90, fill=COLORS["bg_outer"], outline=""
+        )
         # Bottom-left
         self.canvas.create_rectangle(x1 - 2, y2 - r, x1 + r, y2 + 2, fill=bg, outline="")
-        self.canvas.create_arc(x1, y2 - 2 * r, x1 + 2 * r, y2, start=180, extent=90,
-                               fill=COLORS["bg_outer"], outline="")
+        self.canvas.create_arc(
+            x1, y2 - 2 * r, x1 + 2 * r, y2, start=180, extent=90, fill=COLORS["bg_outer"], outline=""
+        )
         # Bottom-right
         self.canvas.create_rectangle(x2 - r, y2 - r, x2 + 2, y2 + 2, fill=bg, outline="")
-        self.canvas.create_arc(x2 - 2 * r, y2 - 2 * r, x2, y2, start=270, extent=90,
-                               fill=COLORS["bg_outer"], outline="")
+        self.canvas.create_arc(
+            x2 - 2 * r, y2 - 2 * r, x2, y2, start=270, extent=90, fill=COLORS["bg_outer"], outline=""
+        )
 
     def _draw_radial_glow(self, cx, cy, radius, inner, outer, steps=24):
         c_in = self._hex_to_rgb(inner)
@@ -357,8 +388,7 @@ class SplashScreen:
             rgb = self._lerp_rgb(c_out, c_in, 1 - t)
             color = self._rgb_to_hex(rgb)
             rr = int(radius * t)
-            self.canvas.create_oval(cx - rr, cy - rr, cx + rr, cy + rr,
-                                    fill=color, outline="")
+            self.canvas.create_oval(cx - rr, cy - rr, cx + rr, cy + rr, fill=color, outline="")
 
     def _resolve_logo_path(self) -> Path:
         """Resolve logo_path against the project root if it isn't absolute."""
@@ -401,9 +431,14 @@ class SplashScreen:
             x = cx + math.cos(a) * (gear_r - 4)
             y = cy + math.sin(a) * (gear_r - 4)
             self.canvas.create_oval(x - 6, y - 6, x + 6, y + 6, fill=gear_color, outline="")
-        self.canvas.create_oval(cx - gear_r + 12, cy - gear_r + 12,
-                                cx + gear_r - 12, cy + gear_r - 12,
-                                fill=COLORS["bg_inner"], outline=gear_color)
+        self.canvas.create_oval(
+            cx - gear_r + 12,
+            cy - gear_r + 12,
+            cx + gear_r - 12,
+            cy + gear_r - 12,
+            fill=COLORS["bg_inner"],
+            outline=gear_color,
+        )
 
         # Letter A (two angled strokes + crossbar)
         top = (cx, cy - s)
@@ -411,32 +446,48 @@ class SplashScreen:
         br = (cx + int(s * 0.85), cy + int(s * 0.85))
         # outer left stroke
         self.canvas.create_polygon(
-            top[0], top[1],
-            top[0] + 12, top[1] + 4,
-            bl[0] + 24, bl[1],
-            bl[0], bl[1],
-            fill=white, outline="",
+            top[0],
+            top[1],
+            top[0] + 12,
+            top[1] + 4,
+            bl[0] + 24,
+            bl[1],
+            bl[0],
+            bl[1],
+            fill=white,
+            outline="",
         )
         # outer right stroke
         self.canvas.create_polygon(
-            top[0], top[1],
-            top[0] - 12, top[1] + 4,
-            br[0] - 24, br[1],
-            br[0], br[1],
-            fill=white, outline="",
+            top[0],
+            top[1],
+            top[0] - 12,
+            top[1] + 4,
+            br[0] - 24,
+            br[1],
+            br[0],
+            br[1],
+            fill=white,
+            outline="",
         )
         # crossbar
         self.canvas.create_rectangle(
-            cx - int(s * 0.42), cy + int(s * 0.18),
-            cx + int(s * 0.42), cy + int(s * 0.30),
-            fill=white, outline="",
+            cx - int(s * 0.42),
+            cy + int(s * 0.18),
+            cx + int(s * 0.42),
+            cy + int(s * 0.30),
+            fill=white,
+            outline="",
         )
 
         # Play triangle inside the A's lower opening
         tri = [
-            cx - int(s * 0.18), cy + int(s * 0.42),
-            cx - int(s * 0.18), cy + int(s * 0.78),
-            cx + int(s * 0.22), cy + int(s * 0.60),
+            cx - int(s * 0.18),
+            cy + int(s * 0.42),
+            cx - int(s * 0.18),
+            cy + int(s * 0.78),
+            cx + int(s * 0.22),
+            cy + int(s * 0.60),
         ]
         self.canvas.create_polygon(tri, fill=COLORS["accent"], outline="")
 
@@ -449,15 +500,15 @@ class SplashScreen:
 
     @staticmethod
     def _rgb_to_hex(rgb):
-        return "#%02x%02x%02x" % (max(0, min(255, int(rgb[0]))),
-                                   max(0, min(255, int(rgb[1]))),
-                                   max(0, min(255, int(rgb[2]))))
+        return "#%02x%02x%02x" % (
+            max(0, min(255, int(rgb[0]))),
+            max(0, min(255, int(rgb[1]))),
+            max(0, min(255, int(rgb[2]))),
+        )
 
     @staticmethod
     def _lerp_rgb(a, b, t):
-        return (a[0] + (b[0] - a[0]) * t,
-                a[1] + (b[1] - a[1]) * t,
-                a[2] + (b[2] - a[2]) * t)
+        return (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t)
 
     # ----- animation -------------------------------------------------------
 

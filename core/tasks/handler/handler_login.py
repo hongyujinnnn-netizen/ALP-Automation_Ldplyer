@@ -1,4 +1,4 @@
-﻿import base64
+import base64
 import hashlib
 import hmac
 import json
@@ -14,6 +14,7 @@ from core.paths import get_app_paths
 from core.settings import _atomic_write_json
 
 _logger = logging.getLogger(__name__)
+
 
 class LoginHandlerMixin:
     # ------------------------------------------------------------------
@@ -282,53 +283,58 @@ class LoginHandlerMixin:
         except Exception:
             return "Unknown"
 
-        if any(p in xml for p in (
-            "Go to your authentication app",
-            "authentication app"
-        )):
+        if any(p in xml for p in ("Go to your authentication app", "authentication app")):
             return "Otp"
-        
-        if any(p in xml for p in (
-            "check your notifications on another device",
-            "we sent a notification to your other device",
-            "Waiting for approval on your other device",
-        )):
-            return "Otp2"
-        
-        # choose method screen
-        if any(p in xml for p in (
-            "choose a way to confirm",
-            "confirm it's you",
-            "notification on another device",
-            "authentication app",
-            "available confirmation methods",
-        )):
+
+        if any(
+            p in xml
+            for p in (
+                "check your notifications on another device",
+                "we sent a notification to your other device",
+                "Waiting for approval on your other device",
+            )
+        ):
             return "Otp2"
 
-        if any(p in xml for p in (
-            "wrong password",
-            "incorrect password",
-            "the password you entered is incorrect",
-            "couldn't find your account",
-            "account not found",
-        )):
+        # choose method screen
+        if any(
+            p in xml
+            for p in (
+                "choose a way to confirm",
+                "confirm it's you",
+                "notification on another device",
+                "authentication app",
+                "available confirmation methods",
+            )
+        ):
+            return "Otp2"
+
+        if any(
+            p in xml
+            for p in (
+                "wrong password",
+                "incorrect password",
+                "the password you entered is incorrect",
+                "couldn't find your account",
+                "account not found",
+            )
+        ):
             return "WrongPassword"
-        
-        if any(p in xml for p in (
-            "Save your login info?",
-            "We'll save the login info for",
-            "you restore."
-        )):
+
+        if any(p in xml for p in ("Save your login info?", "We'll save the login info for", "you restore.")):
             return "SussaveLogininfo"
 
-        if any(p in xml for p in (
-            "account suspended",
-            "we suspended your account",
-            "confirm your identity",
-            "confirm it's you",
-            "we need to confirm",
-            "review login",
-        )):
+        if any(
+            p in xml
+            for p in (
+                "account suspended",
+                "we suspended your account",
+                "confirm your identity",
+                "confirm it's you",
+                "we need to confirm",
+                "review login",
+            )
+        ):
             return "Checkpoint"
 
         if self._is_logged_in_xml(xml):
@@ -469,14 +475,7 @@ class LoginHandlerMixin:
         return False
 
     def _is_logged_in_xml(self, xml_lower):
-        markers = (
-            "what's on your mind"
-            "news feed"
-            "stories"
-            "marketplace"
-            "tab_feed"
-            "feed_tab"
-        )
+        markers = "what's on your mindnews feedstoriesmarketplacetab_feedfeed_tab"
         return any(m in xml_lower for m in markers)
 
     def _is_logged_in(self, d):
@@ -525,7 +524,7 @@ class LoginHandlerMixin:
         digest = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
         offset = digest[-1] & 0x0F
         token = struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
-        return str(token % (10 ** digits)).zfill(digits)
+        return str(token % (10**digits)).zfill(digits)
 
     def _looks_like_2fa_screen(self, d):
         selectors = [

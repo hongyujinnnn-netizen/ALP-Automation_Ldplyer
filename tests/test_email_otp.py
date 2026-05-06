@@ -42,7 +42,12 @@ class FakeClock:
 
 
 class FakeEmailService:
-    def __init__(self, messages: dict[str, dict], search_sequences: list[list[str]] | None = None, fail_connect: bool = False) -> None:
+    def __init__(
+        self,
+        messages: dict[str, dict],
+        search_sequences: list[list[str]] | None = None,
+        fail_connect: bool = False,
+    ) -> None:
         self.messages = messages
         self.search_sequences = list(search_sequences or [list(messages.keys())])
         self.fail_connect = fail_connect
@@ -92,8 +97,12 @@ class TestEmailOTP(unittest.TestCase):
 
     def test_matches_filters_uses_case_insensitive_substring_matching(self) -> None:
         request = OTPRequest(sender_filter="alerts@example.com", subject_filter="verify")
-        self.assertTrue(OTPService.matches_filters("Alerts <alerts@example.com>", "Please Verify Your Login", request))
-        self.assertFalse(OTPService.matches_filters("Other <other@example.com>", "Please Verify Your Login", request))
+        self.assertTrue(
+            OTPService.matches_filters("Alerts <alerts@example.com>", "Please Verify Your Login", request)
+        )
+        self.assertFalse(
+            OTPService.matches_filters("Other <other@example.com>", "Please Verify Your Login", request)
+        )
         self.assertFalse(OTPService.matches_filters("Alerts <alerts@example.com>", "Weekly Digest", request))
 
     def test_fetch_latest_otp_checks_newest_messages_first(self) -> None:

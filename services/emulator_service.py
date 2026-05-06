@@ -86,8 +86,9 @@ class EmulatorService:
                     return True
         return False
 
-    def wait_for_ld_ready(self, name: str, timeout: int = 120, poll_interval: int = 2,
-                          max_offline_tries: int = 8) -> bool:
+    def wait_for_ld_ready(
+        self, name: str, timeout: int = 120, poll_interval: int = 2, max_offline_tries: int = 8
+    ) -> bool:
         serial = self.name_to_serial.get(name)
         if not serial:
             return False

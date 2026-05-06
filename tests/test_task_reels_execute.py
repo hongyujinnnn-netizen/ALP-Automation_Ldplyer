@@ -153,11 +153,13 @@ class TestReelsExecutePageLoop(unittest.TestCase):
         handler.open_facebook = Mock(return_value=True)
         handler.click_facebook_menu = Mock(return_value=True)
         handler.click_profile_dropdown = Mock(return_value=True)
-        handler.detect_facebook_page = Mock(side_effect=AssertionError("dashboard pages should skip detection"))
+        handler.detect_facebook_page = Mock(
+            side_effect=AssertionError("dashboard pages should skip detection")
+        )
         handler.click_on_page = Mock(
-            side_effect=lambda d, pages, page_to_click: clicked_pages.append(list(pages))
-            or clicked_page_indexes.append(page_to_click)
-            or True
+            side_effect=lambda d, pages, page_to_click: (
+                clicked_pages.append(list(pages)) or clicked_page_indexes.append(page_to_click) or True
+            )
         )
         handler._open_file_manager_with_retry = Mock(return_value=True)
         handler.navigate_to_pictures = Mock(return_value=True)
@@ -196,10 +198,12 @@ class TestReelsExecutePageLoop(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch("core.tasks.task_reels.U2_AVAILABLE", True), \
-                 patch("core.tasks.task_reels.u2") as mock_u2, \
-                 patch("core.tasks.task_reels.time.sleep", return_value=None), \
-                 patch("core.tasks.task_reels.get_app_paths", return_value=paths):
+            with (
+                patch("core.tasks.task_reels.U2_AVAILABLE", True),
+                patch("core.tasks.task_reels.u2") as mock_u2,
+                patch("core.tasks.task_reels.time.sleep", return_value=None),
+                patch("core.tasks.task_reels.get_app_paths", return_value=paths),
+            ):
                 device = Mock()
                 device.serial = "127.0.0.1:5555"
                 selector = Mock()
@@ -270,10 +274,12 @@ class TestReelsExecutePageLoop(unittest.TestCase):
             paths = build_test_paths(Path(tmp_dir))
             paths.ensure_runtime_dirs()
 
-            with patch("core.tasks.task_reels.U2_AVAILABLE", True), \
-                 patch("core.tasks.task_reels.u2") as mock_u2, \
-                 patch("core.tasks.task_reels.time.sleep", return_value=None), \
-                 patch("core.tasks.task_reels.get_app_paths", return_value=paths):
+            with (
+                patch("core.tasks.task_reels.U2_AVAILABLE", True),
+                patch("core.tasks.task_reels.u2") as mock_u2,
+                patch("core.tasks.task_reels.time.sleep", return_value=None),
+                patch("core.tasks.task_reels.get_app_paths", return_value=paths),
+            ):
                 device = Mock()
                 device.serial = "127.0.0.1:5555"
                 selector = Mock()
@@ -321,7 +327,9 @@ class TestReelsExecutePageLoop(unittest.TestCase):
         handler.click_facebook_menu = Mock(return_value=True)
         handler.click_profile_dropdown = Mock(side_effect=[False, True])
         handler._clear_recent_apps = Mock()
-        handler.detect_facebook_page = Mock(side_effect=AssertionError("dashboard pages should skip detection"))
+        handler.detect_facebook_page = Mock(
+            side_effect=AssertionError("dashboard pages should skip detection")
+        )
         handler.click_on_page = Mock(return_value=True)
         handler._open_file_manager_with_retry = Mock(return_value=True)
         handler.navigate_to_pictures = Mock(return_value=True)
@@ -355,10 +363,12 @@ class TestReelsExecutePageLoop(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch("core.tasks.task_reels.U2_AVAILABLE", True), \
-                 patch("core.tasks.task_reels.u2") as mock_u2, \
-                 patch("core.tasks.task_reels.time.sleep", return_value=None), \
-                 patch("core.tasks.task_reels.get_app_paths", return_value=paths):
+            with (
+                patch("core.tasks.task_reels.U2_AVAILABLE", True),
+                patch("core.tasks.task_reels.u2") as mock_u2,
+                patch("core.tasks.task_reels.time.sleep", return_value=None),
+                patch("core.tasks.task_reels.get_app_paths", return_value=paths),
+            ):
                 device = Mock()
                 device.serial = "127.0.0.1:5555"
                 selector = Mock()

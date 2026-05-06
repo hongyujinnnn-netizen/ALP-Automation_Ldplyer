@@ -26,10 +26,10 @@ from typing import Callable, List, Optional
 # ── Known wedging signatures ─────────────────────────────────────────── #
 # Substrings (case-insensitive) — match anywhere in the VBox log line.
 ASSERTION_SIGNATURES = (
-    "ucountstat",          # STAM counter overflow — the headline error
-    "assertmsgfailed",     # generic VBox assertion
-    "guru meditation",     # VBox VM gone toxic
-    "verr_nem_",           # Hyper-V / NEM conflict
+    "ucountstat",  # STAM counter overflow — the headline error
+    "assertmsgfailed",  # generic VBox assertion
+    "guru meditation",  # VBox VM gone toxic
+    "verr_nem_",  # Hyper-V / NEM conflict
     "machinestate: aborted",
     "fatal error",
 )
@@ -66,6 +66,7 @@ class RecoveryResult:
 
 
 # ── Log scraping ────────────────────────────────────────────────────── #
+
 
 def _instance_log_dir(ld_dir: str, index: int) -> str:
     """LDPlayer 9 stores per-instance VBox logs under vms/leidian{N}/Logs."""
@@ -139,6 +140,7 @@ def scan_dnconsole_output(text: str) -> List[HealthIssue]:
 
 # ── Process surgery ─────────────────────────────────────────────────── #
 
+
 def _run(cmd, timeout=10):
     """Quiet subprocess.run that swallows non-zero exits."""
     try:
@@ -159,11 +161,18 @@ def _wmic_pids_for(image_name: str, cmdline_match: str) -> List[int]:
     Uses WMIC because it ships with every Windows. Falls back to empty list
     on failure — recovery never *requires* this to succeed.
     """
-    proc = _run([
-        "wmic", "process", "where",
-        f"name='{image_name}'",
-        "get", "ProcessId,CommandLine", "/format:csv",
-    ], timeout=15)
+    proc = _run(
+        [
+            "wmic",
+            "process",
+            "where",
+            f"name='{image_name}'",
+            "get",
+            "ProcessId,CommandLine",
+            "/format:csv",
+        ],
+        timeout=15,
+    )
     if not proc or proc.returncode != 0:
         return []
     pids = []
@@ -217,6 +226,7 @@ def kill_global_vboxsvc() -> List[str]:
 
 # ── High-level orchestration ────────────────────────────────────────── #
 
+
 def recover_instance(
     emulator,
     name: str,
@@ -230,6 +240,7 @@ def recover_instance(
 
     ``log(message, level)`` is optional; defaults to print().
     """
+
     def _log(msg, level="INFO"):
         if log:
             try:
@@ -304,9 +315,7 @@ def recover_instance(
             continue
 
         try:
-            ready = emulator.wait_for_ld_ready(
-                name, timeout=boot_timeout, poll_interval=2
-            )
+            ready = emulator.wait_for_ld_ready(name, timeout=boot_timeout, poll_interval=2)
         except Exception as exc:
             ready = False
             _log(f"wait_for_ld_ready raised for '{name}': {exc}", "ERROR")

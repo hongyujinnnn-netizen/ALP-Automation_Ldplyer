@@ -37,10 +37,10 @@ class TasksPageMixin:
 
     # Visual metadata per task tile: (icon, short description, accent, badge tag)
     TASK_TYPE_META = {
-        "scroll":       ("◉", "Keep accounts active by browsing the feed.", "#22D3EE", "Engage"),
-        "reg_account":  ("✦", "Register and verify new Facebook accounts.", "#A855F7", "Onboard"),
-        "reels":        ("▶", "Post reels across pages with rotation.",     "#F43F5E", "Publish"),
-        "test_feature": ("✱", "Run experimental modules safely.",           "#F59E0B", "Beta"),
+        "scroll": ("◉", "Keep accounts active by browsing the feed.", "#22D3EE", "Engage"),
+        "reg_account": ("✦", "Register and verify new Facebook accounts.", "#A855F7", "Onboard"),
+        "reels": ("▶", "Post reels across pages with rotation.", "#F43F5E", "Publish"),
+        "test_feature": ("✱", "Run experimental modules safely.", "#F59E0B", "Beta"),
     }
 
     # ─────────────────────────────────────────────────────────────────── #
@@ -168,9 +168,7 @@ class TasksPageMixin:
 
         self._task_tile_widgets = {}
         for index, (label, value) in enumerate(self.TASK_TYPE_OPTIONS):
-            icon, desc, accent, tag = self.TASK_TYPE_META.get(
-                value, ("●", "", _TASKS_PRIMARY, "Task")
-            )
+            icon, desc, accent, tag = self.TASK_TYPE_META.get(value, ("●", "", _TASKS_PRIMARY, "Task"))
             tile = self._build_task_tile(grid, value, label, desc, icon, accent, tag)
             tile.grid(
                 row=index // columns,
@@ -258,8 +256,18 @@ class TasksPageMixin:
         )
         desc_lbl.pack(anchor="w", pady=(6, 0))
 
-        widgets = (outer, inner, head, badge_outer, icon_lbl,
-                   tag_lbl, title_row, title_lbl, check_lbl, desc_lbl)
+        widgets = (
+            outer,
+            inner,
+            head,
+            badge_outer,
+            icon_lbl,
+            tag_lbl,
+            title_row,
+            title_lbl,
+            check_lbl,
+            desc_lbl,
+        )
 
         def _select(_event=None):
             if self.task_type_var.get() != value:
@@ -275,8 +283,7 @@ class TasksPageMixin:
             self._sync_task_tile_selection()
 
         # Don't bind hover on the icon badge itself — it would flicker its bg.
-        click_targets = (outer, inner, head, tag_lbl, title_row,
-                         title_lbl, check_lbl, desc_lbl)
+        click_targets = (outer, inner, head, tag_lbl, title_row, title_lbl, check_lbl, desc_lbl)
         for widget in click_targets:
             widget.bind("<Button-1>", _select)
             widget.bind("<Enter>", _on_enter)
@@ -421,9 +428,7 @@ class TasksPageMixin:
     def _add_active_task_accent(self, card):
         """Add a thin accent stripe at the top of an Active Task card body so
         the panel visibly recolors when the user switches tasks."""
-        accent = self.TASK_TYPE_META.get(
-            self.task_type_var.get(), ("", "", _TASKS_PRIMARY, "")
-        )[2]
+        accent = self.TASK_TYPE_META.get(self.task_type_var.get(), ("", "", _TASKS_PRIMARY, ""))[2]
         tk.Frame(card, bg=accent, height=2).pack(fill="x", pady=(0, 8))
 
     def create_reels_task_settings(self, parent):
@@ -667,9 +672,9 @@ class TasksPageMixin:
                 pass
 
     _TASKS_STATUS_MAP = {
-        "ready":   ("Ready",   "● READY",   "#10B981"),
+        "ready": ("Ready", "● READY", "#10B981"),
         "running": ("Running", "● RUNNING", _TASKS_PRIMARY),
-        "paused":  ("Paused",  "● PAUSED",  _TASKS_WARNING),
+        "paused": ("Paused", "● PAUSED", _TASKS_WARNING),
         "stopped": ("Stopped", "● STOPPED", _TASKS_DANGER),
     }
 
@@ -693,7 +698,7 @@ class TasksPageMixin:
         if task_type == "scroll":
             try:
                 mins = int(self.task_duration.get())
-                ending_text = f"{mins} min run" if mins < 60 else f"{mins/60:.1f}h run"
+                ending_text = f"{mins} min run" if mins < 60 else f"{mins / 60:.1f}h run"
             except Exception:
                 ending_text = "— run"
             ending_color = _TASKS_WARNING
@@ -704,9 +709,9 @@ class TasksPageMixin:
         # Status segment color follows the live status word.
         status_word = getattr(self, "_tasks_status_word", "Ready")
         status_color = {
-            "Ready":   "#10B981",
+            "Ready": "#10B981",
             "Running": _TASKS_PRIMARY,
-            "Paused":  _TASKS_WARNING,
+            "Paused": _TASKS_WARNING,
             "Stopped": _TASKS_DANGER,
         }.get(status_word, "#10B981")
 

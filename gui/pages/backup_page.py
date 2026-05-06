@@ -480,8 +480,12 @@ class BackupPageMixin:
         pad = 8
         # Track
         canvas.create_arc(
-            pad, pad, size - pad, size - pad,
-            start=90, extent=-359.999,
+            pad,
+            pad,
+            size - pad,
+            size - pad,
+            start=90,
+            extent=-359.999,
             style="arc",
             outline=self.palette["surface_alt"],
             width=10,
@@ -490,21 +494,27 @@ class BackupPageMixin:
         if pct > 0:
             extent = -max(1, int(359.999 * (pct / 100)))
             canvas.create_arc(
-                pad, pad, size - pad, size - pad,
-                start=90, extent=extent,
+                pad,
+                pad,
+                size - pad,
+                size - pad,
+                start=90,
+                extent=extent,
                 style="arc",
                 outline=color,
                 width=10,
             )
         # Center percentage
         canvas.create_text(
-            size / 2, size / 2 - 6,
+            size / 2,
+            size / 2 - 6,
             text=f"{pct}%",
             fill=self.palette["text"],
             font=(self.display_font, 16, "bold"),
         )
         canvas.create_text(
-            size / 2, size / 2 + 14,
+            size / 2,
+            size / 2 + 14,
             text=label.upper(),
             fill=color,
             font=(self.mono_font, 8, "bold"),
@@ -524,40 +534,60 @@ class BackupPageMixin:
             child.destroy()
 
         tips = [
-            ("●", "Snapshot before risky ops", "Create a backup before bulk imports, queue resets, or schedule edits.", _VAULT_INDIGO),
-            ("●", "Restore scope", "Archives replace matching config/log/content files on restore.", _VAULT_AMBER),
+            (
+                "●",
+                "Snapshot before risky ops",
+                "Create a backup before bulk imports, queue resets, or schedule edits.",
+                _VAULT_INDIGO,
+            ),
+            (
+                "●",
+                "Restore scope",
+                "Archives replace matching config/log/content files on restore.",
+                _VAULT_AMBER,
+            ),
             ("●", "Retention", "Keep at least one baseline + one fresh working snapshot.", _VAULT_TEAL),
         ]
         if backups:
             latest = backups[0]
-            tips.append((
-                "●",
-                "Latest snapshot",
-                f"{latest['name']} — {latest['item_count']} files, {latest['size_text']}",
-                _VAULT_SKY,
-            ))
+            tips.append(
+                (
+                    "●",
+                    "Latest snapshot",
+                    f"{latest['name']} — {latest['item_count']} files, {latest['size_text']}",
+                    _VAULT_SKY,
+                )
+            )
 
         for dot, title, msg, color in tips:
             row = tk.Frame(self._tips_host, bg=self.palette["surface"])
             row.pack(fill="x", pady=3)
             tk.Label(
-                row, text=dot,
-                bg=self.palette["surface"], fg=color,
+                row,
+                text=dot,
+                bg=self.palette["surface"],
+                fg=color,
                 font=(self.display_font, 14),
             ).pack(side="left", padx=(0, 8), anchor="n")
             text_col = tk.Frame(row, bg=self.palette["surface"])
             text_col.pack(side="left", fill="x", expand=True)
             tk.Label(
-                text_col, text=title,
-                bg=self.palette["surface"], fg=self.palette["text"],
+                text_col,
+                text=title,
+                bg=self.palette["surface"],
+                fg=self.palette["text"],
                 font=(self.display_font, 10, "bold"),
                 anchor="w",
             ).pack(anchor="w")
             tk.Label(
-                text_col, text=msg,
-                bg=self.palette["surface"], fg=self.palette["muted"],
+                text_col,
+                text=msg,
+                bg=self.palette["surface"],
+                fg=self.palette["muted"],
                 font=(self.mono_font, 9),
-                anchor="w", justify="left", wraplength=300,
+                anchor="w",
+                justify="left",
+                wraplength=300,
             ).pack(anchor="w")
 
     # ─────────────────────────────────────────────────────────────────── #
@@ -633,7 +663,9 @@ class BackupPageMixin:
             font=(self.mono_font, 10),
             activestyle="none",
         )
-        sb = tb.Scrollbar(list_wrap, orient="vertical", command=self.backup_detail_files.yview, style="Vertical.TScrollbar")
+        sb = tb.Scrollbar(
+            list_wrap, orient="vertical", command=self.backup_detail_files.yview, style="Vertical.TScrollbar"
+        )
         sb.pack(side="right", fill="y")
         self.backup_detail_files.configure(yscrollcommand=sb.set)
         self.backup_detail_files.pack(side="left", fill="both", expand=True)
@@ -713,9 +745,7 @@ class BackupPageMixin:
         for member in preview:
             self.backup_detail_files.insert("end", f"  {member}")
         if len(row["members"]) > len(preview):
-            self.backup_detail_files.insert(
-                "end", f"  + {len(row['members']) - len(preview)} more file(s)"
-            )
+            self.backup_detail_files.insert("end", f"  + {len(row['members']) - len(preview)} more file(s)")
 
     # ─────────────────────────────────────────────────────────────────── #
     # Refresh pipeline
@@ -899,7 +929,9 @@ class BackupPageMixin:
             return
         self.log("Old backup archives cleaned from Backup Center", "INFO")
         self._refresh_backup_page()
-        MessageBox.showinfo("Backup Cleanup", "Old backups cleaned up. The most recent 10 archives were kept.")
+        MessageBox.showinfo(
+            "Backup Cleanup", "Old backups cleaned up. The most recent 10 archives were kept."
+        )
 
     def _backup_delete_path(self, path):
         path = Path(path)

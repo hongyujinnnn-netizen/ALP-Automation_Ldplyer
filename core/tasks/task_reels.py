@@ -13,19 +13,31 @@ from core.paths import get_app_paths
 from core.tasks.handler.handler_reels import ReelsHandlerMixin
 from utils.ip_guard import check_ld_ip_allowed
 
+
 class ReelsTaskHandler(ReelsHandlerMixin, BaseTaskHandler):
     """Handler for Facebook Reels tasks"""
+
     def __init__(self, emulator, log_func, pause_event, running_flag, content_manager=None):
         super().__init__(emulator, log_func, pause_event, running_flag)
         self.content_manager = content_manager
         from utils.error_handler import EnhancedErrorHandler
         from utils.rate_limiter import RateLimiter
         from utils.activity_randomizer import ActivityRandomizer
+
         self.error_handler = EnhancedErrorHandler(log_func)
         self.rate_limiter = RateLimiter()
         self.randomizer = ActivityRandomizer()
 
-    def execute(self, name, duration=60, max_videos=2, scroll_after_post=True, use_content_queue=True, page_per_account=2, clear_cache=True):
+    def execute(
+        self,
+        name,
+        duration=60,
+        max_videos=2,
+        scroll_after_post=True,
+        use_content_queue=True,
+        page_per_account=2,
+        clear_cache=True,
+    ):
         if self.check_paused():
             return False
 
@@ -35,7 +47,9 @@ class ReelsTaskHandler(ReelsHandlerMixin, BaseTaskHandler):
                 return False
             self.auto_arrange_ld_windows()
             self.log(f"Waiting for emulator ready: {name}")
-            if not self.ensure_device_ready(name, timeout=max(90, int(getattr(self.emulator, 'boot_delay', 20)) * 6)):
+            if not self.ensure_device_ready(
+                name, timeout=max(90, int(getattr(self.emulator, "boot_delay", 20)) * 6)
+            ):
                 self.log(f"Device not ready after startup: {name}")
                 return False
 
@@ -66,7 +80,7 @@ class ReelsTaskHandler(ReelsHandlerMixin, BaseTaskHandler):
         except Exception as e:
             self.log(f"Failed to connect {serial}: {e}")
             return False
-        
+
         page_ready = 0
         click_pages = 0
         f_index = 2
@@ -182,7 +196,9 @@ class ReelsTaskHandler(ReelsHandlerMixin, BaseTaskHandler):
                 if setup_attempt >= max_setup_attempts:
                     break
 
-                self.log(f"Setup failed on {name}. Clearing all apps before retry {setup_attempt + 1}/{max_setup_attempts}")
+                self.log(
+                    f"Setup failed on {name}. Clearing all apps before retry {setup_attempt + 1}/{max_setup_attempts}"
+                )
                 self._clear_recent_apps(d)
                 time.sleep(2)
 
@@ -295,7 +311,11 @@ class ReelsTaskHandler(ReelsHandlerMixin, BaseTaskHandler):
                         video_posted += 1
                         page_video_posted += 1
                         success_pots += 1
-                        progress_value = min(100, 78 + int((success_pots / total_videos_target) * 22)) if total_videos_target > 0 else 100
+                        progress_value = (
+                            min(100, 78 + int((success_pots / total_videos_target) * 22))
+                            if total_videos_target > 0
+                            else 100
+                        )
                         self.push_runtime_state(
                             name,
                             state="Running" if success_pots < total_videos_target else "Completed",
@@ -319,14 +339,14 @@ class ReelsTaskHandler(ReelsHandlerMixin, BaseTaskHandler):
             click_pages += 1
             f_index += 1
 
-        self.log("Finished processing all pages/videos for this account")    
+        self.log("Finished processing all pages/videos for this account")
         time.sleep(5)
-        self.end_to_accoutn_profile(d, name)  
-        
+        self.end_to_accoutn_profile(d, name)
+
         time.sleep(6)
         if clear_cache:
             self.clear_app_cache(d, name)
-        
+
         self.push_runtime_state(
             name,
             state="Completed" if success_pots > 0 else "Attention",
@@ -335,8 +355,6 @@ class ReelsTaskHandler(ReelsHandlerMixin, BaseTaskHandler):
         )
         self.log(f"Task completed: Processed {success_pots}/{total_videos_target} videos successfully")
         return success_pots > 0
-    
-
 
     def end_to_accoutn_profile(self, d, name):
         if not self.open_facebook(d):
@@ -366,5 +384,3 @@ class ReelsTaskHandler(ReelsHandlerMixin, BaseTaskHandler):
             )
             return False
         return True
-
-   

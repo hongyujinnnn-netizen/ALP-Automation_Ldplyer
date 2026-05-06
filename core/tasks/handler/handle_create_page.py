@@ -40,7 +40,9 @@ class CreatePageHandlerMixin:
                 self.log(f"Create-page flow failed for {ld_name} after {attempt} attempts")
                 return False
 
-            self.log(f"Create-page attempt {attempt}/{retries} failed for {ld_name}, retrying in {retry_delay}s")
+            self.log(
+                f"Create-page attempt {attempt}/{retries} failed for {ld_name}, retrying in {retry_delay}s"
+            )
             time.sleep(retry_delay)
             try:
                 d.app_stop("com.facebook.katana")
@@ -96,7 +98,7 @@ class CreatePageHandlerMixin:
         self._handle_next_notifications_prompt(d)
 
         time.sleep(2)
-        self.end_to_accoutn_profile(d,ld_name)
+        self.end_to_accoutn_profile(d, ld_name)
         return True
 
     # ------------------------------------------------------------------
@@ -105,16 +107,16 @@ class CreatePageHandlerMixin:
 
     def click_facebook_menu(self, d, timeout=10):
         """Click the Menu tab in Facebook's bottom nav bar.
-        
+
         Tries multiple strategies in order of reliability.
         """
         import time
-        
+
         # Make sure tab bar is visible
         time.sleep(0.4)
         d.swipe_ext("down", scale=0.75, duration=0.08)
         time.sleep(0.5)
-        
+
         # Strategy 1: selector-based
         try:
             xpath = '//*[@content-desc="Menu"]'
@@ -126,7 +128,7 @@ class CreatePageHandlerMixin:
                     return True
         except Exception as e:
             print(f"[click_facebook_menu] Selector strategy failed: {e}")
-        
+
         # Strategy 2: XPath with index [6]
         try:
             xpath = '(//android.view.View[@resource-id="com.facebook.katana:id/(name removed)"])[6]'
@@ -138,7 +140,7 @@ class CreatePageHandlerMixin:
                     return True
         except Exception as e:
             print(f"[click_facebook_menu] XPath [6] failed: {e}")
-        
+
         # Strategy 3: try other indices (tab order changes across versions)
         for idx in [5, 7, 4, 3]:
             try:
@@ -152,7 +154,7 @@ class CreatePageHandlerMixin:
                         return True
             except Exception:
                 continue
-        
+
         # Strategy 4: tap the rightmost tab by coordinates
         try:
             info = d.info
@@ -167,10 +169,9 @@ class CreatePageHandlerMixin:
                 return True
         except Exception as e:
             print(f"[click_facebook_menu] Coordinate tap failed: {e}")
-        
+
         print("[click_facebook_menu] All strategies failed")
         return False
-
 
     def _verify_menu_opened(self, d):
         """Check if the Menu screen actually opened by looking for known elements."""
@@ -326,16 +327,13 @@ class CreatePageHandlerMixin:
             # 🔥 Primary (top chip button)
             {"text": "Create", "className": "android.view.ViewGroup"},
             {"textContains": "Create", "className": "android.view.ViewGroup"},
-
             # 🔥 Variants
             {"text": "Create new Page"},
             {"textContains": "Create new Page"},
             {"textContains": "Create a Page"},
-
             # 🔥 Accessibility (very common in FB)
             {"description": "Create"},
             {"descriptionContains": "Create"},
-
             # 🔥 Resource-based (rare but strong if exists)
             {"resourceIdMatches": r".*(create|page_create|pages_create).*"},
         ]
@@ -539,13 +537,12 @@ class CreatePageHandlerMixin:
         # This is layout-specific, so keep it as fallback, not primary.
         first_row_xpaths = [
             # Safer relative version: first ViewGroup inside second RecyclerView
-            '(//androidx.recyclerview.widget.RecyclerView)[2]/android.view.ViewGroup/android.view.ViewGroup[1]',
-
+            "(//androidx.recyclerview.widget.RecyclerView)[2]/android.view.ViewGroup/android.view.ViewGroup[1]",
             # More direct version based on your inspector path
             '(//android.widget.FrameLayout[@resource-id="com.facebook.katana:id/(name removed)"])[2]'
-            '/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup'
-            '/androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup/android.view.ViewGroup[2]'
-            '/androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup/android.view.ViewGroup[1]',
+            "/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup"
+            "/androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup/android.view.ViewGroup[2]"
+            "/androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup/android.view.ViewGroup[1]",
         ]
 
         for xp in first_row_xpaths:
@@ -655,21 +652,27 @@ class CreatePageHandlerMixin:
         except Exception:
             return "Unknown"
 
-        if any(p in xml for p in (
-            "your page is ready",
-            "page created",
-            "welcome to your page",
-            "invite friends to like",
-        )):
+        if any(
+            p in xml
+            for p in (
+                "your page is ready",
+                "page created",
+                "welcome to your page",
+                "invite friends to like",
+            )
+        ):
             return "Created"
 
-        if any(p in xml for p in (
-            "you can't create a page",
-            "page creation is unavailable",
-            "we limit how often",
-            "action blocked",
-            "confirm your identity",
-        )):
+        if any(
+            p in xml
+            for p in (
+                "you can't create a page",
+                "page creation is unavailable",
+                "we limit how often",
+                "action blocked",
+                "confirm your identity",
+            )
+        ):
             return "Blocked"
 
         return "Unknown"
@@ -784,16 +787,16 @@ class CreatePageHandlerMixin:
             self.log(f"Failed to switch back to profile on {name}")
             return False
         return True
-    
+
     def back_to_profile(self, d, timeout=10):
         """Click the Menu tab in Facebook's bottom nav bar using UiSelector."""
         import time
-        
+
         # Make sure tab bar is visible
         time.sleep(0.4)
         d.swipe_ext("down", scale=0.75, duration=0.08)
         time.sleep(0.5)
-        
+
         try:
             el = d(className="android.widget.ImageView", instance=1)
             if el.wait(timeout=timeout):
@@ -804,5 +807,5 @@ class CreatePageHandlerMixin:
                 print("[back_to_profile] Element not found within timeout")
         except Exception as e:
             print(f"[back_to_profile] Failed: {e}")
-        
+
         return False

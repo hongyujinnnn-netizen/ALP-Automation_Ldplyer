@@ -92,6 +92,11 @@ class GradientProgressBar(tk.Canvas):
         self.delete("clip")
         if fill_w < width:
             self.create_rectangle(
-                fill_w, 0, width, height,
-                fill=self["bg"], outline="", tags="clip",
+                fill_w,
+                0,
+                width,
+                height,
+                fill=self["bg"],
+                outline="",
+                tags="clip",
             )

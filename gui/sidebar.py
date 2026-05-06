@@ -31,7 +31,8 @@ class SidebarMixin:
 
         logo_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "img", "logo.png",
+            "img",
+            "logo.png",
         )
         logo_img = None
         if Image is not None and os.path.exists(logo_path):
@@ -76,7 +77,11 @@ class SidebarMixin:
         current_section = None
 
         def _make_nav_row(parent_widget, key, text, badge_text, command):
-            row = tk.Frame(parent_widget, bg=self.palette["surface"], height=max(30, int(spacing.get("tree_row_height", 28)) + 6))
+            row = tk.Frame(
+                parent_widget,
+                bg=self.palette["surface"],
+                height=max(30, int(spacing.get("tree_row_height", 28)) + 6),
+            )
             row.pack(fill="x", pady=1)
             row.pack_propagate(False)
 
@@ -113,7 +118,9 @@ class SidebarMixin:
 
             def _pointer_inside_row(target_row):
                 try:
-                    widget = target_row.winfo_containing(target_row.winfo_pointerx(), target_row.winfo_pointery())
+                    widget = target_row.winfo_containing(
+                        target_row.winfo_pointerx(), target_row.winfo_pointery()
+                    )
                     while widget is not None:
                         if widget is target_row:
                             return True
@@ -204,7 +211,7 @@ class SidebarMixin:
             if len(value) == 3:
                 value = "".join(ch * 2 for ch in value)
             try:
-                return tuple(int(value[i:i + 2], 16) for i in (0, 2, 4))
+                return tuple(int(value[i : i + 2], 16) for i in (0, 2, 4))
             except Exception:
                 return (0, 0, 0)
 
@@ -212,8 +219,7 @@ class SidebarMixin:
             start_rgb = _hex_to_rgb(start)
             end_rgb = _hex_to_rgb(end)
             rgb = tuple(
-                round(start_rgb[index] + (end_rgb[index] - start_rgb[index]) * progress)
-                for index in range(3)
+                round(start_rgb[index] + (end_rgb[index] - start_rgb[index]) * progress) for index in range(3)
             )
             return "#{:02x}{:02x}{:02x}".format(*rgb)
 

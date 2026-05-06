@@ -135,11 +135,11 @@ class AccountDialogMixin:
 
         # (key, label, accent hex from palette, bootstyle for tb.Label fallback)
         specs = [
-            ("active", "Live",      self.palette["success"],                    "success"),
-            ("idle",   "Idle",      self.palette.get("muted", "#64748B"),       "secondary"),
-            ("novery", "No Verify", self.palette["warning"],                    "warning"),
-            ("dead",   "Dead",      self.palette["danger"],                     "danger"),
-            ("total",  "Total",     self.palette["primary"],                    "info"),
+            ("active", "Live", self.palette["success"], "success"),
+            ("idle", "Idle", self.palette.get("muted", "#64748B"), "secondary"),
+            ("novery", "No Verify", self.palette["warning"], "warning"),
+            ("dead", "Dead", self.palette["danger"], "danger"),
+            ("total", "Total", self.palette["primary"], "info"),
         ]
 
         bg_color = self.palette["surface"]
@@ -262,6 +262,7 @@ class AccountDialogMixin:
         # to tag "active"); skip duplicates so earlier specs win — matching the
         # de-dup behavior in configure_status_tree_tags.
         from gui.components.status import STATUS_SPECS
+
         configured_tags = set()
         for spec in STATUS_SPECS.values():
             if spec.tag in configured_tags:
@@ -500,7 +501,9 @@ class AccountDialogMixin:
 
         footer = tb.Frame(card, style="CardInner.TFrame")
         footer.pack(fill="x", pady=(14, 0))
-        tb.Button(footer, text="Close", bootstyle="secondary-outline", command=win.destroy, width=10).pack(side="right")
+        tb.Button(footer, text="Close", bootstyle="secondary-outline", command=win.destroy, width=10).pack(
+            side="right"
+        )
 
     # ─────────────────────────────────────────────────────────────────── #
     # Editor
@@ -522,10 +525,14 @@ class AccountDialogMixin:
             "email": tk.StringVar(value=str(account.get("email") or "")),
             "password": tk.StringVar(value=str(account.get("password") or "")),
             "instance": tk.StringVar(
-                value=str(account.get("instance") or account.get("device_name") or account.get("ld_name") or "")
+                value=str(
+                    account.get("instance") or account.get("device_name") or account.get("ld_name") or ""
+                )
             ),
             "ld_adb": tk.StringVar(value=str(account.get("ld_adb") or "")),
-            "status": tk.StringVar(value=status_label(self._account_display_status_key(account.get("status") or "idle"))),
+            "status": tk.StringVar(
+                value=status_label(self._account_display_status_key(account.get("status") or "idle"))
+            ),
         }
 
         card = tb.Frame(win, style="Card.TFrame", padding=22)
@@ -586,9 +593,7 @@ class AccountDialogMixin:
                     text="Clear Saved",
                     bootstyle="secondary-outline",
                     width=12,
-                    command=lambda: self._clear_saved_account_password(
-                        account, vars_map["password"]
-                    ),
+                    command=lambda: self._clear_saved_account_password(account, vars_map["password"]),
                 ).pack(side="left", padx=(6, 0))
             else:
                 widget = tb.Entry(
@@ -646,10 +651,14 @@ class AccountDialogMixin:
                 self.log(f"Failed to save account: {exc}", "ERROR")
                 return
 
-            self._refresh_account_tree(select_uid=str(saved.get("account_id") or saved.get("facebook_uid") or ""))
+            self._refresh_account_tree(
+                select_uid=str(saved.get("account_id") or saved.get("facebook_uid") or "")
+            )
             win.destroy()
 
-        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(side="left")
+        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(
+            side="left"
+        )
         tb.Button(footer, text="Save", bootstyle="primary", command=save_account, width=10).pack(side="right")
 
     def _clear_saved_account_password(self, account, password_var):
@@ -724,9 +733,16 @@ class AccountDialogMixin:
     def _get_visible_accounts(self):
         query = getattr(self, "_acct_search_var", tk.StringVar()).get().strip().lower()
         status_filter_raw = getattr(self, "_acct_status_filter_var", tk.StringVar(value="All")).get().strip()
-        status_filter = "all" if status_filter_raw.lower() == "all" else self._account_filter_status_key(status_filter_raw)
+        status_filter = (
+            "all"
+            if status_filter_raw.lower() == "all"
+            else self._account_filter_status_key(status_filter_raw)
+        )
         sort_by = getattr(self, "_acct_sort_by_var", tk.StringVar(value="Created")).get().strip().lower()
-        descending = getattr(self, "_acct_sort_order_var", tk.StringVar(value="Descending")).get().strip().lower() != "ascending"
+        descending = (
+            getattr(self, "_acct_sort_order_var", tk.StringVar(value="Descending")).get().strip().lower()
+            != "ascending"
+        )
         try:
             accounts = self.account_manager.list_accounts()
         except Exception as exc:
@@ -813,10 +829,18 @@ class AccountDialogMixin:
         # Update metric cards
         cards = getattr(self, "_acct_metric_cards", {}) or {}
         if cards:
-            cards["active"].set(summary.get("active", 0), subtitle=status_count_text("live", summary.get("active", 0)))
-            cards["idle"].set(summary.get("idle", 0), subtitle=status_count_text("idle", summary.get("idle", 0)))
-            cards["novery"].set(summary.get("novery", 0), subtitle=status_count_text("novery", summary.get("novery", 0)))
-            cards["dead"].set(summary.get("dead", 0), subtitle=status_count_text("dead", summary.get("dead", 0)))
+            cards["active"].set(
+                summary.get("active", 0), subtitle=status_count_text("live", summary.get("active", 0))
+            )
+            cards["idle"].set(
+                summary.get("idle", 0), subtitle=status_count_text("idle", summary.get("idle", 0))
+            )
+            cards["novery"].set(
+                summary.get("novery", 0), subtitle=status_count_text("novery", summary.get("novery", 0))
+            )
+            cards["dead"].set(
+                summary.get("dead", 0), subtitle=status_count_text("dead", summary.get("dead", 0))
+            )
             cards["total"].set(summary.get("total", 0), subtitle="All accounts tracked")
 
         # Empty-state visibility

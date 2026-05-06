@@ -34,63 +34,182 @@ class AccountProfile:
 class RegAccountTaskHandler(RegAccountHandlerMixin, ScrollTaskHandler):
     """Create a Facebook account using the mobile app flow."""
 
-
-    MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
     FIRST_NAMES = [
-        "Liam", "Noah", "Mason", "Ethan", "Lucas",
-        "Ava", "Emma", "Mia", "Sofia", "Ella",
-
-        "James", "William", "Benjamin", "Elijah", "Oliver",
-        "Henry", "Alexander", "Michael", "Daniel", "Jacob",
-
-        "Logan", "Jackson", "Levi", "Sebastian", "Mateo",
-        "Jack", "Owen", "Theodore", "Aiden", "Samuel",
-
-        "Joseph", "John", "David", "Wyatt", "Matthew",
-        "Luke", "Asher", "Carter", "Julian", "Grayson",
-
-        "Leo", "Jayden", "Gabriel", "Isaac", "Lincoln",
-        "Anthony", "Hudson", "Dylan", "Ezra", "Thomas",
-
-        "Charlotte", "Amelia", "Harper", "Evelyn", "Abigail",
-        "Emily", "Ella", "Elizabeth", "Camila", "Luna",
-
-        "Sofia", "Avery", "Mila", "Aria", "Scarlett",
-        "Penelope", "Layla", "Chloe", "Victoria", "Madison",
-
-        "Eleanor", "Grace", "Nora", "Riley", "Zoey",
-        "Hannah", "Lily", "Addison", "Aubrey", "Ellie",
-
-        "Stella", "Natalie", "Zoe", "Leah", "Hazel",
-        "Violet", "Aurora", "Savannah", "Audrey", "Brooklyn"
+        "Liam",
+        "Noah",
+        "Mason",
+        "Ethan",
+        "Lucas",
+        "Ava",
+        "Emma",
+        "Mia",
+        "Sofia",
+        "Ella",
+        "James",
+        "William",
+        "Benjamin",
+        "Elijah",
+        "Oliver",
+        "Henry",
+        "Alexander",
+        "Michael",
+        "Daniel",
+        "Jacob",
+        "Logan",
+        "Jackson",
+        "Levi",
+        "Sebastian",
+        "Mateo",
+        "Jack",
+        "Owen",
+        "Theodore",
+        "Aiden",
+        "Samuel",
+        "Joseph",
+        "John",
+        "David",
+        "Wyatt",
+        "Matthew",
+        "Luke",
+        "Asher",
+        "Carter",
+        "Julian",
+        "Grayson",
+        "Leo",
+        "Jayden",
+        "Gabriel",
+        "Isaac",
+        "Lincoln",
+        "Anthony",
+        "Hudson",
+        "Dylan",
+        "Ezra",
+        "Thomas",
+        "Charlotte",
+        "Amelia",
+        "Harper",
+        "Evelyn",
+        "Abigail",
+        "Emily",
+        "Ella",
+        "Elizabeth",
+        "Camila",
+        "Luna",
+        "Sofia",
+        "Avery",
+        "Mila",
+        "Aria",
+        "Scarlett",
+        "Penelope",
+        "Layla",
+        "Chloe",
+        "Victoria",
+        "Madison",
+        "Eleanor",
+        "Grace",
+        "Nora",
+        "Riley",
+        "Zoey",
+        "Hannah",
+        "Lily",
+        "Addison",
+        "Aubrey",
+        "Ellie",
+        "Stella",
+        "Natalie",
+        "Zoe",
+        "Leah",
+        "Hazel",
+        "Violet",
+        "Aurora",
+        "Savannah",
+        "Audrey",
+        "Brooklyn",
     ]
 
     LAST_NAMES = [
-        "Smith", "Johnson", "Brown", "Taylor", "Anderson",
-        "Thomas", "Martin", "Walker", "White", "Harris",
-
-        "Clark", "Lewis", "Robinson", "Young", "Allen",
-        "Kong", "Wright", "Scott", "Torres", "Nguyen",
-
-        "Hill", "Flores", "Green", "Adams", "Nelson",
-        "Baker", "Hall", "Rivera", "Campbell", "Mitchell",
-
-        "Carter", "Roberts", "Gomez", "Phillips", "Evans",
-        "Turner", "Diaz", "Parker", "Cruz", "Edwards",
-
-        "Collins", "Stewart", "Morris", "Rogers", "Reed",
-        "Cook", "Morgan", "Bell", "Murphy", "Bailey",
-
-        "Cooper", "Richardson", "Cox", "Howard", "Ward",
-        "Peterson", "Gray", "Ramirez", "James", "Watson",
-
-        "Brooks", "Kelly", "Sanders", "Price", "Bennett",
-        "Wood", "Barnes", "Ross", "Henderson", "Coleman",
-
-        "Jenkins", "Perry", "Powell", "Long", "Patterson",
-        "Hughes", "Washington", "Butler", "Simmons", "Foster"
+        "Smith",
+        "Johnson",
+        "Brown",
+        "Taylor",
+        "Anderson",
+        "Thomas",
+        "Martin",
+        "Walker",
+        "White",
+        "Harris",
+        "Clark",
+        "Lewis",
+        "Robinson",
+        "Young",
+        "Allen",
+        "Kong",
+        "Wright",
+        "Scott",
+        "Torres",
+        "Nguyen",
+        "Hill",
+        "Flores",
+        "Green",
+        "Adams",
+        "Nelson",
+        "Baker",
+        "Hall",
+        "Rivera",
+        "Campbell",
+        "Mitchell",
+        "Carter",
+        "Roberts",
+        "Gomez",
+        "Phillips",
+        "Evans",
+        "Turner",
+        "Diaz",
+        "Parker",
+        "Cruz",
+        "Edwards",
+        "Collins",
+        "Stewart",
+        "Morris",
+        "Rogers",
+        "Reed",
+        "Cook",
+        "Morgan",
+        "Bell",
+        "Murphy",
+        "Bailey",
+        "Cooper",
+        "Richardson",
+        "Cox",
+        "Howard",
+        "Ward",
+        "Peterson",
+        "Gray",
+        "Ramirez",
+        "James",
+        "Watson",
+        "Brooks",
+        "Kelly",
+        "Sanders",
+        "Price",
+        "Bennett",
+        "Wood",
+        "Barnes",
+        "Ross",
+        "Henderson",
+        "Coleman",
+        "Jenkins",
+        "Perry",
+        "Powell",
+        "Long",
+        "Patterson",
+        "Hughes",
+        "Washington",
+        "Butler",
+        "Simmons",
+        "Foster",
     ]
 
     def execute(self, name, duration=300, **kwargs):
@@ -115,7 +234,9 @@ class RegAccountTaskHandler(RegAccountHandlerMixin, ScrollTaskHandler):
                 return False
             self.auto_arrange_ld_windows()
             self.log(f"Waiting for emulator ready: {name}")
-            if not self.ensure_device_ready(name, timeout=max(90, int(getattr(self.emulator, "boot_delay", 20)) * 6)):
+            if not self.ensure_device_ready(
+                name, timeout=max(90, int(getattr(self.emulator, "boot_delay", 20)) * 6)
+            ):
                 self.log(f"Device not ready after startup: {name}")
                 return False
 
@@ -174,7 +295,7 @@ class RegAccountTaskHandler(RegAccountHandlerMixin, ScrollTaskHandler):
 
             self._handle_confirm_by_email(d)
             time.sleep(3)
-            
+
             confirmation_email = self._resolve_confirmation_email()
             if not confirmation_email:
                 self.log(f"No confirmation email available for {name}")
@@ -190,13 +311,13 @@ class RegAccountTaskHandler(RegAccountHandlerMixin, ScrollTaskHandler):
             if not self.enter_confirmation_code(d, otp_code):
                 self.log(f"Failed to enter confirmation code for {name}")
                 return False
-             
+
             time.sleep(10)
-            account_status= self.detect_human_confirm_screen(d)
+            account_status = self.detect_human_confirm_screen(d)
             if account_status == "Dead":
                 self.log(f"Account {name} was flagged for human verification → DEAD")
                 return False
-            
+
         facebook_uid = ""
         if account_status == "Unknown":
             self.log(f"Account status is Unknown for {name}, skipping Facebook UID detection")
@@ -204,7 +325,7 @@ class RegAccountTaskHandler(RegAccountHandlerMixin, ScrollTaskHandler):
             time.sleep(10)
             d.app_stop("com.facebook.katana")
             time.sleep(4)
-        
+
             d.app_start("com.facebook.katana")
             time.sleep(7)
 
@@ -225,7 +346,7 @@ class RegAccountTaskHandler(RegAccountHandlerMixin, ScrollTaskHandler):
         if not self._submit_signup_step(d, name):
             self.log(f"Failed on final signup step for {name}")
             return False
-        
+
         if not account_status == "Unknown":
             self._save_created_account(
                 name,
@@ -247,5 +368,3 @@ class RegAccountTaskHandler(RegAccountHandlerMixin, ScrollTaskHandler):
         self._clear_app_data(d, "com.facebook.katana", name=name)
 
         return True
-    
-    

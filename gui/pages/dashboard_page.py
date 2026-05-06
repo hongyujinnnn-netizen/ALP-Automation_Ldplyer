@@ -187,8 +187,7 @@ class DashboardDialogMixin:
 
         total_inst = len(device_names)
         total_acc = sum(
-            1 for i in visible
-            if (i.get("account") or {}).get("uid") or (i.get("account") or {}).get("mail")
+            1 for i in visible if (i.get("account") or {}).get("uid") or (i.get("account") or {}).get("mail")
         )
         total_pages = sum(len(self._db_account_pages(i.get("account") or {})) for i in visible)
         total_reels_on = sum(
@@ -430,11 +429,13 @@ class DashboardDialogMixin:
         total_tags = sum(len((p.get("reels") or {}).get("hashtags") or []) for p in pages)
         auto_pct = (reels_on / len(pages) * 100) if pages else 0
 
-        for idx, (label, value, accent, subtitle) in enumerate([
-            ("Pages", str(len(pages)), self.palette["primary"], "Configured on this LD"),
-            ("Automation", f"{auto_pct:.0f}%", self.palette["success"], f"{reels_on} of {len(pages)} ON"),
-            ("Hashtags", str(total_tags), self.palette["warning"], "across all pages"),
-        ]):
+        for idx, (label, value, accent, subtitle) in enumerate(
+            [
+                ("Pages", str(len(pages)), self.palette["primary"], "Configured on this LD"),
+                ("Automation", f"{auto_pct:.0f}%", self.palette["success"], f"{reels_on} of {len(pages)} ON"),
+                ("Hashtags", str(total_tags), self.palette["warning"], "across all pages"),
+            ]
+        ):
             card = MetricCard(mini, label, value, subtitle, accent=accent, palette=self.palette)
             card.pack(side="left", fill="both", expand=True, padx=(0, 8 if idx < 2 else 0))
 
@@ -621,6 +622,7 @@ class DashboardDialogMixin:
             return
         try:
             from gui.checkbox_treeview import _blend  # local import keeps top-level imports tidy
+
             tint = _blend(
                 self.palette.get("success", "#10B981"),
                 self.palette.get("surface", "#0E1118"),
@@ -855,10 +857,7 @@ class DashboardDialogMixin:
             if not old_serial:
                 continue
             matching_new = next(
-                (
-                    new_name for new_name in sorted(added_names)
-                    if new_snapshot.get(new_name) == old_serial
-                ),
+                (new_name for new_name in sorted(added_names) if new_snapshot.get(new_name) == old_serial),
                 None,
             )
             if not matching_new:
@@ -1027,8 +1026,7 @@ class DashboardDialogMixin:
             pages = self._db_account_pages(acc)
             status = self._db_device_status(name)
             account_label = (
-                str(acc.get("name") or acc.get("uid") or acc.get("mail") or "").strip()
-                or "— No account"
+                str(acc.get("name") or acc.get("uid") or acc.get("mail") or "").strip() or "— No account"
             )
             zebra = "even_row" if row_idx % 2 == 0 else "odd_row"
             tree.insert(
@@ -1122,7 +1120,7 @@ class DashboardDialogMixin:
         e = items.index(end_item)
         if s > e:
             s, e = e, s
-        return items[s:e + 1]
+        return items[s : e + 1]
 
     def _db_autoscroll_tree(self, tree, event, margin=18):
         try:
@@ -1218,7 +1216,9 @@ class DashboardDialogMixin:
         tree = getattr(self, "_db_tree", None)
         if not self._db_widget_exists(tree):
             return "break"
-        self._db_set_checked_instances(set(getattr(self, "_dashboard_checked", set())) | set(tree.get_children()))
+        self._db_set_checked_instances(
+            set(getattr(self, "_dashboard_checked", set())) | set(tree.get_children())
+        )
         return "break"
 
     def _db_clear_checked_instances(self):
@@ -1298,19 +1298,59 @@ class DashboardDialogMixin:
     # ------------------------------------------------------------------
 
     _CREATE_PAGE_RANDOM_WORDS = (
-        "Aurora", "Vertex", "Lumen", "Nimbus", "Cobalt", "Quartz", "Onyx",
-        "Echo", "Atlas", "Pixel", "Nova", "Drift", "Hatch", "Spark", "Mango",
-        "Harbor", "Summit", "Orbit", "Glow", "Ember", "Maple", "Lumio",
-        "Forge", "Loop", "Tide", "Cipher", "Halo", "Brisk", "Solace", "Vibe",
+        "Aurora",
+        "Vertex",
+        "Lumen",
+        "Nimbus",
+        "Cobalt",
+        "Quartz",
+        "Onyx",
+        "Echo",
+        "Atlas",
+        "Pixel",
+        "Nova",
+        "Drift",
+        "Hatch",
+        "Spark",
+        "Mango",
+        "Harbor",
+        "Summit",
+        "Orbit",
+        "Glow",
+        "Ember",
+        "Maple",
+        "Lumio",
+        "Forge",
+        "Loop",
+        "Tide",
+        "Cipher",
+        "Halo",
+        "Brisk",
+        "Solace",
+        "Vibe",
     )
 
     _CREATE_PAGE_RANDOM_SUFFIXES = (
-        "Studio", "Lab", "Hub", "House", "Co", "Works", "Daily", "Club",
-        "Media", "World", "Spot", "Press", "Notes", "Society", "Stories",
+        "Studio",
+        "Lab",
+        "Hub",
+        "House",
+        "Co",
+        "Works",
+        "Daily",
+        "Club",
+        "Media",
+        "World",
+        "Spot",
+        "Press",
+        "Notes",
+        "Society",
+        "Stories",
     )
 
     def _db_random_page_name(self):
         import random
+
         word = random.choice(self._CREATE_PAGE_RANDOM_WORDS)
         suffix = random.choice(self._CREATE_PAGE_RANDOM_SUFFIXES)
         # Occasional numeric suffix to reduce collisions.
@@ -1361,7 +1401,9 @@ class DashboardDialogMixin:
             list_frame.pack(fill="both", expand=True)
 
             canvas = tk.Canvas(list_frame, bg=self.palette["surface"], highlightthickness=0)
-            scroll_y = tb.Scrollbar(list_frame, orient="vertical", command=canvas.yview, style="Vertical.TScrollbar")
+            scroll_y = tb.Scrollbar(
+                list_frame, orient="vertical", command=canvas.yview, style="Vertical.TScrollbar"
+            )
             inner = tb.Frame(canvas, style="CardInner.TFrame")
             inner.bind(
                 "<Configure>",
@@ -1447,7 +1489,9 @@ class DashboardDialogMixin:
             win.destroy()
             self._db_start_create_page_batch(assignments, category=category_var.get().strip())
 
-        tb.Button(footer, text="Cancel", bootstyle="secondary", command=on_cancel).pack(side="right", padx=(6, 0))
+        tb.Button(footer, text="Cancel", bootstyle="secondary", command=on_cancel).pack(
+            side="right", padx=(6, 0)
+        )
         tb.Button(footer, text="Create", bootstyle="primary", command=on_create).pack(side="right")
 
     def _db_start_create_page_batch(self, assignments, category=""):
@@ -1664,14 +1708,16 @@ class DashboardDialogMixin:
     def _db_open_login_account_dialog(self):
         names = self._db_checked_names()
         if not names:
-            MessageBox.showinfo("Login", "Select one or more instances first.", parent=self._db_message_parent())
+            MessageBox.showinfo(
+                "Login", "Select one or more instances first.", parent=self._db_message_parent()
+            )
             return
         if len(names) == 1:
             self._dashboard_selected = names[0]
         inst = self._db_selected_instance() if len(names) == 1 else None
         multi_mode = len(names) > 1
 
-        title_suffix = f"{len(names)} instances" if multi_mode else (inst.get('name') if inst else "")
+        title_suffix = f"{len(names)} instances" if multi_mode else (inst.get("name") if inst else "")
         win = self._db_modal(f"Login Account · {title_suffix}", 920, 640)
         shell = tb.Frame(win, style="Card.TFrame", padding=18)
         shell.pack(fill="both", expand=True)
@@ -1692,7 +1738,14 @@ class DashboardDialogMixin:
         cols = ("name", "uid", "email", "password", "twofa")
         self._db_login_checked_account_id = None
         self._db_login_checked_account_ids = set()
-        tree = tb.Treeview(shell, columns=cols, show="tree headings", height=13, style="Custom.Treeview", selectmode="extended")
+        tree = tb.Treeview(
+            shell,
+            columns=cols,
+            show="tree headings",
+            height=13,
+            style="Custom.Treeview",
+            selectmode="extended",
+        )
         tree.heading("#0", text="", anchor="center")
         tree.column("#0", width=42, minwidth=42, stretch=False, anchor="center")
         for col, width, title in (
@@ -1718,8 +1771,14 @@ class DashboardDialogMixin:
         tree.bind("<Button-1>", lambda event: self._db_on_login_account_click(event, tree), add="+")
         tree.bind("<B1-Motion>", lambda event: self._db_on_login_account_drag(event, tree), add="+")
         tree.bind("<ButtonRelease-1>", lambda event: self._db_end_login_account_drag(event), add="+")
-        tree.bind("<Motion>", lambda event: self._db_on_generic_tree_hover(event, tree, "_db_login_hover_item"), add="+")
-        tree.bind("<Leave>", lambda event: self._db_on_generic_tree_leave(tree, "_db_login_hover_item"), add="+")
+        tree.bind(
+            "<Motion>",
+            lambda event: self._db_on_generic_tree_hover(event, tree, "_db_login_hover_item"),
+            add="+",
+        )
+        tree.bind(
+            "<Leave>", lambda event: self._db_on_generic_tree_leave(tree, "_db_login_hover_item"), add="+"
+        )
 
         def refresh(select_id=None):
             for item in tree.get_children():
@@ -1792,10 +1851,7 @@ class DashboardDialogMixin:
                     parent=win,
                 )
                 return
-            accounts = [
-                self._db_get_login_account(str(account_id))
-                for account_id in checked_ids
-            ]
+            accounts = [self._db_get_login_account(str(account_id)) for account_id in checked_ids]
             accounts = [a for a in accounts if a]
             if len(accounts) < len(names):
                 MessageBox.showwarning(
@@ -1809,11 +1865,33 @@ class DashboardDialogMixin:
 
         footer = tb.Frame(win, style="CardInner.TFrame", padding=(18, 12))
         footer.pack(fill="x", side="bottom")
-        tb.Button(footer, text="Import Text", bootstyle="info-outline", command=lambda: self._db_import_login_accounts_text(refresh, win), width=13).pack(side="left")
-        tb.Button(footer, text="Import File", bootstyle="info-outline", command=lambda: self._db_import_login_accounts_file(refresh, win), width=12).pack(side="left", padx=(6, 0))
-        tb.Button(footer, text="Add Account", bootstyle="success-outline", command=lambda: self._db_add_login_account(refresh, win), width=13).pack(side="left", padx=(6, 0))
-        tb.Button(footer, text="Delete Selected", bootstyle="danger-outline", command=delete_selected, width=15).pack(side="left", padx=(6, 0))
-        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(side="right")
+        tb.Button(
+            footer,
+            text="Import Text",
+            bootstyle="info-outline",
+            command=lambda: self._db_import_login_accounts_text(refresh, win),
+            width=13,
+        ).pack(side="left")
+        tb.Button(
+            footer,
+            text="Import File",
+            bootstyle="info-outline",
+            command=lambda: self._db_import_login_accounts_file(refresh, win),
+            width=12,
+        ).pack(side="left", padx=(6, 0))
+        tb.Button(
+            footer,
+            text="Add Account",
+            bootstyle="success-outline",
+            command=lambda: self._db_add_login_account(refresh, win),
+            width=13,
+        ).pack(side="left", padx=(6, 0))
+        tb.Button(
+            footer, text="Delete Selected", bootstyle="danger-outline", command=delete_selected, width=15
+        ).pack(side="left", padx=(6, 0))
+        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(
+            side="right"
+        )
         if multi_mode:
             tb.Button(
                 footer,
@@ -1823,7 +1901,9 @@ class DashboardDialogMixin:
                 width=22,
             ).pack(side="right", padx=(0, 6))
         else:
-            tb.Button(footer, text="Use Account", bootstyle="primary", command=use_selected, width=12).pack(side="right", padx=(0, 6))
+            tb.Button(footer, text="Use Account", bootstyle="primary", command=use_selected, width=12).pack(
+                side="right", padx=(0, 6)
+            )
 
         refresh()
 
@@ -1886,12 +1966,7 @@ class DashboardDialogMixin:
         )
 
     def _db_account_row_id(self, account):
-        return str(
-            account.get("account_id")
-            or account.get("uid")
-            or account.get("email")
-            or "account"
-        )
+        return str(account.get("account_id") or account.get("uid") or account.get("email") or "account")
 
     def _db_get_login_account(self, account_id):
         for account in self._db_login_accounts():
@@ -2057,7 +2132,9 @@ class DashboardDialogMixin:
     def _db_start_login_account_task(self, instance, account):
         ld_name = str((instance or {}).get("name") or "").strip()
         if not ld_name:
-            MessageBox.showwarning("Login Account", "LD instance name is missing.", parent=self._db_message_parent())
+            MessageBox.showwarning(
+                "Login Account", "LD instance name is missing.", parent=self._db_message_parent()
+            )
             return
 
         if getattr(self, "running_event", None) is not None and self.running_event.is_set():
@@ -2083,7 +2160,9 @@ class DashboardDialogMixin:
         try:
             from core.tasks.login_account import LoginAccountTaskHandler
         except Exception as exc:
-            MessageBox.showerror("Login Account", f"Login task is not available: {exc}", parent=self._db_message_parent())
+            MessageBox.showerror(
+                "Login Account", f"Login task is not available: {exc}", parent=self._db_message_parent()
+            )
             return
 
         try:
@@ -2237,7 +2316,9 @@ class DashboardDialogMixin:
         try:
             task_handler = self.task_handler_factory.create("login", handler_context)
         except UnsupportedTaskTypeError as exc:
-            MessageBox.showerror("Login Account", f"Login handler is not registered: {exc}", parent=self._db_message_parent())
+            MessageBox.showerror(
+                "Login Account", f"Login handler is not registered: {exc}", parent=self._db_message_parent()
+            )
             return
 
         parallel_ld = max(1, int(self._db_var_value("parallel_ld", 1) or 1))
@@ -2429,7 +2510,11 @@ class DashboardDialogMixin:
         body = tb.Frame(win, style="Card.TFrame", padding=18)
         body.pack(fill="both", expand=True)
         tb.Label(body, text="Import Login Accounts", style="SectionTitle.TLabel").pack(anchor="w")
-        tb.Label(body, text="Format per line: Name<TAB or ,>UID<TAB or ,>Password<TAB or ,>email<TAB or ,>2fa", style="Subtitle.TLabel").pack(anchor="w", pady=(2, 10))
+        tb.Label(
+            body,
+            text="Format per line: Name<TAB or ,>UID<TAB or ,>Password<TAB or ,>email<TAB or ,>2fa",
+            style="Subtitle.TLabel",
+        ).pack(anchor="w", pady=(2, 10))
         text = tk.Text(
             body,
             height=10,
@@ -2457,7 +2542,9 @@ class DashboardDialogMixin:
 
         footer = tb.Frame(win, style="CardInner.TFrame", padding=(18, 12))
         footer.pack(fill="x", side="bottom")
-        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(side="left")
+        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(
+            side="left"
+        )
         tb.Button(footer, text="Import", bootstyle="primary", command=commit, width=10).pack(side="right")
 
     def _db_import_login_accounts_file(self, refresh, parent):
@@ -2490,8 +2577,12 @@ class DashboardDialogMixin:
                 pass
         form = tb.Frame(win, style="Card.TFrame", padding=22)
         form.pack(fill="both", expand=True)
-        tb.Label(form, text="Add Login Account", style="SectionTitle.TLabel").grid(row=0, column=0, columnspan=2, sticky="w")
-        tb.Label(form, text="Credentials used by the Login task.", style="Subtitle.TLabel").grid(row=1, column=0, columnspan=2, sticky="w", pady=(2, 14))
+        tb.Label(form, text="Add Login Account", style="SectionTitle.TLabel").grid(
+            row=0, column=0, columnspan=2, sticky="w"
+        )
+        tb.Label(form, text="Credentials used by the Login task.", style="Subtitle.TLabel").grid(
+            row=1, column=0, columnspan=2, sticky="w", pady=(2, 14)
+        )
 
         vars_map = {
             "uid": tk.StringVar(),
@@ -2508,14 +2599,20 @@ class DashboardDialogMixin:
             ("Name", "name", False),
         ]
         for row, (label, key, secret) in enumerate(fields, start=2):
-            tb.Label(form, text=label.upper(), style="MetricLabel.TLabel").grid(row=row, column=0, sticky="w", padx=(0, 16), pady=8)
-            tb.Entry(form, textvariable=vars_map[key], bootstyle="secondary", show="*" if secret else "").grid(row=row, column=1, sticky="ew", pady=8, ipady=3)
+            tb.Label(form, text=label.upper(), style="MetricLabel.TLabel").grid(
+                row=row, column=0, sticky="w", padx=(0, 16), pady=8
+            )
+            tb.Entry(
+                form, textvariable=vars_map[key], bootstyle="secondary", show="*" if secret else ""
+            ).grid(row=row, column=1, sticky="ew", pady=8, ipady=3)
         form.columnconfigure(1, weight=1)
 
         def commit():
             payload = {key: var.get().strip() for key, var in vars_map.items()}
             if not (payload["uid"] or payload["email"]) or not payload["password"]:
-                MessageBox.showwarning("Add Login Account", "UID or email plus password is required.", parent=win)
+                MessageBox.showwarning(
+                    "Add Login Account", "UID or email plus password is required.", parent=win
+                )
                 return
             saved = self._db_save_login_accounts([payload])
             refresh(str(saved[-1].get("account_id") or "") if saved else None)
@@ -2524,13 +2621,17 @@ class DashboardDialogMixin:
 
         footer = tb.Frame(win, style="CardInner.TFrame", padding=(18, 12))
         footer.pack(fill="x", side="bottom")
-        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(side="left")
+        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(
+            side="left"
+        )
         tb.Button(footer, text="Save", bootstyle="primary", command=commit, width=10).pack(side="right")
 
     def _db_clear_checked_account_data(self):
         instances = self._db_checked_instances()
         if not instances:
-            MessageBox.showinfo("Clear Account Data", "Select one or more instances first.", parent=self._db_message_parent())
+            MessageBox.showinfo(
+                "Clear Account Data", "Select one or more instances first.", parent=self._db_message_parent()
+            )
             return
         label = f"{len(instances)} selected instance{'s' if len(instances) != 1 else ''}"
         if not MessageBox.askyesno(
@@ -2548,7 +2649,11 @@ class DashboardDialogMixin:
     def _db_delete_checked_dashboard_data(self):
         names = set(self._db_checked_names())
         if not names:
-            MessageBox.showinfo("Remove Dashboard Data", "Select one or more instances first.", parent=self._db_message_parent())
+            MessageBox.showinfo(
+                "Remove Dashboard Data",
+                "Select one or more instances first.",
+                parent=self._db_message_parent(),
+            )
             return
         if not MessageBox.askyesno(
             "Remove Dashboard Data",
@@ -2651,7 +2756,9 @@ class DashboardDialogMixin:
 
         footer = tb.Frame(win, style="CardInner.TFrame", padding=(18, 12))
         footer.pack(fill="x", side="bottom")
-        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(side="left")
+        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(
+            side="left"
+        )
         tb.Button(footer, text="Save", bootstyle="primary", command=commit, width=10).pack(side="right")
 
     def _db_add_page(self):
@@ -2741,7 +2848,9 @@ class DashboardDialogMixin:
 
         footer = tb.Frame(win, style="CardInner.TFrame", padding=(18, 12))
         footer.pack(fill="x", side="bottom")
-        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(side="left")
+        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(
+            side="left"
+        )
         tb.Button(footer, text="Save", bootstyle="primary", command=commit, width=10).pack(side="right")
 
     # ─────────────────────────────────────────────────────────────────── #
@@ -2808,7 +2917,9 @@ class DashboardDialogMixin:
         tb.Label(rcol, text="INTERVAL (MIN)", style="MetricLabel.TLabel").pack(anchor="w", pady=(0, 4))
         tb.Entry(rcol, textvariable=interval_var, bootstyle="secondary").pack(fill="x", ipady=3)
 
-        tb.Label(body, text="HASHTAGS (COMMA SEPARATED)", style="MetricLabel.TLabel").pack(anchor="w", pady=(0, 4))
+        tb.Label(body, text="HASHTAGS (COMMA SEPARATED)", style="MetricLabel.TLabel").pack(
+            anchor="w", pady=(0, 4)
+        )
         tb.Entry(body, textvariable=hashtags_var, bootstyle="secondary").pack(fill="x", pady=(0, 12), ipady=3)
 
         tb.Label(body, text="SOURCE FOLDER / PATH", style="MetricLabel.TLabel").pack(anchor="w", pady=(0, 4))
@@ -2854,7 +2965,9 @@ class DashboardDialogMixin:
 
         footer = tb.Frame(win, style="CardInner.TFrame", padding=(18, 12))
         footer.pack(fill="x", side="bottom")
-        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(side="left")
+        tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(
+            side="left"
+        )
         tb.Button(footer, text="Save Reels", bootstyle="success", command=commit, width=12).pack(side="right")
 
     # ─────────────────────────────────────────────────────────────────── #

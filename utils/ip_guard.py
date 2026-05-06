@@ -87,6 +87,7 @@ def check_ip_allowed(
       True  -> automation may proceed
       False -> automation should be blocked
     """
+
     def _log(msg: str, level: str = "INFO") -> None:
         if log is not None:
             try:
@@ -108,7 +109,10 @@ def check_ip_allowed(
     country = info.get("country") or ""
 
     if is_blocked_country(country, blocked_list):
-        _log(f"[IP Guard] Public IP {ip} in blocked country '{country or '??'}'; automation will not start.", "ERROR")
+        _log(
+            f"[IP Guard] Public IP {ip} in blocked country '{country or '??'}'; automation will not start.",
+            "ERROR",
+        )
         return False
 
     _log(f"[IP Guard] Public IP {ip} in allowed country '{country}'; automation allowed.", "INFO")
@@ -176,6 +180,7 @@ def check_ld_ip_allowed(
     We query ipinfo.io *from inside the emulator* so that VPN/proxy rules
     applied inside LD are reflected in the detected public IP.
     """
+
     def _log(msg: str, level: str = "INFO") -> None:
         if log is not None:
             try:
@@ -190,7 +195,10 @@ def check_ld_ip_allowed(
 
     info = get_ld_public_ip_info(serial, timeout=timeout)
     if info is None:
-        _log(f"[IP Guard] Could not determine public IP for LD {ld_name or serial}; blocking for safety.", "WARNING")
+        _log(
+            f"[IP Guard] Could not determine public IP for LD {ld_name or serial}; blocking for safety.",
+            "WARNING",
+        )
         return False
 
     ip = info.get("ip", "?")
@@ -198,9 +206,11 @@ def check_ld_ip_allowed(
 
     if is_blocked_country(country, blocked_list):
         label = ld_name or serial
-        _log(f"[IP Guard] LD {label} has public IP {ip} in blocked country '{country or '??'}'; automation will not run on this LD.", "ERROR")
+        _log(
+            f"[IP Guard] LD {label} has public IP {ip} in blocked country '{country or '??'}'; automation will not run on this LD.",
+            "ERROR",
+        )
         return False
 
     _log(f"[IP Guard] LD {ld_name or serial} has allowed public IP {ip} (country='{country}').", "INFO")
     return True
-

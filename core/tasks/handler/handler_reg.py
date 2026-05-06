@@ -1,4 +1,4 @@
-﻿import json
+import json
 import random
 import re
 import string
@@ -11,6 +11,7 @@ from core.email_models import EmailAccountConfig, OTPRequest
 from core.paths import get_app_paths
 from core.settings import SettingsError, load_app_settings
 from services.otp_service import OTPService
+
 
 class RegAccountHandlerMixin:
     def enter_email(self, d, email, timeout=5):
@@ -49,7 +50,7 @@ class RegAccountHandlerMixin:
                             typed_ok = True
                             break
                     except Exception:
-                        continue   
+                        continue
                 if not typed_ok:
                     self.log("Email text was not visible after input, retrying")
                     time.sleep(0.8)
@@ -193,9 +194,7 @@ class RegAccountHandlerMixin:
 
     def _click_text_variants(self, d, variants, timeout=5):
         normalized_variants = [
-            self._normalize_ui_text(variant)
-            for variant in variants
-            if str(variant or "").strip()
+            self._normalize_ui_text(variant) for variant in variants if str(variant or "").strip()
         ]
         if not normalized_variants:
             return False
@@ -218,8 +217,7 @@ class RegAccountHandlerMixin:
                     try:
                         info = getattr(candidate, "info", {}) or {}
                         label = " ".join(
-                            str(info.get(key, "") or "")
-                            for key in ("text", "contentDescription", "hint")
+                            str(info.get(key, "") or "") for key in ("text", "contentDescription", "hint")
                         )
                         normalized_label = self._normalize_ui_text(label)
                         if not normalized_label:
@@ -345,13 +343,13 @@ class RegAccountHandlerMixin:
             if self._fill_contact_step(d, name, profile):
                 self._check_Continue_creating_account(d)
             else:
-                self.log(f"Failed on contact step for {name}")  
-            
+                self.log(f"Failed on contact step for {name}")
+
         time.sleep(4)
         if not self._fill_password_step(d, name, profile):
             self.log(f"Failed on password step for {name}")
             return False, "password"
-        
+
         time.sleep(4)
 
         self._handle_save_step(d)
@@ -456,7 +454,6 @@ class RegAccountHandlerMixin:
             print(f"[ERROR] detect_account_status: {e}")
             return "Unknown"
 
-
     def check_uid_account(self, d, before_ids=None):
         if d is None:
             self.log("Cannot check Facebook UID without a device session")
@@ -499,7 +496,6 @@ class RegAccountHandlerMixin:
         )
 
         for attempt in range(max_scrolls):
-
             # 1) Try exact visible text search first
             if self._click_settings_accounts_row(d, account_patterns):
                 if self._is_accounts_screen_open(d):
@@ -687,7 +683,9 @@ class RegAccountHandlerMixin:
         for scroll_index in range(max(1, int(max_scrolls or 1))):
             items = self._collect_text_view_items(d)
             if not items:
-                self.log(f"No TextView items found while scanning Facebook accounts (page {scroll_index + 1})")
+                self.log(
+                    f"No TextView items found while scanning Facebook accounts (page {scroll_index + 1})"
+                )
             else:
                 screen_signature = tuple((item["text"], item["top"], item["left"]) for item in items)
                 if screen_signature in seen_screens:
@@ -695,14 +693,8 @@ class RegAccountHandlerMixin:
                     break
                 seen_screens.add(screen_signature)
 
-            numeric_items = [
-                item for item in items
-                if numeric_pattern.fullmatch(item["text"])
-            ]
-            facebook_items = [
-                item for item in items
-                if item["text"].strip().lower() == "facebook"
-            ]
+            numeric_items = [item for item in items if numeric_pattern.fullmatch(item["text"])]
+            facebook_items = [item for item in items if item["text"].strip().lower() == "facebook"]
 
             self.log(
                 f"Scanning Accounts page {scroll_index + 1}: "
@@ -732,9 +724,7 @@ class RegAccountHandlerMixin:
                     )
 
                 if not candidates:
-                    self.log(
-                        "Found a Facebook row but no numeric text above it on the current page"
-                    )
+                    self.log("Found a Facebook row but no numeric text above it on the current page")
                     continue
 
                 best_match = min(candidates)[-1]
@@ -743,8 +733,7 @@ class RegAccountHandlerMixin:
                     seen_ids.add(facebook_id)
                     facebook_ids.append(facebook_id)
                     self.log(
-                        f"Matched Facebook row at y={facebook_item['center_y']} "
-                        f"to numeric ID {facebook_id}"
+                        f"Matched Facebook row at y={facebook_item['center_y']} to numeric ID {facebook_id}"
                     )
 
             if scroll_index >= max_scrolls - 1:
@@ -848,7 +837,9 @@ class RegAccountHandlerMixin:
         )
 
     def _build_contact(self, first_name, last_name, kwargs):
-        mode = str(kwargs.get("contact_mode") or getattr(self, "contact_mode", "random_phone")).strip().lower()
+        mode = (
+            str(kwargs.get("contact_mode") or getattr(self, "contact_mode", "random_phone")).strip().lower()
+        )
         fixed_value = str(kwargs.get("contact_value") or getattr(self, "contact_value", "")).strip()
         phone_prefix = str(kwargs.get("phone_prefix") or getattr(self, "phone_prefix", "+1")).strip() or "+1"
         fixed_pool = self._parse_contact_pool(fixed_value)
@@ -872,11 +863,7 @@ class RegAccountHandlerMixin:
         if not cleaned:
             return []
 
-        return [
-            part.strip().strip("\"'")
-            for part in cleaned.split(",")
-            if part.strip().strip("\"'")
-        ]
+        return [part.strip().strip("\"'") for part in cleaned.split(",") if part.strip().strip("\"'")]
 
     def _generate_email(self, first_name, last_name):
         suffix = random.randint(1000, 99999)
@@ -894,7 +881,11 @@ class RegAccountHandlerMixin:
             return None
 
         provider = str(getattr(settings, "email_provider", "") or "").strip().lower()
-        alias_email = self._build_yandex_clone_email(main_email) if self._is_yandex_address(main_email, provider) else main_email
+        alias_email = (
+            self._build_yandex_clone_email(main_email)
+            if self._is_yandex_address(main_email, provider)
+            else main_email
+        )
         self.log(f"Using confirmation email: {alias_email}")
         return alias_email
 
@@ -1283,9 +1274,7 @@ class RegAccountHandlerMixin:
         target_year = int(profile.birth_year)
         target_month = self.MONTHS[profile.birth_month - 1]
         target_day = str(int(profile.birth_day))
-        self.log(
-            f"Selecting birth date: {profile.birth_day:02d}/{profile.birth_month:02d}/{target_year}"
-        )
+        self.log(f"Selecting birth date: {profile.birth_day:02d}/{profile.birth_month:02d}/{target_year}")
 
         pickers = list(d(className="android.widget.NumberPicker"))
         if len(pickers) < 3:
@@ -1349,6 +1338,7 @@ class RegAccountHandlerMixin:
         except Exception as exc:
             self.log(f"Failed while checking agreement button: {exc}")
             return False
+
     def _detect_date_pickers(self, pickers):
         detected = {}
         for picker in pickers:
@@ -1377,7 +1367,9 @@ class RegAccountHandlerMixin:
 
         return None
 
-    def _scroll_picker_to_value(self, d, picker, target, kind="generic", numeric_bounds=None, max_attempts=20):
+    def _scroll_picker_to_value(
+        self, d, picker, target, kind="generic", numeric_bounds=None, max_attempts=20
+    ):
         target = str(target).strip()
         for attempt in range(max_attempts):
             current = self._get_picker_center_value(picker)
@@ -1385,7 +1377,9 @@ class RegAccountHandlerMixin:
             if current_text == target:
                 return True
 
-            direction = self._decide_picker_direction(current_text, target, kind, numeric_bounds=numeric_bounds)
+            direction = self._decide_picker_direction(
+                current_text, target, kind, numeric_bounds=numeric_bounds
+            )
             step_scale = self._get_picker_step_scale(current_text, target, kind)
 
             if direction == "up":
@@ -1506,7 +1500,7 @@ class RegAccountHandlerMixin:
         return "up" if target_num > current_num else "down"
 
     def _swipe_picker_up(self, d, picker, step_scale=0.55):
-        bounds = (picker.info.get("bounds", {}) or {})
+        bounds = picker.info.get("bounds", {}) or {}
         left = int(bounds.get("left", 0))
         right = int(bounds.get("right", 0))
         top = int(bounds.get("top", 0))
@@ -1525,7 +1519,7 @@ class RegAccountHandlerMixin:
             self.log(f"Picker swipe up failed: {exc}")
 
     def _swipe_picker_down(self, d, picker, step_scale=0.55):
-        bounds = (picker.info.get("bounds", {}) or {})
+        bounds = picker.info.get("bounds", {}) or {}
         left = int(bounds.get("left", 0))
         right = int(bounds.get("right", 0))
         top = int(bounds.get("top", 0))
@@ -1542,7 +1536,6 @@ class RegAccountHandlerMixin:
             d.swipe(cx, start_y, cx, end_y, 0.18)
         except Exception as exc:
             self.log(f"Picker swipe down failed: {exc}")
-
 
     def _tap_set_or_continue(self, d):
         for label in ("SET", "Set"):
@@ -1569,6 +1562,7 @@ class RegAccountHandlerMixin:
             time.sleep(1)
             return True
         return False
+
     def _fill_gender_step(self, d, name, profile):
         self.log(f"Selecting gender: {profile.gender}")
         gender_selectors = (
@@ -1612,7 +1606,7 @@ class RegAccountHandlerMixin:
             timeout=6,
             required=False,
         )
-          
+
     def _fill_password_step(self, d, name, profile):
         self.log("Entering password")
         if not self._set_text_inputs(d, [profile.password], hints=("password",), require_hint_match=True):
@@ -1676,7 +1670,7 @@ class RegAccountHandlerMixin:
             {"textContains": "creating new account"},
             {"descriptionContains": "creating new account"},
             {"textContains": "create new account"},
-            {"descriptionContains": "create new account"}
+            {"descriptionContains": "create new account"},
         ]
         if self._click_any_selector(
             d,
@@ -1689,15 +1683,15 @@ class RegAccountHandlerMixin:
 
         try:
             buttons = [
-                btn for btn in list(d(className="android.widget.Button"))
+                btn
+                for btn in list(d(className="android.widget.Button"))
                 if btn.exists and btn.info.get("enabled", True)
             ]
             button_labels = []
             for btn in buttons:
                 info = getattr(btn, "info", {}) or {}
                 label = " ".join(
-                    str(info.get(key, "") or "")
-                    for key in ("text", "contentDescription")
+                    str(info.get(key, "") or "") for key in ("text", "contentDescription")
                 ).strip()
                 if label:
                     button_labels.append(label.lower())
@@ -1720,7 +1714,7 @@ class RegAccountHandlerMixin:
         return False
 
     def _handle_contact_continue_step(self, d):
-        
+
         if self._click_any_selector(
             d,
             [
@@ -1753,7 +1747,8 @@ class RegAccountHandlerMixin:
 
         try:
             buttons = [
-                btn for btn in list(d(className="android.widget.Button"))
+                btn
+                for btn in list(d(className="android.widget.Button"))
                 if btn.exists and btn.info.get("enabled", True)
             ]
             if buttons:
@@ -1769,7 +1764,7 @@ class RegAccountHandlerMixin:
             pass
 
         self.log("No continue button detected after contact step")
-        return False    
+        return False
 
     def _tap_continue(self, d, required=True):
         return self._click_any_selector(
@@ -1924,8 +1919,8 @@ class RegAccountHandlerMixin:
 
         def _normalize(value):
             value = str(value or "").strip().lower()
-            value = value.replace("\u2019", "'")   # smart quote -> normal quote
-            value = re.sub(r"\s+", " ", value)     # collapse spaces/newlines
+            value = value.replace("\u2019", "'")  # smart quote -> normal quote
+            value = re.sub(r"\s+", " ", value)  # collapse spaces/newlines
             return value
 
         def _exists_by_phrase(phrase):
@@ -1954,9 +1949,8 @@ class RegAccountHandlerMixin:
 
                 # 2) ACTIVE check for screen like screenshot
                 # stronger check: heading + button/skip
-                add_profile_title = (
-                    _exists_by_phrase("add a profile picture") or
-                    _exists_by_phrase("add profile picture")
+                add_profile_title = _exists_by_phrase("add a profile picture") or _exists_by_phrase(
+                    "add profile picture"
                 )
                 add_picture_btn = _exists_by_phrase("add picture")
                 skip_btn = _exists_by_phrase("skip")

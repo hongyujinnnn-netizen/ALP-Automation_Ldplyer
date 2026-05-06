@@ -6,8 +6,11 @@ import time
 
 from core.task_base import BaseTaskHandler, U2_AVAILABLE, u2
 from utils.ip_guard import check_ld_ip_allowed
+
+
 class ScrollTaskHandler(BaseTaskHandler):
     """Handler for Facebook scrolling tasks"""
+
     def _restart_scroll_task(self, name, serial, remaining_duration, direction, intensity, restart_attempts):
         """Restart LD and resume the scroll task with the remaining duration."""
         try:
@@ -25,7 +28,9 @@ class ScrollTaskHandler(BaseTaskHandler):
         self.auto_arrange_ld_windows()
 
         self.log(f"Waiting for emulator ready after restart: {name}")
-        if not self.ensure_device_ready(name, timeout=max(90, int(getattr(self.emulator, 'boot_delay', 20)) * 6)):
+        if not self.ensure_device_ready(
+            name, timeout=max(90, int(getattr(self.emulator, "boot_delay", 20)) * 6)
+        ):
             self.log(f"Device not ready after restart: {name}")
             return False
 
@@ -46,19 +51,19 @@ class ScrollTaskHandler(BaseTaskHandler):
     def execute(self, name, duration=900, direction="down", intensity="medium", restart_attempts=0):
         """
         Execute smooth scrolling on the specified device.
-        
+
         Args:
             name (str): Device identifier
             duration (int): Total scrolling duration in seconds (default: 900)
             direction (str): Scroll direction - "down", "up", or "random" (default: "down")
             intensity (str): Scroll intensity - "light", "medium", or "heavy" (default: "medium")
-        
+
         Returns:
             bool: True if successful, False otherwise
         """
         if self.check_paused():
             return False
-            
+
         # Get device serial
         serial = self.emulator.name_to_serial.get(name, name)
         if not serial:
@@ -69,7 +74,7 @@ class ScrollTaskHandler(BaseTaskHandler):
         if not self._ensure_adb_connection(serial):
             self.log(f"Failed to connect to device {serial}")
             return False
-        
+
         # Start LD if not running
         if not self.emulator.is_ld_running(name):
             if not self.emulator.start_ld(name):
@@ -77,7 +82,9 @@ class ScrollTaskHandler(BaseTaskHandler):
                 return False
             self.auto_arrange_ld_windows()
             self.log(f"Waiting for emulator ready: {name}")
-            if not self.ensure_device_ready(name, timeout=max(90, int(getattr(self.emulator, 'boot_delay', 20)) * 6)):
+            if not self.ensure_device_ready(
+                name, timeout=max(90, int(getattr(self.emulator, "boot_delay", 20)) * 6)
+            ):
                 self.log(f"Device not ready after startup: {name}")
                 return False
 
@@ -122,7 +129,7 @@ class ScrollTaskHandler(BaseTaskHandler):
         # Durations are in milliseconds for the ADB swipe command.
         intensity_params = {
             "light": {
-                "duration_range": (550, 800),   # slightly slower, longer swipes
+                "duration_range": (550, 800),  # slightly slower, longer swipes
                 "delay_range": (1.8, 3.0),
             },
             "medium": {
@@ -130,13 +137,13 @@ class ScrollTaskHandler(BaseTaskHandler):
                 "delay_range": (1.4, 2.4),
             },
             "heavy": {
-                "duration_range": (380, 600),   # faster but still non-robotic
+                "duration_range": (380, 600),  # faster but still non-robotic
                 "delay_range": (1.0, 2.0),
             },
         }
 
         params = intensity_params.get(intensity, intensity_params["medium"])
-        
+
         # Let Facebook/feed settle before issuing swipe commands
         settle_delay = random.uniform(5, 10)
         self.log(f"Waiting {settle_delay:.1f}s before starting scrolls")
@@ -153,13 +160,13 @@ class ScrollTaskHandler(BaseTaskHandler):
         random_like_enabled = bool(getattr(self, "random_like", True))
         like_chance = float(getattr(self, "like_chance", 0.18)) if random_like_enabled else 0.0
         like_min_gap = float(getattr(self, "like_min_gap_seconds", 12.0))
-        
+
         try:
             while time.time() - start_time < duration:
                 if self.check_paused():
                     self.log(f"Scrolling paused on {name} after {successful_swipes} successful swipes")
                     return False
-                
+
                 # Determine scroll direction.
                 # Even when direction is "down", add a small probability of brief
                 # reverse scrolls to mimic human corrections.
@@ -171,7 +178,7 @@ class ScrollTaskHandler(BaseTaskHandler):
                         current_direction = "up"
                     elif current_direction == "up" and random.random() < 0.12:
                         current_direction = "down"
-                
+
                 # Generate swipe parameters based on direction and intensity.
                 scroll_duration = random.uniform(*params["duration_range"])
 
@@ -195,7 +202,7 @@ class ScrollTaskHandler(BaseTaskHandler):
                 base_x = random.randint(270, 330)
                 jitter = random.randint(-8, 8)
                 x_pos = base_x + jitter
-                
+
                 # Respect optional rate limiter if present (EnhancedScrollTaskHandler and similar).
                 limiter = getattr(self, "rate_limiter", None)
                 if limiter is not None:
@@ -208,14 +215,25 @@ class ScrollTaskHandler(BaseTaskHandler):
 
                 # Execute the swipe command
                 try:
-                    result = subprocess.run([
-                        "adb", "-s", serial,
-                        "shell", "input", "swipe", 
-                        str(x_pos), str(start_y), 
-                        str(x_pos), str(end_y), 
-                        str(int(scroll_duration))
-                    ], capture_output=True, text=True, timeout=10)
-                    
+                    result = subprocess.run(
+                        [
+                            "adb",
+                            "-s",
+                            serial,
+                            "shell",
+                            "input",
+                            "swipe",
+                            str(x_pos),
+                            str(start_y),
+                            str(x_pos),
+                            str(end_y),
+                            str(int(scroll_duration)),
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                    )
+
                     if result.returncode == 0:
                         successful_swipes += 1
                         consecutive_failures = 0
@@ -238,7 +256,7 @@ class ScrollTaskHandler(BaseTaskHandler):
                         consecutive_failures += 1
                         consecutive_timeouts = 0
                         self.log(f"ADB command failed: {result.stderr}")
-                        
+
                         # If too many consecutive failures, try to reconnect
                         if consecutive_failures >= 3:
                             self.log("Too many failures, attempting to reconnect...")
@@ -246,7 +264,7 @@ class ScrollTaskHandler(BaseTaskHandler):
                                 self.log("Reconnection failed, aborting")
                                 return False
                             consecutive_failures = 0
-                            
+
                 except subprocess.TimeoutExpired:
                     failed_swipes += 1
                     consecutive_failures += 1
@@ -259,7 +277,9 @@ class ScrollTaskHandler(BaseTaskHandler):
                             return False
 
                         remaining_duration = duration - (time.time() - start_time)
-                        self.log(f"ADB command timed out for {name} 5 times. Restarting LD and resuming scroll task")
+                        self.log(
+                            f"ADB command timed out for {name} 5 times. Restarting LD and resuming scroll task"
+                        )
                         return self._restart_scroll_task(
                             name,
                             serial,
@@ -275,7 +295,7 @@ class ScrollTaskHandler(BaseTaskHandler):
                             self.log("Reconnection failed, aborting")
                             return False
                         consecutive_failures = 0
-                
+
                 # Vary the delay between swipes for more human-like behavior.
                 base_delay = random.uniform(*params["delay_range"])
 
@@ -295,13 +315,13 @@ class ScrollTaskHandler(BaseTaskHandler):
                     delay += random.uniform(0.15, 0.45)
 
                 time.sleep(delay)
-                
+
             self.log(
                 f"Completed scrolling on {name}: {successful_swipes} successful, "
                 f"{failed_swipes} failed swipes, {like_count} like(s)"
             )
             return True
-            
+
         except Exception as e:
             self.log(f"Unexpected error scrolling on {name}: {str(e)}")
             return False
@@ -315,24 +335,26 @@ class ScrollTaskHandler(BaseTaskHandler):
                 if serial in result.stdout and "device" in result.stdout:
                     self.log(f"ADB device {serial} is already connected")
                     return True
-                
+
                 # Try to connect
                 self.log(f"Attempting to connect to {serial} (attempt {attempt + 1}/{max_retries})")
-                result = subprocess.run(["adb", "connect", serial], capture_output=True, text=True, timeout=10)
-                
+                result = subprocess.run(
+                    ["adb", "connect", serial], capture_output=True, text=True, timeout=10
+                )
+
                 if "connected to" in result.stdout.lower() or "already connected" in result.stdout.lower():
                     self.log(f"Successfully connected to {serial}")
                     return True
                 else:
                     self.log(f"Connection attempt failed: {result.stdout.strip()}")
-                    
+
                 time.sleep(2)  # Wait before retry
-                
+
             except subprocess.TimeoutExpired:
                 self.log(f"ADB connection timeout for {serial}")
             except Exception as e:
                 self.log(f"Error connecting to {serial}: {str(e)}")
-                
+
         return False
 
     def open_facebook(self, d, ready_delay_range=(5, 15)):
@@ -365,8 +387,8 @@ class ScrollTaskHandler(BaseTaskHandler):
         try:
             w, h = d.window_size()
             b = node.info.get("bounds", {})
-            l, t, r, btm = b.get("left",0), b.get("top",0), b.get("right",0), b.get("bottom",0)
-            return t < h*top_ratio and r > w*(1-right_ratio)
+            l, t, r, btm = b.get("left", 0), b.get("top", 0), b.get("right", 0), b.get("bottom", 0)
+            return t < h * top_ratio and r > w * (1 - right_ratio)
         except Exception:
             return False
 
@@ -388,14 +410,15 @@ class ScrollTaskHandler(BaseTaskHandler):
                 r"(?i)creator\s+studio",
                 r"(?i)business\s+suite",
                 r"(?i)page\s+info",
-                r"(?i)switch\s+to\s+personal"
+                r"(?i)switch\s+to\s+personal",
             ]
-            
+
             # Check both text and description matches with timeout
             for pattern in page_text_patterns:
                 try:
-                    if (d(textMatches=pattern).exists(timeout=1.0) or 
-                        d(descriptionMatches=pattern).exists(timeout=1.0)):
+                    if d(textMatches=pattern).exists(timeout=1.0) or d(descriptionMatches=pattern).exists(
+                        timeout=1.0
+                    ):
                         return True
                 except:
                     continue
@@ -412,13 +435,11 @@ class ScrollTaskHandler(BaseTaskHandler):
         """
         # 1) Obvious switcher/avatar button (home screen)
         ids = [
-            r".*profile_switcher.*", r".*account_switcher.*", r".*menu_tab_profile.*",
+            r".*profile_switcher.*",
+            r".*account_switcher.*",
+            r".*menu_tab_profile.*",
         ]
-        descs = [
-            r"(?i)(account|profile).*(switch|changer)",
-            r"(?i)switch.*(account|profile)",
-            r"(?i)Menu"
-        ]
+        descs = [r"(?i)(account|profile).*(switch|changer)", r"(?i)switch.*(account|profile)", r"(?i)Menu"]
         for i in ids:
             node = d(resourceIdMatches=i)
             if node.exists and self._in_top_right(d, node):
@@ -433,17 +454,15 @@ class ScrollTaskHandler(BaseTaskHandler):
         # 2) Fallback: tap in the top-right corner
         w, h = d.window_size()
         for _ in range(2):
-            d.click(w*0.93, h*0.09)
+            d.click(w * 0.93, h * 0.09)
             time.sleep(1)
-            d.click(w*0.93, h*0.09)
+            d.click(w * 0.93, h * 0.09)
             if d(textMatches=r"(?i)Menu").exists or d(descriptionMatches=r"(?i)Settings|Search").exists:
                 return True
             time.sleep(0.4)
 
         # 3) Try bottom Menu tab
-        possible_tabs = [
-            r".*tab_bar_menu.*", r".*tab_menu.*", r".*menu_tab.*"
-        ]
+        possible_tabs = [r".*tab_bar_menu.*", r".*tab_menu.*", r".*menu_tab.*"]
         for i in possible_tabs:
             node = d(resourceIdMatches=i)
             if node.exists and self._tap(node):
@@ -455,9 +474,7 @@ class ScrollTaskHandler(BaseTaskHandler):
         """
         On the Menu header, tap the circular arrows quick-switch button.
         """
-        candidates = [
-            r".*switch.*", r".*swap.*", r".*toggle.*"
-        ]
+        candidates = [r".*switch.*", r".*swap.*", r".*toggle.*"]
         # Try resource-id first
         for pat in candidates:
             node = d(resourceIdMatches=pat)
@@ -474,7 +491,7 @@ class ScrollTaskHandler(BaseTaskHandler):
 
         # Fallback: tap the header's right side
         w, h = d.window_size()
-        d.click(w*0.784, h*0.206)
+        d.click(w * 0.784, h * 0.206)
         return True
 
     def _tap(self, elem):
@@ -495,7 +512,7 @@ class ScrollTaskHandler(BaseTaskHandler):
             # Open Menu/profile-switcher area
             if not self._open_menu_profile_switcher(d, wait=max_wait):
                 return False
-            
+
             # Check if we're in Page mode
             if self._already_in_page(d):
                 self.log("Switching to Profile from Page...")
@@ -510,7 +527,7 @@ class ScrollTaskHandler(BaseTaskHandler):
         except Exception as e:
             self.log(f"[switch_to_profile] Error: {e}")
             return False
-           
+
     def click_home_button(self, d, max_wait=5, retries=2):
         """
         Click the Home button (house icon) in Facebook.
@@ -523,6 +540,7 @@ class ScrollTaskHandler(BaseTaskHandler):
         Returns:
             bool: True if clicked successfully, False otherwise
         """
+
         def _on_home_feed(timeout_sec=2.5):
             """Best-effort confirmation that Facebook Home/feed is visible."""
             checks = [
@@ -594,7 +612,7 @@ class ScrollTaskHandler(BaseTaskHandler):
 
         self.log("Could not confirm Home button after retries")
         return False
-    
+
     def _handle_skip_notifications_prompt(self, d, max_skips=6):
         """Click repeated post-login Skip/Not Now prompts until none remain."""
         selectors = [
@@ -688,8 +706,8 @@ class ScrollTaskHandler(BaseTaskHandler):
                 except Exception:
                     continue
 
-                desc = (info.get("contentDescription") or "")
-                text = (info.get("text") or "")
+                desc = info.get("contentDescription") or ""
+                text = info.get("text") or ""
                 blob = f"{desc} {text}".strip()
 
                 if not blob:
@@ -734,18 +752,21 @@ class ScrollTaskHandler(BaseTaskHandler):
 
         return False
 
+
 class EnhancedScrollTaskHandler(ScrollTaskHandler):
     """Enhanced scroll handler with error handling and randomization"""
+
     def __init__(self, emulator, log_func, pause_event, running_flag):
         super().__init__(emulator, log_func, pause_event, running_flag)
         from utils.error_handler import EnhancedErrorHandler
         from utils.rate_limiter import RateLimiter
         from utils.activity_randomizer import ActivityRandomizer
+
         self.error_handler = EnhancedErrorHandler(log_func)
         self.rate_limiter = RateLimiter()
         self.randomizer = ActivityRandomizer()
-    
+
     def execute(self, name, duration=900, direction="down", intensity="medium"):
         """Enhanced execute with error handling"""
         self.error_handler.reset_counters(name)
-        return super().execute(name, duration, direction, intensity)    
+        return super().execute(name, duration, direction, intensity)

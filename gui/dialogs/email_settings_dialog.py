@@ -104,9 +104,7 @@ class EmailSettingsDialogMixin:
             padx=8,
             pady=2,
             cursor="hand2",
-            command=lambda: self._clear_saved_email_password(
-                email_address_var, email_app_password_var
-            ),
+            command=lambda: self._clear_saved_email_password(email_address_var, email_app_password_var),
         )
         clear_btn.pack(side="left", padx=(6, 0))
         self._email_form_field(
@@ -162,7 +160,9 @@ class EmailSettingsDialogMixin:
 
         toggle_row = tk.Frame(account_card, bg=palette["surface_alt"])
         toggle_row.pack(fill="x", pady=(10, 0))
-        tb.Checkbutton(toggle_row, text="Use SSL/TLS", variable=email_use_ssl_var, bootstyle="round-toggle").pack(side="left")
+        tb.Checkbutton(
+            toggle_row, text="Use SSL/TLS", variable=email_use_ssl_var, bootstyle="round-toggle"
+        ).pack(side="left")
         tk.Label(
             toggle_row,
             text="Use app-password-based login for mailboxes you own or are explicitly authorized to access.",
@@ -243,8 +243,15 @@ class EmailSettingsDialogMixin:
 
         toggle_row2 = tk.Frame(polling_card, bg=palette["surface_alt"])
         toggle_row2.pack(fill="x", pady=(10, 0))
-        tb.Checkbutton(toggle_row2, text="Unread only", variable=email_unread_only_var, bootstyle="round-toggle").pack(side="left")
-        tb.Checkbutton(toggle_row2, text="Mark matched email as seen", variable=email_mark_as_seen_var, bootstyle="round-toggle").pack(side="left", padx=(16, 0))
+        tb.Checkbutton(
+            toggle_row2, text="Unread only", variable=email_unread_only_var, bootstyle="round-toggle"
+        ).pack(side="left")
+        tb.Checkbutton(
+            toggle_row2,
+            text="Mark matched email as seen",
+            variable=email_mark_as_seen_var,
+            bootstyle="round-toggle",
+        ).pack(side="left", padx=(16, 0))
 
         outer3, actions_card = self._premium_card(
             parent,
@@ -254,7 +261,9 @@ class EmailSettingsDialogMixin:
         )
         outer3.pack(fill="x")
 
-        self._email_action_status_var = tk.StringVar(value="Ready. Save settings after confirming the mailbox connection.")
+        self._email_action_status_var = tk.StringVar(
+            value="Ready. Save settings after confirming the mailbox connection."
+        )
         tk.Label(
             actions_card,
             textvariable=self._email_action_status_var,
@@ -492,7 +501,9 @@ class EmailSettingsDialogMixin:
             email_mark_as_seen_var,
         )
         if not self.otp_controller.save_email_settings(config, request):
-            self._email_action_status_var.set("Email OTP settings could not be saved. Check the log for details.")
+            self._email_action_status_var.set(
+                "Email OTP settings could not be saved. Check the log for details."
+            )
             return
 
         self._sync_email_dialog_vars_to_app_vars(

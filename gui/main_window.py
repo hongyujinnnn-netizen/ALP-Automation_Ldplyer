@@ -7,10 +7,31 @@ from utils.ip_guard import get_ld_public_ip_info
 
 
 class MainWindow:
-    def __init__(self, selected_ld_names, running_flag, ld_thread, log_func=print,
-                 start_same_time=False, auto_arrange_ld=False, task_type="scroll", task_template="custom", task_handler=None, progress_callback=None,
-                 boot_delay=20, task_duration=900, max_videos=2, page_per_account=2, accounts_per_ld=1, scroll_after_post=True, clear_cache=True, verify_account=True, emulator=None, state_callback=None,
-                 accounts_pool=None, verify_2fa=True):
+    def __init__(
+        self,
+        selected_ld_names,
+        running_flag,
+        ld_thread,
+        log_func=print,
+        start_same_time=False,
+        auto_arrange_ld=False,
+        task_type="scroll",
+        task_template="custom",
+        task_handler=None,
+        progress_callback=None,
+        boot_delay=20,
+        task_duration=900,
+        max_videos=2,
+        page_per_account=2,
+        accounts_per_ld=1,
+        scroll_after_post=True,
+        clear_cache=True,
+        verify_account=True,
+        emulator=None,
+        state_callback=None,
+        accounts_pool=None,
+        verify_2fa=True,
+    ):
 
         # Import here to avoid circular imports when we need a fresh controller
         if emulator is None:
@@ -22,12 +43,12 @@ class MainWindow:
         # Set the boot delay and task duration from parameters
         self.em.boot_delay = boot_delay
         self.em.task_duration = task_duration
-        
+
         # Debug: print what we're trying to process
         log_func(f"Selected LD names: {selected_ld_names}")
         emulator_count = len(self.em.name_to_serial)
         log_func(f"Available emulators: [{emulator_count} - Emulator ]")
-        
+
         # Filter only the names that exist in our emulator mapping
         self.thread_ld = []
         for name in selected_ld_names:
@@ -40,9 +61,9 @@ class MainWindow:
                         self.thread_ld.append(emu_name)
                         log_func(f"Matched {name} to {emu_name}")
                         break
-        
+
         log_func(f"Processing LDs: {self.thread_ld}")
-        
+
         self.log = log_func
         self.running_flag = running_flag
         self.ld_thread = ld_thread
@@ -174,16 +195,18 @@ class MainWindow:
     def ld_task_stage(self, name, stage):
         if not self.running_flag():
             return
-        
+
         if self.check_paused():
             return
-        
+
         if stage == "start":
             self._push_state(name, phase="start", state="Starting", task="Boot sequence", progress=10)
             self.log(f"Starting LD: {name}")
             self.em.start_ld(name, delay_between_starts=self.boot_delay)
             self.log(f"Waiting for LD ready: {name}")
-            self._push_state(name, phase="start", state="Waiting", task="Waiting for Android ready", progress=24)
+            self._push_state(
+                name, phase="start", state="Waiting", task="Waiting for Android ready", progress=24
+            )
             if not self.em.wait_for_ld_ready(name, timeout=max(90, self.boot_delay * 6), poll_interval=2):
                 # Adapter: self.log is injected and may be 1-arg or 2-arg.
                 def _safe_log(msg, level="INFO"):
@@ -213,7 +236,9 @@ class MainWindow:
                         )
                         if result and getattr(result, "recovered", False):
                             _safe_log(f"Auto-recovered LD: {name}", "SUCCESS")
-                            self._push_state(name, phase="ready", state="Active", task="Recovered", progress=36)
+                            self._push_state(
+                                name, phase="ready", state="Active", task="Recovered", progress=36
+                            )
                             self._start_ip_lookup(name)
                             return
                         if result and getattr(result, "issues", None):
@@ -232,10 +257,14 @@ class MainWindow:
             if self.task_type in {"scroll", "reg_account"}:
                 if not self.em.wait_for_ld_ready(name, timeout=60, poll_interval=2):
                     self.log(f"Skip Facebook; LD not ready: {name}")
-                    self._push_state(name, phase="facebook", state="Attention", task="Facebook skipped", progress=0)
+                    self._push_state(
+                        name, phase="facebook", state="Attention", task="Facebook skipped", progress=0
+                    )
                     return
                 self.log(f"Opening Facebook on LD: {name}")
-                self._push_state(name, phase="facebook", state="Preparing", task="Opening Facebook", progress=48)
+                self._push_state(
+                    name, phase="facebook", state="Preparing", task="Opening Facebook", progress=48
+                )
                 self.em.open_facebook(name)
                 self._push_state(name, phase="facebook", state="Ready", task="Facebook opened", progress=60)
         elif stage == "task":
@@ -289,7 +318,9 @@ class MainWindow:
                             "password": str(account.get("password") or "").strip(),
                             "twofa": twofa_secret,
                             "twofa_secret": twofa_secret,
-                            "twofa_email": str(account.get("twofa_email") or account.get("email") or "").strip(),
+                            "twofa_email": str(
+                                account.get("twofa_email") or account.get("email") or ""
+                            ).strip(),
                             "verify_2fa": bool(self.verify_2fa) or bool(twofa_secret),
                             "clear_before_login": True,
                         }
@@ -341,11 +372,7 @@ class MainWindow:
                     progress=100 if success else 0,
                 )
 
-                if (
-                    self.task_type == "reg_account"
-                    and success
-                    and completed_accounts == requested_accounts
-                ):
+                if self.task_type == "reg_account" and success and completed_accounts == requested_accounts:
                     # Registration batches should release the emulator immediately
                     # after the final account succeeds so we do not depend on the
                     # later close stage to shut the LD instance down.
@@ -359,7 +386,7 @@ class MainWindow:
                     # original name would silently no-op in dnconsole.
                     close_name = getattr(self.task_handler, "last_renamed_to", "") or name
                     self._close_ld_if_needed(close_name)
-            
+
             # Update progress if callback provided
             if self.progress_callback:
                 self.completed_count += 1
@@ -394,7 +421,7 @@ class MainWindow:
                 if not self.running_flag():
                     break
 
-                batch = self.thread_ld[batch_start:batch_start + self.ld_thread]
+                batch = self.thread_ld[batch_start : batch_start + self.ld_thread]
                 self.log(f"Processing batch: {batch}")
 
                 # Scroll tasks open Facebook inside the task handler after the
@@ -408,7 +435,7 @@ class MainWindow:
                         break
 
                     self.log(f"Stage: {stage.capitalize()}")
-                    
+
                     if stage == "start" and not self.start_same_time:
                         for name in batch:
                             if not self.running_flag():
@@ -425,17 +452,19 @@ class MainWindow:
                             t.daemon = True
                             t.start()
                             threads.append(t)
-                        
+
                         # Wait for all stage threads to fully finish before advancing.
                         self._wait_for_stage_threads(threads, stage)
 
                         if any(t.is_alive() for t in threads):
-                            self.log(f"Stage {stage.capitalize()} is still running; not advancing to the next stage.")
+                            self.log(
+                                f"Stage {stage.capitalize()} is still running; not advancing to the next stage."
+                            )
                             break
 
                         if stage == "start":
                             self._auto_arrange_windows()
-                            
+
         finally:
             # Only tear down ADB if this instance owns the emulator lifecycle
             if getattr(self, "_owns_emulator", False):

@@ -9,7 +9,7 @@ def _hex_to_rgb(value):
     value = (value or "").lstrip("#")
     if len(value) != 6:
         return (255, 255, 255)
-    return tuple(int(value[i:i + 2], 16) for i in (0, 2, 4))
+    return tuple(int(value[i : i + 2], 16) for i in (0, 2, 4))
 
 
 def _rgb_to_hex(rgb):
@@ -19,11 +19,13 @@ def _rgb_to_hex(rgb):
 def _blend(fg, bg, alpha):
     fr, fgn, fb = _hex_to_rgb(fg)
     br, bgn, bb = _hex_to_rgb(bg)
-    return _rgb_to_hex((
-        fr * alpha + br * (1 - alpha),
-        fgn * alpha + bgn * (1 - alpha),
-        fb * alpha + bb * (1 - alpha),
-    ))
+    return _rgb_to_hex(
+        (
+            fr * alpha + br * (1 - alpha),
+            fgn * alpha + bgn * (1 - alpha),
+            fb * alpha + bb * (1 - alpha),
+        )
+    )
 
 
 def build_checkbox_image_set(palette=None, *, size=18):
@@ -181,7 +183,9 @@ class CheckboxTreeview(ttk.Treeview):
         )
         self.tag_configure("hover", background=self.palette.get("hover_bg", self.palette["surface_alt"]))
         # Subtle accent so checked rows stand out without overpowering status colors.
-        checked_tint = _blend(self.palette.get("success", "#10B981"), self.palette.get("surface", "#0E1118"), 0.12)
+        checked_tint = _blend(
+            self.palette.get("success", "#10B981"), self.palette.get("surface", "#0E1118"), 0.12
+        )
         self.tag_configure("checked", background=checked_tint, foreground=self.palette.get("text", "#E2E8F0"))
         self.tag_configure("unchecked", background="", foreground="")
         if hasattr(self, "context_menu"):
@@ -289,9 +293,7 @@ class CheckboxTreeview(ttk.Treeview):
             tags = [t for t in self.item(self.hover_item, "tags") if t != "hover"]
             self.item(self.hover_item, tags=tags)
             # Restore the proper checkbox image after leaving hover.
-            self._apply_checkbox_visual(
-                self.hover_item, self.checkboxes.get(self.hover_item, False)
-            )
+            self._apply_checkbox_visual(self.hover_item, self.checkboxes.get(self.hover_item, False))
         self.hover_item = None
 
     def toggle_checkbox(self, item):

@@ -172,7 +172,5 @@ class TaskHandlerFactory:
         try:
             builder = self._builders[task_type]
         except KeyError as exc:
-            raise UnsupportedTaskTypeError(
-                f"No task handler registered for task_type={task_type!r}"
-            ) from exc
+            raise UnsupportedTaskTypeError(f"No task handler registered for task_type={task_type!r}") from exc
         return builder(context)

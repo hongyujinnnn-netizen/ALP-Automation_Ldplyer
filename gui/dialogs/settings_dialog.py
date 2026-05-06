@@ -55,7 +55,10 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             return
 
         value_var.set(",".join(items))
-        self.log(f"Imported {len(items)} {'phone numbers' if mode == 'fixed_phone' else 'emails'} from {file_path}", "SUCCESS")
+        self.log(
+            f"Imported {len(items)} {'phone numbers' if mode == 'fixed_phone' else 'emails'} from {file_path}",
+            "SUCCESS",
+        )
 
     def _extract_phone_candidates(self, content):
         seen = set()
@@ -631,9 +634,18 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         _bind_menu_mousewheel(menu_shell)
 
         tip_bg = palette.get("tip_bg", palette["surface_alt"])
-        tip = tk.Frame(inner, bg=tip_bg, padx=12, pady=12, highlightthickness=1, highlightbackground=palette["border_alt"])
+        tip = tk.Frame(
+            inner,
+            bg=tip_bg,
+            padx=12,
+            pady=12,
+            highlightthickness=1,
+            highlightbackground=palette["border_alt"],
+        )
         tip.pack(fill="x", side="bottom", pady=(18, 0))
-        tk.Label(tip, text="RECOMMENDATION", bg=tip_bg, fg=palette["primary"], font=(self.mono_font, 8)).pack(anchor="w")
+        tk.Label(tip, text="RECOMMENDATION", bg=tip_bg, fg=palette["primary"], font=(self.mono_font, 8)).pack(
+            anchor="w"
+        )
         tk.Label(
             tip,
             text="Use Balanced profile first, then adjust only one or two values.",
@@ -675,7 +687,9 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
 
     def _premium_card(self, parent, palette, title, subtitle=None, padding=16):
         if padding == 16:
-            padding = int(getattr(getattr(self, "appearance", None), "spacing", {}).get("card_padding", padding))
+            padding = int(
+                getattr(getattr(self, "appearance", None), "spacing", {}).get("card_padding", padding)
+            )
         outer = tk.Frame(parent, bg=palette["border"], padx=1, pady=1)
         card = tk.Frame(outer, bg=palette["surface_alt"], padx=padding, pady=padding)
         card.pack(fill="both", expand=True)
@@ -807,9 +821,22 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         )
         preview_outer.pack(fill="x", pady=(6, 12))
 
-        sample = tk.Frame(preview, bg=palette["surface"], padx=14, pady=14, highlightthickness=1, highlightbackground=palette["border"])
+        sample = tk.Frame(
+            preview,
+            bg=palette["surface"],
+            padx=14,
+            pady=14,
+            highlightthickness=1,
+            highlightbackground=palette["border"],
+        )
         sample.pack(fill="x")
-        title = tk.Label(sample, text="Automation Control", bg=palette["surface"], fg=palette["text"], font=(self.display_font, 13))
+        title = tk.Label(
+            sample,
+            text="Automation Control",
+            bg=palette["surface"],
+            fg=palette["text"],
+            font=(self.display_font, 13),
+        )
         title.pack(anchor="w")
         subtitle = tk.Label(
             sample,
@@ -825,7 +852,9 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         primary.pack(side="left", padx=(0, 8))
         secondary = tk.Button(actions, text="Review Queue", relief="flat", padx=12, pady=7, cursor="hand2")
         secondary.pack(side="left", padx=(0, 8))
-        pill = StatusPill(actions, "Active", palette=palette, text="READY", font=(self.display_font, 9), padx=8, pady=3)
+        pill = StatusPill(
+            actions, "Active", palette=palette, text="READY", font=(self.display_font, 9), padx=8, pady=3
+        )
         pill.pack(side="left")
         meta = tk.Label(sample, text="", bg=palette["surface"], fg=palette["muted"], font=(self.mono_font, 8))
         meta.pack(anchor="w", pady=(12, 0))
@@ -863,9 +892,18 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
 
         outer, notes = self._premium_card(parent, palette, "Apply Flow", "How appearance changes behave.")
         outer.pack(fill="x")
-        self._info_row(notes, palette, "Preview", "Changing a control updates the miniature preview immediately.")
-        self._info_row(notes, palette, "Save appearance", "Persists the look and feel selection. The running window keeps its current theme.")
-        self._info_row(notes, palette, "Restart", "Restart the app when you want the saved appearance to become active.")
+        self._info_row(
+            notes, palette, "Preview", "Changing a control updates the miniature preview immediately."
+        )
+        self._info_row(
+            notes,
+            palette,
+            "Save appearance",
+            "Persists the look and feel selection. The running window keeps its current theme.",
+        )
+        self._info_row(
+            notes, palette, "Restart", "Restart the app when you want the saved appearance to become active."
+        )
 
         def refresh_preview(*_):
             resolved = resolve_appearance(
@@ -879,7 +917,12 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             meta_size = resolved.font_sizes["meta"]
             card_size = resolved.font_sizes["card_title"]
             button_pad = resolved.spacing["button_pad"]
-            sample.configure(bg=p["surface"], padx=resolved.spacing["card_padding"], pady=resolved.spacing["card_padding"], highlightbackground=p["border"])
+            sample.configure(
+                bg=p["surface"],
+                padx=resolved.spacing["card_padding"],
+                pady=resolved.spacing["card_padding"],
+                highlightbackground=p["border"],
+            )
             actions.configure(bg=p["surface"])
             title.configure(bg=p["surface"], fg=p["text"], font=(self.display_font, card_size + 2))
             subtitle.configure(bg=p["surface"], fg=p["muted"], font=(self.mono_font, meta_size))
@@ -920,7 +963,9 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             var.trace_add("write", refresh_preview)
         refresh_preview()
 
-    def _appearance_choice_group(self, parent, palette, title, description, variable, options, refresh, swatches=False):
+    def _appearance_choice_group(
+        self, parent, palette, title, description, variable, options, refresh, swatches=False
+    ):
         outer, card = self._premium_card(parent, palette, title, description)
         outer.pack(fill="x", pady=(0, 12))
         row = tk.Frame(card, bg=palette["surface_alt"])
@@ -937,7 +982,11 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
                 option_color = options[value].get("color", palette["primary"])
                 selected = value == current
                 button.configure(
-                    bg=option_color if selected and swatches else palette["primary"] if selected else palette["surface"],
+                    bg=option_color
+                    if selected and swatches
+                    else palette["primary"]
+                    if selected
+                    else palette["surface"],
                     fg=palette["primary_fg"] if selected else palette["text"],
                     activebackground=palette["primary_active"] if selected else palette["border_alt"],
                     activeforeground=palette["primary_fg"] if selected else palette["text"],
@@ -1007,37 +1056,158 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         if hasattr(self, "_footer_state_var"):
             self._footer_state_var.set("Appearance reset to defaults. Save & Apply to persist.")
 
-    def _build_general_page(self, parent, palette, parallel_var, boot_delay_var, task_duration_var, max_videos_var, accounts_per_ld_var):
-        self._page_heading(parent, palette, "GENERAL", "Launch & Session Controls", "Tune your main runtime values with cleaner, more readable controls.")
+    def _build_general_page(
+        self,
+        parent,
+        palette,
+        parallel_var,
+        boot_delay_var,
+        task_duration_var,
+        max_videos_var,
+        accounts_per_ld_var,
+    ):
+        self._page_heading(
+            parent,
+            palette,
+            "GENERAL",
+            "Launch & Session Controls",
+            "Tune your main runtime values with cleaner, more readable controls.",
+        )
 
         grid1 = tk.Frame(parent, bg=palette["surface"])
         grid1.pack(fill="x", pady=(0, 12))
-        self._metric_card(grid1, palette, "Parallel LDs", parallel_var, "active devices", "Recommended: 1–2 for mid-range PCs.", min_value=1)
-        self._metric_card(grid1, palette, "Boot Delay", boot_delay_var, "seconds", "Increase if emulator startup is unstable.", min_value=1)
+        self._metric_card(
+            grid1,
+            palette,
+            "Parallel LDs",
+            parallel_var,
+            "active devices",
+            "Recommended: 1–2 for mid-range PCs.",
+            min_value=1,
+        )
+        self._metric_card(
+            grid1,
+            palette,
+            "Boot Delay",
+            boot_delay_var,
+            "seconds",
+            "Increase if emulator startup is unstable.",
+            min_value=1,
+        )
 
         grid2 = tk.Frame(parent, bg=palette["surface"])
         grid2.pack(fill="x", pady=(0, 12))
-        self._metric_card(grid2, palette, "Task Duration", task_duration_var, "minutes", "Target session runtime per account.", min_value=1)
-        self._metric_card(grid2, palette, "Max Reels", max_videos_var, "per cycle", "Use lower values for a safer behavior pattern.", min_value=1)
+        self._metric_card(
+            grid2,
+            palette,
+            "Task Duration",
+            task_duration_var,
+            "minutes",
+            "Target session runtime per account.",
+            min_value=1,
+        )
+        self._metric_card(
+            grid2,
+            palette,
+            "Max Reels",
+            max_videos_var,
+            "per cycle",
+            "Use lower values for a safer behavior pattern.",
+            min_value=1,
+        )
 
         grid3 = tk.Frame(parent, bg=palette["surface"])
         grid3.pack(fill="x", pady=(0, 12))
-        self._metric_card(grid3, palette, "Accounts / LD", accounts_per_ld_var, "registration loops", "Register Account will run this many times per emulator.", min_value=1)
+        self._metric_card(
+            grid3,
+            palette,
+            "Accounts / LD",
+            accounts_per_ld_var,
+            "registration loops",
+            "Register Account will run this many times per emulator.",
+            min_value=1,
+        )
 
-        outer, notes = self._premium_card(parent, palette, "Performance Notes", "Quick guidance based on current setup.")
+        outer, notes = self._premium_card(
+            parent, palette, "Performance Notes", "Quick guidance based on current setup."
+        )
         outer.pack(fill="x", pady=(2, 0))
-        self._info_row(notes, palette, "System load", "Higher parallel counts increase CPU, RAM, and ADB contention.")
-        self._info_row(notes, palette, "Safer setup", "Balanced pacing usually gives more stable startup and fewer connection issues.")
-        self._info_row(notes, palette, "Best practice", "Change one value at a time, then test the workflow before raising throughput.")
+        self._info_row(
+            notes, palette, "System load", "Higher parallel counts increase CPU, RAM, and ADB contention."
+        )
+        self._info_row(
+            notes,
+            palette,
+            "Safer setup",
+            "Balanced pacing usually gives more stable startup and fewer connection issues.",
+        )
+        self._info_row(
+            notes,
+            palette,
+            "Best practice",
+            "Change one value at a time, then test the workflow before raising throughput.",
+        )
 
-    def _build_behavior_page(self, parent, palette, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, parallel_var, boot_delay_var, task_duration_var, max_videos_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var):
-        self._page_heading(parent, palette, "BEHAVIOR", "Dispatch & Queue Logic", "Configure how sessions start and how content is delivered during execution.")
+    def _build_behavior_page(
+        self,
+        parent,
+        palette,
+        start_same_var,
+        use_queue_var,
+        auto_arrange_var,
+        auto_shutdown_var,
+        verify_account_var,
+        parallel_var,
+        boot_delay_var,
+        task_duration_var,
+        max_videos_var,
+        reg_contact_mode_var,
+        reg_contact_value_var,
+        reg_phone_prefix_var,
+    ):
+        self._page_heading(
+            parent,
+            palette,
+            "BEHAVIOR",
+            "Dispatch & Queue Logic",
+            "Configure how sessions start and how content is delivered during execution.",
+        )
 
-        self._toggle_feature_card(parent, palette, "Start at Same Time", "Launch all selected instances together for faster startup on stronger machines.", start_same_var)
-        self._toggle_feature_card(parent, palette, "Use Content Queue", "Enable a safer and more organized content delivery flow during the session.", use_queue_var)
-        self._toggle_feature_card(parent, palette, "Auto Arrange LD", "Automatically arrange LD windows after the start stage completes.", auto_arrange_var)
-        self._toggle_feature_card(parent, palette, "Auto Shutdown PC", "Shutdown Windows automatically after the current automation run finishes normally.", auto_shutdown_var)
-        self._toggle_feature_card(parent, palette, "Verify Account", "When enabled, registration tasks continue into the account verification flow after signup.", verify_account_var)
+        self._toggle_feature_card(
+            parent,
+            palette,
+            "Start at Same Time",
+            "Launch all selected instances together for faster startup on stronger machines.",
+            start_same_var,
+        )
+        self._toggle_feature_card(
+            parent,
+            palette,
+            "Use Content Queue",
+            "Enable a safer and more organized content delivery flow during the session.",
+            use_queue_var,
+        )
+        self._toggle_feature_card(
+            parent,
+            palette,
+            "Auto Arrange LD",
+            "Automatically arrange LD windows after the start stage completes.",
+            auto_arrange_var,
+        )
+        self._toggle_feature_card(
+            parent,
+            palette,
+            "Auto Shutdown PC",
+            "Shutdown Windows automatically after the current automation run finishes normally.",
+            auto_shutdown_var,
+        )
+        self._toggle_feature_card(
+            parent,
+            palette,
+            "Verify Account",
+            "When enabled, registration tasks continue into the account verification flow after signup.",
+            verify_account_var,
+        )
 
         # Country / IP guard configuration
         outer, card = self._premium_card(
@@ -1091,7 +1261,13 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         )
         outer.pack(fill="x", pady=(12, 0))
 
-        tk.Label(reg_card, text="Contact Type", bg=palette["surface_alt"], fg=palette["text"], font=(self.mono_font, 8)).pack(anchor="w")
+        tk.Label(
+            reg_card,
+            text="Contact Type",
+            bg=palette["surface_alt"],
+            fg=palette["text"],
+            font=(self.mono_font, 8),
+        ).pack(anchor="w")
         tb.Combobox(
             reg_card,
             textvariable=reg_contact_mode_var,
@@ -1100,7 +1276,13 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             width=22,
         ).pack(anchor="w", pady=(4, 10))
 
-        tk.Label(reg_card, text="Fixed Contact", bg=palette["surface_alt"], fg=palette["text"], font=(self.mono_font, 8)).pack(anchor="w")
+        tk.Label(
+            reg_card,
+            text="Fixed Contact",
+            bg=palette["surface_alt"],
+            fg=palette["text"],
+            font=(self.mono_font, 8),
+        ).pack(anchor="w")
         tk.Entry(
             reg_card,
             textvariable=reg_contact_value_var,
@@ -1124,7 +1306,9 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             padx=12,
             pady=6,
             cursor="hand2",
-            command=lambda: self._import_fixed_contacts_from_text(reg_contact_mode_var, reg_contact_value_var),
+            command=lambda: self._import_fixed_contacts_from_text(
+                reg_contact_mode_var, reg_contact_value_var
+            ),
         ).pack(side="left")
         tk.Label(
             import_row,
@@ -1134,7 +1318,13 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             font=(self.mono_font, 8),
         ).pack(side="left", padx=(10, 0))
 
-        tk.Label(reg_card, text="Phone Prefix", bg=palette["surface_alt"], fg=palette["text"], font=(self.mono_font, 8)).pack(anchor="w")
+        tk.Label(
+            reg_card,
+            text="Phone Prefix",
+            bg=palette["surface_alt"],
+            fg=palette["text"],
+            font=(self.mono_font, 8),
+        ).pack(anchor="w")
         tk.Entry(
             reg_card,
             textvariable=reg_phone_prefix_var,
@@ -1153,11 +1343,25 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             font=(self.mono_font, 8),
         ).pack(anchor="w", pady=(8, 0))
 
-        outer, notes = self._premium_card(parent, palette, "Operational Notes", "Behavior settings should match your hardware and launch pacing.")
+        outer, notes = self._premium_card(
+            parent,
+            palette,
+            "Operational Notes",
+            "Behavior settings should match your hardware and launch pacing.",
+        )
         outer.pack(fill="x", pady=(12, 0))
-        self._info_row(notes, palette, "Parallel impact", f"Current parallel load: {parallel_var.get()} device(s).")
-        self._info_row(notes, palette, "Boot pacing", f"Current startup delay: {boot_delay_var.get()} second(s).")
-        self._info_row(notes, palette, "Session target", f"{task_duration_var.get()} min / {max_videos_var.get()} reels configured.")
+        self._info_row(
+            notes, palette, "Parallel impact", f"Current parallel load: {parallel_var.get()} device(s)."
+        )
+        self._info_row(
+            notes, palette, "Boot pacing", f"Current startup delay: {boot_delay_var.get()} second(s)."
+        )
+        self._info_row(
+            notes,
+            palette,
+            "Session target",
+            f"{task_duration_var.get()} min / {max_videos_var.get()} reels configured.",
+        )
 
     def _toggle_feature_card(self, parent, palette, title, description, variable):
         outer = tk.Frame(parent, bg=palette["border"], padx=1, pady=1)
@@ -1218,19 +1422,65 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         def toggle(_event=None):
             variable.set(not variable.get())
 
-        for widget in (outer, card, left, right, state, track_border, switch_shell, knob, title_lbl, desc_lbl):
+        for widget in (
+            outer,
+            card,
+            left,
+            right,
+            state,
+            track_border,
+            switch_shell,
+            knob,
+            title_lbl,
+            desc_lbl,
+        ):
             widget.bind("<Button-1>", toggle)
 
         variable.trace_add("write", redraw)
         redraw()
 
-    def _build_profiles_page(self, parent, palette, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var):
-        self._page_heading(parent, palette, "PROFILES", "Preset Profiles", "Apply a starter preset, then fine-tune individual values if needed.")
+    def _build_profiles_page(
+        self,
+        parent,
+        palette,
+        parallel_var,
+        boot_delay_var,
+        task_duration_var,
+        max_videos_var,
+        start_same_var,
+        use_queue_var,
+        auto_arrange_var,
+    ):
+        self._page_heading(
+            parent,
+            palette,
+            "PROFILES",
+            "Preset Profiles",
+            "Apply a starter preset, then fine-tune individual values if needed.",
+        )
 
         profiles = [
-            ("Safe", "#38BDF8", "Low load and safer startup pacing for weaker hardware.", (1, 12, 10, 1, False, True), "Stable first"),
-            ("Balanced", palette["primary"], "Best default profile for most daily usage.", (2, 8, 15, 2, False, True), "Recommended"),
-            ("Aggressive", "#F59E0B", "Higher throughput for stronger hardware and faster cycles.", (4, 3, 25, 5, True, True), "High load"),
+            (
+                "Safe",
+                "#38BDF8",
+                "Low load and safer startup pacing for weaker hardware.",
+                (1, 12, 10, 1, False, True),
+                "Stable first",
+            ),
+            (
+                "Balanced",
+                palette["primary"],
+                "Best default profile for most daily usage.",
+                (2, 8, 15, 2, False, True),
+                "Recommended",
+            ),
+            (
+                "Aggressive",
+                "#F59E0B",
+                "Higher throughput for stronger hardware and faster cycles.",
+                (4, 3, 25, 5, True, True),
+                "High load",
+            ),
         ]
 
         for name, color, desc, values, tag in profiles:
@@ -1247,8 +1497,12 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
 
             top = tk.Frame(content, bg=palette["surface_alt"])
             top.pack(fill="x")
-            tk.Label(top, text=name, bg=palette["surface_alt"], fg=color, font=(self.display_font, 13)).pack(side="left")
-            tk.Label(top, text=tag, bg=palette["surface"], fg=color, font=(self.mono_font, 8), padx=8, pady=3).pack(side="left", padx=(10, 0))
+            tk.Label(top, text=name, bg=palette["surface_alt"], fg=color, font=(self.display_font, 13)).pack(
+                side="left"
+            )
+            tk.Label(
+                top, text=tag, bg=palette["surface"], fg=color, font=(self.mono_font, 8), padx=8, pady=3
+            ).pack(side="left", padx=(10, 0))
             tk.Button(
                 top,
                 text="Apply",
@@ -1273,7 +1527,14 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
                 ),
             ).pack(side="right")
 
-            tk.Label(content, text=desc, bg=palette["surface_alt"], fg=palette["muted"], font=(self.mono_font, 8), justify="left").pack(anchor="w", pady=(6, 10))
+            tk.Label(
+                content,
+                text=desc,
+                bg=palette["surface_alt"],
+                fg=palette["muted"],
+                font=(self.mono_font, 8),
+                justify="left",
+            ).pack(anchor="w", pady=(6, 10))
 
             stats = tk.Frame(content, bg=palette["surface_alt"])
             stats.pack(fill="x")
@@ -1286,10 +1547,45 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
                 "Queue On" if values[5] else "Queue Off",
             ]
             for text in labels:
-                tk.Label(stats, text=text, bg=palette["surface"], fg=palette["text"], font=(self.mono_font, 8), padx=8, pady=4).pack(side="left", padx=(0, 6))
+                tk.Label(
+                    stats,
+                    text=text,
+                    bg=palette["surface"],
+                    fg=palette["text"],
+                    font=(self.mono_font, 8),
+                    padx=8,
+                    pady=4,
+                ).pack(side="left", padx=(0, 6))
 
-    def _build_summary_page(self, parent, palette, parallel_var, boot_delay_var, task_duration_var, max_videos_var, accounts_per_ld_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_sender_filter_var, email_subject_filter_var):
-        self._page_heading(parent, palette, "SUMMARY", "Configuration Review", "Read the current setup before saving changes.")
+    def _build_summary_page(
+        self,
+        parent,
+        palette,
+        parallel_var,
+        boot_delay_var,
+        task_duration_var,
+        max_videos_var,
+        accounts_per_ld_var,
+        start_same_var,
+        use_queue_var,
+        auto_arrange_var,
+        auto_shutdown_var,
+        verify_account_var,
+        reg_contact_mode_var,
+        reg_contact_value_var,
+        reg_phone_prefix_var,
+        email_provider_var,
+        email_address_var,
+        email_sender_filter_var,
+        email_subject_filter_var,
+    ):
+        self._page_heading(
+            parent,
+            palette,
+            "SUMMARY",
+            "Configuration Review",
+            "Read the current setup before saving changes.",
+        )
 
         row = tk.Frame(parent, bg=palette["surface"])
         row.pack(fill="x", pady=(0, 12))
@@ -1300,17 +1596,45 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         self._summary_stat_card(row, palette, "Reels", max_videos_var, "items")
         self._summary_stat_card(row, palette, "Accounts / LD", accounts_per_ld_var, "loops")
 
-        outer, detail = self._premium_card(parent, palette, "Live Readout", "Human-readable review of the active configuration.")
+        outer, detail = self._premium_card(
+            parent, palette, "Live Readout", "Human-readable review of the active configuration."
+        )
         outer.pack(fill="x", pady=(0, 12))
         self._summary_text_var = tk.StringVar()
         self._summary_detail_var = tk.StringVar()
-        tk.Label(detail, textvariable=self._summary_text_var, bg=palette["surface_alt"], fg=palette["text"], justify="left", wraplength=640, font=(self.mono_font, 9)).pack(anchor="w")
-        tk.Label(detail, textvariable=self._summary_detail_var, bg=palette["surface_alt"], fg=palette["muted"], justify="left", wraplength=640, font=(self.mono_font, 8)).pack(anchor="w", pady=(8, 0))
+        tk.Label(
+            detail,
+            textvariable=self._summary_text_var,
+            bg=palette["surface_alt"],
+            fg=palette["text"],
+            justify="left",
+            wraplength=640,
+            font=(self.mono_font, 9),
+        ).pack(anchor="w")
+        tk.Label(
+            detail,
+            textvariable=self._summary_detail_var,
+            bg=palette["surface_alt"],
+            fg=palette["muted"],
+            justify="left",
+            wraplength=640,
+            font=(self.mono_font, 8),
+        ).pack(anchor="w", pady=(8, 0))
 
-        outer2, impact = self._premium_card(parent, palette, "Impact Estimate", "Quick interpretation of the current setup.")
+        outer2, impact = self._premium_card(
+            parent, palette, "Impact Estimate", "Quick interpretation of the current setup."
+        )
         outer2.pack(fill="x")
         self._impact_var = tk.StringVar()
-        tk.Label(impact, textvariable=self._impact_var, bg=palette["surface_alt"], fg=palette["primary"], justify="left", wraplength=640, font=(self.mono_font, 9)).pack(anchor="w")
+        tk.Label(
+            impact,
+            textvariable=self._impact_var,
+            bg=palette["surface_alt"],
+            fg=palette["primary"],
+            justify="left",
+            wraplength=640,
+            font=(self.mono_font, 9),
+        ).pack(anchor="w")
 
     def _summary_stat_card(self, parent, palette, title, variable, unit):
         outer, card = self._premium_card(parent, palette, title)
@@ -1330,7 +1654,39 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             font=(self.mono_font, 8, "bold"),
         ).pack(anchor="w", pady=(2, 0))
 
-    def _build_premium_footer(self, parent, palette, dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, accounts_per_ld_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_app_password_var, email_imap_server_var, email_imap_port_var, email_mailbox_var, email_use_ssl_var, email_unread_only_var, email_sender_filter_var, email_subject_filter_var, email_timeout_var, email_poll_interval_var, email_mark_as_seen_var, appearance_vars):
+    def _build_premium_footer(
+        self,
+        parent,
+        palette,
+        dialog,
+        parallel_var,
+        boot_delay_var,
+        task_duration_var,
+        max_videos_var,
+        accounts_per_ld_var,
+        start_same_var,
+        use_queue_var,
+        auto_arrange_var,
+        auto_shutdown_var,
+        verify_account_var,
+        reg_contact_mode_var,
+        reg_contact_value_var,
+        reg_phone_prefix_var,
+        email_provider_var,
+        email_address_var,
+        email_app_password_var,
+        email_imap_server_var,
+        email_imap_port_var,
+        email_mailbox_var,
+        email_use_ssl_var,
+        email_unread_only_var,
+        email_sender_filter_var,
+        email_subject_filter_var,
+        email_timeout_var,
+        email_poll_interval_var,
+        email_mark_as_seen_var,
+        appearance_vars,
+    ):
         divider = tk.Frame(parent, bg=palette["border"], height=1)
         divider.pack(fill="x")
 
@@ -1365,14 +1721,52 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             palette,
             "Reset Defaults",
             kind="secondary",
-            command=lambda: self._apply_settings_profile((2, 8, 15, 2, False, True), "Balanced", parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var),
+            command=lambda: self._apply_settings_profile(
+                (2, 8, 15, 2, False, True),
+                "Balanced",
+                parallel_var,
+                boot_delay_var,
+                task_duration_var,
+                max_videos_var,
+                start_same_var,
+                use_queue_var,
+            ),
         )
         self._footer_button(
             right,
             palette,
             "Save & Apply",
             kind="primary",
-            command=lambda: self._save_settings_from_dialog(dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, accounts_per_ld_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_app_password_var, email_imap_server_var, email_imap_port_var, email_mailbox_var, email_use_ssl_var, email_unread_only_var, email_sender_filter_var, email_subject_filter_var, email_timeout_var, email_poll_interval_var, email_mark_as_seen_var, appearance_vars),
+            command=lambda: self._save_settings_from_dialog(
+                dialog,
+                parallel_var,
+                boot_delay_var,
+                task_duration_var,
+                max_videos_var,
+                accounts_per_ld_var,
+                start_same_var,
+                use_queue_var,
+                auto_arrange_var,
+                auto_shutdown_var,
+                verify_account_var,
+                reg_contact_mode_var,
+                reg_contact_value_var,
+                reg_phone_prefix_var,
+                email_provider_var,
+                email_address_var,
+                email_app_password_var,
+                email_imap_server_var,
+                email_imap_port_var,
+                email_mailbox_var,
+                email_use_ssl_var,
+                email_unread_only_var,
+                email_sender_filter_var,
+                email_subject_filter_var,
+                email_timeout_var,
+                email_poll_interval_var,
+                email_mark_as_seen_var,
+                appearance_vars,
+            ),
         )
 
     def _footer_button(self, parent, palette, text, kind="ghost", command=None):
@@ -1413,11 +1807,39 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             command=command,
         ).pack()
 
-    def _bind_summary_refresh(self, parallel_var, boot_delay_var, task_duration_var, max_videos_var, accounts_per_ld_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_sender_filter_var, email_subject_filter_var):
+    def _bind_summary_refresh(
+        self,
+        parallel_var,
+        boot_delay_var,
+        task_duration_var,
+        max_videos_var,
+        accounts_per_ld_var,
+        start_same_var,
+        use_queue_var,
+        auto_arrange_var,
+        auto_shutdown_var,
+        verify_account_var,
+        reg_contact_mode_var,
+        reg_contact_value_var,
+        reg_phone_prefix_var,
+        email_provider_var,
+        email_address_var,
+        email_sender_filter_var,
+        email_subject_filter_var,
+    ):
         def refresh(*_):
-            profile = self._detect_profile(parallel_var.get(), boot_delay_var.get(), task_duration_var.get(), max_videos_var.get(), bool(start_same_var.get()), bool(use_queue_var.get()))
+            profile = self._detect_profile(
+                parallel_var.get(),
+                boot_delay_var.get(),
+                task_duration_var.get(),
+                max_videos_var.get(),
+                bool(start_same_var.get()),
+                bool(use_queue_var.get()),
+            )
             self._header_status_var.set(profile)
-            self._header_meta_var.set(f"{parallel_var.get()} LD • {'Queue On' if use_queue_var.get() else 'Queue Off'}")
+            self._header_meta_var.set(
+                f"{parallel_var.get()} LD • {'Queue On' if use_queue_var.get() else 'Queue Off'}"
+            )
             self._settings_overview_var.set(
                 f"{parallel_var.get()} LD • {boot_delay_var.get()}s boot\n{task_duration_var.get()} min session • {max_videos_var.get()} reels"
             )
@@ -1430,16 +1852,60 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
                     "Balanced pacing is recommended for most systems. Aggressive values increase throughput but also raise system load and startup risk."
                 )
             if hasattr(self, "_impact_var"):
-                load = "High" if parallel_var.get() >= 4 or start_same_var.get() else "Medium" if parallel_var.get() >= 2 else "Low"
-                self._impact_var.set(f"Estimated load: {load}. Keep queue enabled for a cleaner execution flow.")
+                load = (
+                    "High"
+                    if parallel_var.get() >= 4 or start_same_var.get()
+                    else "Medium"
+                    if parallel_var.get() >= 2
+                    else "Low"
+                )
+                self._impact_var.set(
+                    f"Estimated load: {load}. Keep queue enabled for a cleaner execution flow."
+                )
             if hasattr(self, "_footer_state_var"):
                 self._footer_state_var.set(f"Current profile: {profile}. Review summary before saving.")
 
-        for var in (parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_sender_filter_var, email_subject_filter_var):
+        for var in (
+            parallel_var,
+            boot_delay_var,
+            task_duration_var,
+            max_videos_var,
+            start_same_var,
+            use_queue_var,
+            auto_arrange_var,
+            auto_shutdown_var,
+            verify_account_var,
+            reg_contact_mode_var,
+            reg_contact_value_var,
+            reg_phone_prefix_var,
+            email_provider_var,
+            email_address_var,
+            email_sender_filter_var,
+            email_subject_filter_var,
+        ):
             var.trace_add("write", refresh)
         refresh()
 
-    def _bind_summary_refresh_with_accounts(self, parallel_var, boot_delay_var, task_duration_var, max_videos_var, accounts_per_ld_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_sender_filter_var, email_subject_filter_var):
+    def _bind_summary_refresh_with_accounts(
+        self,
+        parallel_var,
+        boot_delay_var,
+        task_duration_var,
+        max_videos_var,
+        accounts_per_ld_var,
+        start_same_var,
+        use_queue_var,
+        auto_arrange_var,
+        auto_shutdown_var,
+        verify_account_var,
+        reg_contact_mode_var,
+        reg_contact_value_var,
+        reg_phone_prefix_var,
+        email_provider_var,
+        email_address_var,
+        email_sender_filter_var,
+        email_subject_filter_var,
+    ):
         def refresh(*_):
             profile = self._detect_profile(
                 parallel_var.get(),
@@ -1450,7 +1916,9 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
                 bool(use_queue_var.get()),
             )
             self._header_status_var.set(profile)
-            self._header_meta_var.set(f"{parallel_var.get()} LD | {'Queue On' if use_queue_var.get() else 'Queue Off'}")
+            self._header_meta_var.set(
+                f"{parallel_var.get()} LD | {'Queue On' if use_queue_var.get() else 'Queue Off'}"
+            )
             self._settings_overview_var.set(
                 f"{parallel_var.get()} LD | {boot_delay_var.get()}s boot\n"
                 f"{task_duration_var.get()} min session | {max_videos_var.get()} reels | {accounts_per_ld_var.get()} acc/LD"
@@ -1480,8 +1948,16 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
                     "Balanced pacing is recommended for most systems. Aggressive values increase throughput but also raise system load and startup risk."
                 )
             if hasattr(self, "_impact_var"):
-                load = "High" if parallel_var.get() >= 4 or start_same_var.get() else "Medium" if parallel_var.get() >= 2 else "Low"
-                self._impact_var.set(f"Estimated load: {load}. Keep queue enabled for a cleaner execution flow.")
+                load = (
+                    "High"
+                    if parallel_var.get() >= 4 or start_same_var.get()
+                    else "Medium"
+                    if parallel_var.get() >= 2
+                    else "Low"
+                )
+                self._impact_var.set(
+                    f"Estimated load: {load}. Keep queue enabled for a cleaner execution flow."
+                )
             if hasattr(self, "_footer_state_var"):
                 self._footer_state_var.set(f"Current profile: {profile}. Review summary before saving.")
 
@@ -1522,8 +1998,25 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
     def _info_row(self, parent, palette, label, text):
         row = tk.Frame(parent, bg=palette["surface_alt"])
         row.pack(fill="x", pady=3)
-        tk.Label(row, text=label.upper(), bg=palette["surface_alt"], fg=palette["primary"], font=(self.mono_font, 8), width=15, anchor="w").pack(side="left")
-        tk.Label(row, text=text, bg=palette["surface_alt"], fg=palette["text"], font=(self.mono_font, 8), anchor="w", justify="left", wraplength=520).pack(side="left", fill="x", expand=True)
+        tk.Label(
+            row,
+            text=label.upper(),
+            bg=palette["surface_alt"],
+            fg=palette["primary"],
+            font=(self.mono_font, 8),
+            width=15,
+            anchor="w",
+        ).pack(side="left")
+        tk.Label(
+            row,
+            text=text,
+            bg=palette["surface_alt"],
+            fg=palette["text"],
+            font=(self.mono_font, 8),
+            anchor="w",
+            justify="left",
+            wraplength=520,
+        ).pack(side="left", fill="x", expand=True)
 
     def _open_settings_page(self, key):
         for name, page in getattr(self, "_settings_pages", {}).items():
@@ -1557,7 +2050,17 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
                 title_lbl.config(fg=P["primary"] if active else P["text"])
                 desc_lbl.config(fg=P["text"] if active else P["muted"])
 
-    def _apply_settings_profile(self, values, profile_name, parallel_var, boot_delay_var, task_duration_var, max_videos_var, start_same_var, use_queue_var):
+    def _apply_settings_profile(
+        self,
+        values,
+        profile_name,
+        parallel_var,
+        boot_delay_var,
+        task_duration_var,
+        max_videos_var,
+        start_same_var,
+        use_queue_var,
+    ):
         parallel, delay, duration, reels, start_same, use_queue = values
         parallel_var.set(parallel)
         boot_delay_var.set(delay)
@@ -1568,7 +2071,37 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         if hasattr(self, "_footer_state_var"):
             self._footer_state_var.set(f"Applied profile: {profile_name}.")
 
-    def _save_settings_from_dialog(self, dialog, parallel_var, boot_delay_var, task_duration_var, max_videos_var, accounts_per_ld_var, start_same_var, use_queue_var, auto_arrange_var, auto_shutdown_var, verify_account_var, reg_contact_mode_var, reg_contact_value_var, reg_phone_prefix_var, email_provider_var, email_address_var, email_app_password_var, email_imap_server_var, email_imap_port_var, email_mailbox_var, email_use_ssl_var, email_unread_only_var, email_sender_filter_var, email_subject_filter_var, email_timeout_var, email_poll_interval_var, email_mark_as_seen_var, appearance_vars):
+    def _save_settings_from_dialog(
+        self,
+        dialog,
+        parallel_var,
+        boot_delay_var,
+        task_duration_var,
+        max_videos_var,
+        accounts_per_ld_var,
+        start_same_var,
+        use_queue_var,
+        auto_arrange_var,
+        auto_shutdown_var,
+        verify_account_var,
+        reg_contact_mode_var,
+        reg_contact_value_var,
+        reg_phone_prefix_var,
+        email_provider_var,
+        email_address_var,
+        email_app_password_var,
+        email_imap_server_var,
+        email_imap_port_var,
+        email_mailbox_var,
+        email_use_ssl_var,
+        email_unread_only_var,
+        email_sender_filter_var,
+        email_subject_filter_var,
+        email_timeout_var,
+        email_poll_interval_var,
+        email_mark_as_seen_var,
+        appearance_vars,
+    ):
         self.parallel_ld.set(parallel_var.get())
         self.boot_delay.set(boot_delay_var.get())
         self.task_duration.set(task_duration_var.get())
