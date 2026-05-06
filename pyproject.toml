@@ -1,0 +1,38 @@
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+extend-exclude = [
+    "output",
+    "build",
+    "dist",
+    ".venv",
+    "venv",
+    "tests/task_reels.py",
+]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "RET", "ARG"]
+ignore = [
+    "E501",   # line too long — handled by formatter; some long strings are intentional
+    "B008",   # function call in default arg — ttkbootstrap/Tk patterns rely on this
+    "ARG001", # unused function argument — handler callbacks/Tk callbacks legitimately have unused args
+    "ARG002", # unused method argument — same
+    "RET504", # unnecessary assignment before return — readability over micro-optimization
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ARG", "B", "SIM", "E402"]
+"gui/ld_manager_app.py" = ["F401"]            # mixin imports look unused but populate the class
+"core/tasks/handler/*.py" = ["SIM"]           # handlers favor explicit step-by-step branching
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+filterwarnings = [
+    "ignore::DeprecationWarning:ttkbootstrap",
+]
