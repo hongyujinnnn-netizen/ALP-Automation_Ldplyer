@@ -8,7 +8,7 @@ from datetime import datetime
 
 from core.email_models import EmailAccountConfig, OTPRequest
 from core.paths import get_app_paths
-from core.settings import SettingsError, load_app_settings
+from core.settings import SettingsError, _atomic_write_json, load_app_settings
 from services.otp_service import OTPService
 
 
@@ -815,6 +815,8 @@ class RegAccountHandlerMixin:
         return ""
 
     def _build_profile(self, kwargs):
+        from core.tasks.reg_account import AccountProfile
+
         first_name = str(kwargs.get("first_name") or random.choice(self.FIRST_NAMES))
         last_name = str(kwargs.get("last_name") or random.choice(self.LAST_NAMES))
         birth_day = int(kwargs.get("birth_day") or random.randint(24, 26))

@@ -1,3 +1,551 @@
 {
-  "instances": []
+  "instances": [
+    {
+      "name": "Aisha Jacobson",
+      "serial": "emulator-5572",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Ava Cruze",
+      "serial": "emulator-5602",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Barbara Henriksen",
+      "serial": "emulator-5598",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Bunty juyer",
+      "serial": "emulator-5588",
+      "account": {
+        "name": "Bunty Juyer",
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": [
+          {
+            "name": "flametimer",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "whalesfm",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "Halo House",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Christopher M. Luu",
+      "serial": "emulator-5590",
+      "account": {
+        "name": "Christopher M. Luu",
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": [
+          {
+            "name": "Domthetrol",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "Voodies",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "TrendNest",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "Nimbus Media",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Chuii KonPa",
+      "serial": "emulator-5574",
+      "account": {
+        "name": "Glenda",
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": [
+          {
+            "name": "Chuii KonPa",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "howto.fish",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Denn Kainu",
+      "serial": "emulator-5594",
+      "account": {
+        "name": "healerjoy",
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": [
+          {
+            "name": "Denn Kainu",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "OblivionWraith",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "Visionary Lane",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Estelle B. Rose",
+      "serial": "emulator-5560",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "James Hopkins",
+      "serial": "emulator-5568",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "James Roberts",
+      "serial": "emulator-5580",
+      "account": {
+        "name": "James Roberts",
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": [
+          {
+            "name": "LiveLifetaller",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "marcocaravaggi2",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "HorizonVibes",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Jason L. Mickle",
+      "serial": "emulator-5596",
+      "account": {
+        "name": "Jason L. Mickle",
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": [
+          {
+            "name": "Osvaldo",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "Fan funnyy",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "Peter mai",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "Spark World",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Jea Jonh Son",
+      "serial": "emulator-5558",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Jeck Lusika",
+      "serial": "emulator-5582",
+      "account": {
+        "name": "Jeck Lusika",
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": [
+          {
+            "name": "nikolaiiaksenov",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          },
+          {
+            "name": "Thetradesmanuk",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "hashtags": [],
+              "caption_template": "",
+              "source_folder": ""
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Jenn Anozy",
+      "serial": "emulator-5584",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Joseph Price",
+      "serial": "emulator-5600",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "LD - Clone",
+      "serial": "emulator-5554",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Leah Brown",
+      "serial": "emulator-5592",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Mary T. Butler",
+      "serial": "emulator-5566",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Michael Cox",
+      "serial": "emulator-5570",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Patrick R. Mcnutt",
+      "serial": "emulator-5586",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Pauline J. Flores",
+      "serial": "emulator-5562",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Rixzz Oza",
+      "serial": "emulator-5556",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Ryu s. Kennedy",
+      "serial": "emulator-5564",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    },
+    {
+      "name": "Shayne P. Ledesma",
+      "serial": "emulator-5576",
+      "account": {
+        "name": null,
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": []
+      }
+    }
+  ]
 }
