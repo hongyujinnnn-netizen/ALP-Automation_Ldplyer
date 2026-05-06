@@ -468,8 +468,22 @@ class TestDashboardLdSync(unittest.TestCase):
         self.assertEqual(instance["account"]["pages"][0]["name"], "Page A")
         self.assertIn("reels", instance["account"]["pages"][0])
 
+    def _fake_keyring(self):
+        from unittest.mock import Mock
+        vault: dict[tuple[str, str], str] = {}
+        fake = Mock()
+        fake.set_password.side_effect = lambda svc, user, pwd: vault.__setitem__((svc, user), pwd)
+        fake.get_password.side_effect = lambda svc, user: vault.get((svc, user))
+        fake.delete_password.side_effect = lambda svc, user: vault.pop((svc, user), None)
+        return fake, vault
+
     def test_dashboard_login_accounts_save_to_accounts_login_json(self):
-        with tempfile.TemporaryDirectory() as tmp_dir:
+        from core import credential_store
+        fake, vault = self._fake_keyring()
+
+        with tempfile.TemporaryDirectory() as tmp_dir, \
+             patch.object(credential_store, "keyring", fake), \
+             patch.object(credential_store, "_AVAILABLE", True):
             paths = build_test_paths(Path(tmp_dir))
             paths.ensure_runtime_dirs()
             dashboard = self._dashboard()
@@ -486,22 +500,57 @@ class TestDashboardLdSync(unittest.TestCase):
                     ]
                 )
                 saved = json.loads((paths.config_dir / "accounts_login.json").read_text(encoding="utf-8"))
+                # Round-trip through the loader rehydrates from keyring.
+                with patch("gui.pages.dashboard_page.get_app_paths", return_value=paths):
+                    loaded = dashboard._db_login_accounts()
 
+        # JSON on disk has empty strings (not None) for redacted fields.
         self.assertEqual(
             saved,
             [
                 {
                     "account_id": "100000000001",
                     "uid": "100000000001",
-                    "password": "Password123",
+                    "password": "",
                     "email": "user@example.com",
-                    "twofa": "ABCD EFGH IJKL MNOP",
+                    "twofa": "",
                 }
             ],
         )
+        # Keyring received both secrets under the composite key format.
+        self.assertEqual(vault[("alp-automation", "100000000001::password")], "Password123")
+        self.assertEqual(vault[("alp-automation", "100000000001::twofa")], "ABCD EFGH IJKL MNOP")
+        # Round-trip via loader returns the original plaintext.
+        self.assertEqual(loaded[0]["password"], "Password123")
+        self.assertEqual(loaded[0]["twofa"], "ABCD EFGH IJKL MNOP")
+
+    def test_dashboard_login_accounts_keep_plaintext_when_keyring_unavailable(self):
+        from core import credential_store
+
+        with tempfile.TemporaryDirectory() as tmp_dir, \
+             patch.object(credential_store, "_AVAILABLE", False), \
+             self.assertLogs("gui.pages.dashboard_page", level="WARNING"):
+            paths = build_test_paths(Path(tmp_dir))
+            paths.ensure_runtime_dirs()
+            dashboard = self._dashboard()
+
+            with patch("gui.pages.dashboard_page.get_app_paths", return_value=paths):
+                dashboard._db_save_login_accounts(
+                    [{"uid": "1", "password": "pw", "email": "u@x.com", "twofa": "TOTP"}]
+                )
+                saved = json.loads((paths.config_dir / "accounts_login.json").read_text(encoding="utf-8"))
+
+        # Keyring unavailable → plaintext must survive on disk.
+        self.assertEqual(saved[0]["password"], "pw")
+        self.assertEqual(saved[0]["twofa"], "TOTP")
 
     def test_dashboard_delete_login_accounts_removes_selected_rows(self):
-        with tempfile.TemporaryDirectory() as tmp_dir:
+        from core import credential_store
+        fake, vault = self._fake_keyring()
+
+        with tempfile.TemporaryDirectory() as tmp_dir, \
+             patch.object(credential_store, "keyring", fake), \
+             patch.object(credential_store, "_AVAILABLE", True):
             paths = build_test_paths(Path(tmp_dir))
             paths.ensure_runtime_dirs()
             dashboard = self._dashboard()
@@ -519,6 +568,88 @@ class TestDashboardLdSync(unittest.TestCase):
 
         self.assertEqual(removed, 2)
         self.assertEqual([account["uid"] for account in saved], ["1002"])
+        # Keyring was cleaned for deleted accounts.
+        self.assertNotIn(("alp-automation", "1001::password"), vault)
+        self.assertNotIn(("alp-automation", "1003::password"), vault)
+        self.assertEqual(vault[("alp-automation", "1002::password")], "pw-b")
+
+    def test_dashboard_login_accounts_migrate_legacy_plaintext(self):
+        from core import credential_store
+        fake, vault = self._fake_keyring()
+
+        with tempfile.TemporaryDirectory() as tmp_dir, \
+             patch.object(credential_store, "keyring", fake), \
+             patch.object(credential_store, "_AVAILABLE", True):
+            paths = build_test_paths(Path(tmp_dir))
+            paths.ensure_runtime_dirs()
+            (paths.config_dir / "accounts_login.json").write_text(
+                json.dumps([
+                    {
+                        "account_id": "9999",
+                        "uid": "9999",
+                        "password": "legacy-pw",
+                        "email": "legacy@x.com",
+                        "twofa": "LEG ACY TOTP",
+                    }
+                ]),
+                encoding="utf-8",
+            )
+            dashboard = self._dashboard()
+            with patch("gui.pages.dashboard_page.get_app_paths", return_value=paths):
+                loaded = dashboard._db_login_accounts()
+                on_disk = json.loads((paths.config_dir / "accounts_login.json").read_text(encoding="utf-8"))
+
+        # Migration moved plaintext into keyring.
+        self.assertEqual(vault[("alp-automation", "9999::password")], "legacy-pw")
+        self.assertEqual(vault[("alp-automation", "9999::twofa")], "LEG ACY TOTP")
+        # JSON on disk no longer contains plaintext.
+        self.assertEqual(on_disk[0]["password"], "")
+        self.assertEqual(on_disk[0]["twofa"], "")
+        # Loader still returns the plaintext (hydrated from keyring).
+        self.assertEqual(loaded[0]["password"], "legacy-pw")
+
+    def test_dashboard_instances_secrets_round_trip_via_keyring(self):
+        from core import credential_store
+        fake, vault = self._fake_keyring()
+
+        with tempfile.TemporaryDirectory() as tmp_dir, \
+             patch.object(credential_store, "keyring", fake), \
+             patch.object(credential_store, "_AVAILABLE", True):
+            paths = build_test_paths(Path(tmp_dir))
+            paths.ensure_runtime_dirs()
+            dashboard_path = paths.config_dir / "dashboard_instances.json"
+            dashboard_path.write_text(
+                json.dumps({
+                    "instances": [{
+                        "name": "LD A",
+                        "account": {
+                            "name": "Alice",
+                            "uid": "u-100",
+                            "password": "InstancePw",
+                            "twofa": "INST TOTP",
+                            "mail": "alice@x.com",
+                            "pages": [],
+                        },
+                    }]
+                }),
+                encoding="utf-8",
+            )
+            dashboard = self._dashboard()
+            with patch("gui.pages.dashboard_page.get_app_paths", return_value=paths):
+                dashboard._dashboard_load_data()
+                on_disk = json.loads(dashboard_path.read_text(encoding="utf-8"))
+
+        # Migration wrote secrets to keyring under uid-derived account_id.
+        self.assertEqual(vault[("alp-automation", "u-100::password")], "InstancePw")
+        self.assertEqual(vault[("alp-automation", "u-100::twofa")], "INST TOTP")
+        # JSON was rewritten with redacted values.
+        instance_account = on_disk["instances"][0]["account"]
+        self.assertEqual(instance_account["password"], "")
+        self.assertEqual(instance_account["twofa"], "")
+        # In-memory dashboard data has the hydrated secrets.
+        loaded_account = dashboard._dashboard_data["instances"][0]["account"]
+        self.assertEqual(loaded_account["password"], "InstancePw")
+        self.assertEqual(loaded_account["twofa"], "INST TOTP")
 
     def test_dashboard_login_account_checkbox_supports_multi_select_and_first_checked(self):
         class FakeTree:

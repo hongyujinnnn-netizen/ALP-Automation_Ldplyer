@@ -6,6 +6,7 @@ Persists to config/dashboard_instances.json.
 """
 
 import json
+import logging
 import re
 import threading
 import tkinter as tk
@@ -13,7 +14,19 @@ from tkinter import filedialog, messagebox as MessageBox
 
 import ttkbootstrap as tb
 
+from core.account_secrets import (
+    SECRET_ACCOUNT_FIELDS,
+    delete_secrets,
+    derive_dashboard_account_id,
+    has_plaintext_secrets,
+    hydrate_secrets,
+    migrate_legacy_plaintext,
+    persist_secrets,
+    redacted_copy,
+)
 from core.paths import get_app_paths
+
+_logger = logging.getLogger(__name__)
 from gui.components.cards import FeedCard, MetricCard
 from gui.components.scrollable_frame import ScrollableFrame
 from gui.components.state_views import StateView
@@ -696,12 +709,50 @@ class DashboardDialogMixin:
 
             loaded["instances"] = normalized
             self._dashboard_data = loaded
+            if self._dashboard_migrate_and_hydrate_secrets(normalized):
+                try:
+                    self._db_write_data()
+                except Exception as exc:
+                    _logger.warning(
+                        "[credential-migration] could not rewrite dashboard data: %s",
+                        exc,
+                    )
         except Exception as exc:
             self._dashboard_data = {"instances": []}
             try:
                 self.log(f"Failed to load dashboard data: {exc}", "ERROR")
             except Exception:
                 pass
+
+    def _dashboard_migrate_and_hydrate_secrets(self, instances) -> bool:
+        """Migrate plaintext secrets in dashboard instance account blocks; hydrate from keyring.
+
+        Returns True if any plaintext was migrated and the file should be rewritten.
+        """
+
+        accounts = []
+        for item in instances or []:
+            if isinstance(item, dict):
+                acc = item.get("account")
+                if isinstance(acc, dict):
+                    accounts.append(acc)
+        plaintext_present = has_plaintext_secrets(accounts)
+        needs_rewrite = False
+        for account in accounts:
+            account_id = derive_dashboard_account_id(account)
+            if not account_id:
+                continue
+            if plaintext_present:
+                migrated = migrate_legacy_plaintext(account_id, account)
+                if migrated:
+                    needs_rewrite = True
+                    _logger.info(
+                        "[credential-migration] moved %s for dashboard account %s into the OS credential vault",
+                        ", ".join(migrated.keys()),
+                        account_id,
+                    )
+            hydrate_secrets(account_id, account)
+        return needs_rewrite
 
     def _db_save_all(self):
         try:
@@ -718,8 +769,23 @@ class DashboardDialogMixin:
 
     def _db_write_data(self):
         path = self._db_data_path()
+        # Build a deep copy with secrets persisted to keyring + redacted from JSON.
+        data_copy = json.loads(json.dumps(self._dashboard_data))
+        for item in data_copy.get("instances") or []:
+            if not isinstance(item, dict):
+                continue
+            account = item.get("account")
+            if not isinstance(account, dict):
+                continue
+            account_id = derive_dashboard_account_id(account)
+            if not account_id:
+                continue
+            persisted = persist_secrets(account_id, account)
+            for field, ok in persisted.items():
+                if ok:
+                    account[field] = ""
         path.write_text(
-            json.dumps(self._dashboard_data, indent=2, ensure_ascii=False),
+            json.dumps(data_copy, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
         return path
@@ -1769,13 +1835,55 @@ class DashboardDialogMixin:
             loaded = json.loads(path.read_text(encoding="utf-8")) or []
             if not isinstance(loaded, list):
                 return []
-            return [self._db_normalize_login_account(row) for row in loaded if isinstance(row, dict)]
+            records = [self._db_normalize_login_account(row) for row in loaded if isinstance(row, dict)]
+
+            plaintext_present = has_plaintext_secrets(records)
+            needs_rewrite = False
+            for record in records:
+                account_id = str(record.get("account_id") or "").strip()
+                if not account_id:
+                    continue
+                if plaintext_present:
+                    migrated = migrate_legacy_plaintext(account_id, record)
+                    if migrated:
+                        needs_rewrite = True
+                        _logger.info(
+                            "[credential-migration] moved %s for login account %s into the OS credential vault",
+                            ", ".join(migrated.keys()),
+                            account_id,
+                        )
+                hydrate_secrets(account_id, record)
+
+            if needs_rewrite:
+                try:
+                    self._db_write_login_accounts_redacted(records)
+                except OSError as exc:
+                    _logger.warning(
+                        "[credential-migration] could not rewrite %s: %s",
+                        path,
+                        exc,
+                    )
+            return records
         except Exception as exc:
             try:
                 self.log(f"Failed to load login accounts: {exc}", "ERROR")
             except Exception:
                 pass
             return []
+
+    def _db_write_login_accounts_redacted(self, records):
+        rows = []
+        for record in records or []:
+            account_id = str(record.get("account_id") or "").strip()
+            if account_id:
+                # On rewrite-after-migration, keyring holds the truth — redact everything.
+                rows.append(redacted_copy(record, persisted_fields={f: True for f in SECRET_ACCOUNT_FIELDS}))
+            else:
+                rows.append(dict(record))
+        self._db_login_accounts_path().write_text(
+            json.dumps(rows, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
     def _db_account_row_id(self, account):
         return str(
@@ -1896,15 +2004,33 @@ class DashboardDialogMixin:
         if not account_ids:
             return 0
         accounts = self._db_login_accounts()
-        kept = [
-            account for account in accounts
-            if str(account.get("account_id") or self._db_account_row_id(account)) not in account_ids
-        ]
+        kept: list[dict] = []
+        deleted_account_ids: list[str] = []
+        for account in accounts:
+            row_id = str(account.get("account_id") or self._db_account_row_id(account))
+            if row_id in account_ids:
+                actual_id = str(account.get("account_id") or "").strip()
+                if actual_id:
+                    deleted_account_ids.append(actual_id)
+            else:
+                kept.append(account)
         removed = len(accounts) - len(kept)
+
+        # Persist + redact remaining accounts via the same path as save.
+        rows_to_write: list[dict] = []
+        for record in kept:
+            account_id = str(record.get("account_id") or "").strip()
+            if not account_id:
+                rows_to_write.append(dict(record))
+                continue
+            persisted = persist_secrets(account_id, record)
+            rows_to_write.append(redacted_copy(record, persisted_fields=persisted))
         self._db_login_accounts_path().write_text(
-            json.dumps(kept, indent=2, ensure_ascii=False),
+            json.dumps(rows_to_write, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
+        for account_id in deleted_account_ids:
+            delete_secrets(account_id)
         return removed
 
     def _db_assign_login_account_to_instance(self, instance, account):
@@ -2268,8 +2394,22 @@ class DashboardDialogMixin:
             saved.append(clean)
 
         records = sorted(by_key.values(), key=lambda row: (row.get("email") or "", row.get("uid") or ""))
+        rows_to_write: list[dict] = []
+        for record in records:
+            account_id = str(record.get("account_id") or "").strip()
+            if not account_id:
+                rows_to_write.append(dict(record))
+                continue
+            persisted = persist_secrets(account_id, record)
+            if any(not ok for ok in persisted.values()):
+                _logger.warning(
+                    "[credential-migration] keyring write failed for some fields of login account %s; "
+                    "they remain as plaintext in accounts_login.json",
+                    account_id,
+                )
+            rows_to_write.append(redacted_copy(record, persisted_fields=persisted))
         self._db_login_accounts_path().write_text(
-            json.dumps(records, indent=2, ensure_ascii=False),
+            json.dumps(rows_to_write, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
         return saved

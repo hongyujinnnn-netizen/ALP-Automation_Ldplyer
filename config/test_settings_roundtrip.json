@@ -19,7 +19,6 @@
     "reg_phone_prefix": "+1",
     "email_provider": "yandex",
     "email_address": "",
-    "email_app_password": "",
     "email_imap_server": "imap.yandex.com",
     "email_imap_port": 993,
     "email_mailbox": "INBOX",

@@ -572,12 +572,30 @@ class AccountDialogMixin:
                     state="readonly",
                     bootstyle="secondary",
                 )
+            elif key == "password":
+                widget = tb.Frame(card)
+                entry = tb.Entry(
+                    widget,
+                    textvariable=vars_map[key],
+                    bootstyle="secondary",
+                    show="*",
+                )
+                entry.pack(side="left", fill="x", expand=True)
+                tb.Button(
+                    widget,
+                    text="Clear Saved",
+                    bootstyle="secondary-outline",
+                    width=12,
+                    command=lambda: self._clear_saved_account_password(
+                        account, vars_map["password"]
+                    ),
+                ).pack(side="left", padx=(6, 0))
             else:
                 widget = tb.Entry(
                     card,
                     textvariable=vars_map[key],
                     bootstyle="secondary",
-                    show="*" if key == "password" else "",
+                    show="",
                 )
             widget.grid(row=row, column=1, sticky="ew", pady=8, ipady=3)
 
@@ -633,6 +651,23 @@ class AccountDialogMixin:
 
         tb.Button(footer, text="Cancel", bootstyle="secondary-outline", command=win.destroy, width=10).pack(side="left")
         tb.Button(footer, text="Save", bootstyle="primary", command=save_account, width=10).pack(side="right")
+
+    def _clear_saved_account_password(self, account, password_var):
+        from core.account_secrets import delete_secrets
+
+        account_id = str((account or {}).get("account_id") or "").strip()
+        if not account_id:
+            self.log("Cannot clear saved password: account has no account_id yet.", "WARNING")
+            return
+        if not MessageBox.askyesno(
+            "Clear Saved Password",
+            "Remove this account's saved password from the OS credential vault?",
+            parent=self._account_message_parent(),
+        ):
+            return
+        delete_secrets(account_id)
+        password_var.set("")
+        self.log(f"Cleared saved password for account {account_id}.", "INFO")
 
     # ─────────────────────────────────────────────────────────────────── #
     # Import / export

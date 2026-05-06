@@ -1,13 +1,26 @@
 import json
 import csv
+import logging
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
 import zipfile
 import os
 import textwrap
+from core.account_secrets import (
+    SECRET_ACCOUNT_FIELDS,
+    delete_secrets,
+    has_plaintext_secrets,
+    hydrate_secrets,
+    migrate_legacy_plaintext,
+    persist_secrets,
+    redacted_copy,
+)
+from core.credential_store import CredentialStore
 from core.paths import get_app_paths, AppPaths
 from core.settings import _atomic_write_json
+
+logger = logging.getLogger(__name__)
 
 # ==================== ACCOUNT MANAGER ====================
 class AccountManager:
@@ -25,10 +38,82 @@ class AccountManager:
                 raw = json.load(f)
         except (OSError, json.JSONDecodeError):
             return []
-        return self._normalize_accounts(raw)
+        accounts = self._normalize_accounts(raw)
+        self._migrate_and_hydrate_secrets(accounts)
+        return accounts
 
     def save_accounts(self) -> None:
-        _atomic_write_json(self.accounts_file, self.accounts)
+        rows_to_write: list[dict] = []
+        for account in self.accounts:
+            account_id = self._get_account_identifier(account)
+            non_empty = [f for f in SECRET_ACCOUNT_FIELDS if str(account.get(f) or "").strip()]
+            if not account_id:
+                if non_empty:
+                    logger.warning(
+                        "[credential-migration] account in %s has no account_id; "
+                        "secrets remain as plaintext",
+                        self.accounts_file,
+                    )
+                rows_to_write.append(dict(account))
+                continue
+
+            persisted = persist_secrets(account_id, account)
+            if any(not ok for ok in persisted.values()):
+                logger.warning(
+                    "[credential-migration] keyring write failed for some fields of %s; "
+                    "they remain as plaintext in %s",
+                    account_id,
+                    self.accounts_file,
+                )
+            rows_to_write.append(redacted_copy(account, persisted_fields=persisted))
+        _atomic_write_json(self.accounts_file, rows_to_write)
+
+    def _migrate_and_hydrate_secrets(self, accounts: list[dict]) -> None:
+        plaintext_present = has_plaintext_secrets(accounts)
+        needs_rewrite = False
+        for account in accounts:
+            account_id = self._get_account_identifier(account)
+            if not account_id:
+                if plaintext_present:
+                    logger.warning(
+                        "[credential-migration] account in %s has no account_id; "
+                        "leaving plaintext as-is",
+                        self.accounts_file,
+                    )
+                continue
+            if plaintext_present:
+                migrated = migrate_legacy_plaintext(account_id, account)
+                if migrated:
+                    needs_rewrite = True
+                    logger.info(
+                        "[credential-migration] moved %s for account %s into the OS credential vault",
+                        ", ".join(migrated.keys()),
+                        account_id,
+                    )
+            hydrate_secrets(account_id, account)
+
+        if needs_rewrite:
+            try:
+                rows_to_write: list[dict] = []
+                for account in accounts:
+                    account_id = self._get_account_identifier(account)
+                    if not account_id:
+                        rows_to_write.append(dict(account))
+                        continue
+                    # Mark every secret as successfully persisted (we just wrote it).
+                    persisted = {field: True for field in SECRET_ACCOUNT_FIELDS}
+                    rows_to_write.append(redacted_copy(account, persisted_fields=persisted))
+                _atomic_write_json(self.accounts_file, rows_to_write)
+                logger.info(
+                    "[credential-migration] rewrote %s without plaintext secrets",
+                    self.accounts_file,
+                )
+            except OSError as exc:
+                logger.warning(
+                    "[credential-migration] could not rewrite %s: %s",
+                    self.accounts_file,
+                    exc,
+                )
 
     def get_all_accounts(self) -> list[dict]:
         return [self._with_account_metadata(account) for account in self.accounts]
@@ -46,16 +131,35 @@ class AccountManager:
             raise ValueError("account identifier is required")
 
         for index, account in enumerate(self.accounts):
-            if self._get_account_identifier(account) != identifier:
+            old_account_id = self._get_account_identifier(account)
+            if old_account_id != identifier:
                 continue
             merged = dict(account)
             merged.update(account_data or {})
             clean = self._normalize_account_record(merged, existing=account)
+            new_account_id = self._get_account_identifier(clean)
+            if old_account_id and new_account_id and old_account_id != new_account_id:
+                self._move_keyring_entries(old_account_id, new_account_id)
             self.accounts[index] = clean
             self._sort_accounts()
             self.save_accounts()
             return self._with_account_metadata(clean)
         raise ValueError(f"Account not found: {identifier}")
+
+    def _move_keyring_entries(self, old_account_id: str, new_account_id: str) -> None:
+        store = CredentialStore()
+        for field in SECRET_ACCOUNT_FIELDS:
+            value = store.get_account_secret(old_account_id, field)
+            if not value:
+                continue
+            if store.set_account_secret(new_account_id, field, value):
+                store.delete_account_secret(old_account_id, field)
+                logger.info(
+                    "[credential-migration] moved %s from %s to %s in keyring",
+                    field,
+                    old_account_id,
+                    new_account_id,
+                )
 
     def get_account(self, identifier: str) -> dict:
         identifier = str(identifier or "").strip()
@@ -104,19 +208,44 @@ class AccountManager:
         if not identifier:
             raise ValueError("Account identifier is required")
 
-        original_count = len(self.accounts)
-        self.accounts = [
-            account for account in self.accounts
-            if self._get_account_identifier(account) != identifier
-            and str(account.get("device_name") or account.get("instance") or account.get("ld_name") or "") != identifier
-        ]
-        if len(self.accounts) != original_count:
+        kept: list[dict] = []
+        removed_account_ids: list[str] = []
+        for account in self.accounts:
+            account_id = self._get_account_identifier(account)
+            device = str(
+                account.get("device_name")
+                or account.get("instance")
+                or account.get("ld_name")
+                or ""
+            )
+            if account_id != identifier and device != identifier:
+                kept.append(account)
+                continue
+            if account_id:
+                removed_account_ids.append(account_id)
+
+        if len(kept) != len(self.accounts):
+            self.accounts = kept
             self.save_accounts()
+            for account_id in removed_account_ids:
+                delete_secrets(account_id)
 
     def export_accounts(self, file_path: str | Path, rows: list[dict] | None = None) -> Path:
         path = Path(file_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         rows = [dict(row) for row in (rows if rows is not None else self.list_accounts())]
+        # Exports follow user intent — pull live secret values from keyring so the
+        # exported file reflects what is actually stored, not the redacted JSON.
+        for row in rows:
+            account_id = self._get_account_identifier(row)
+            if account_id:
+                hydrate_secrets(account_id, row)
+        if rows:
+            logger.info(
+                "[credential-export] exported %d account(s) including secret fields to %s",
+                len(rows),
+                path,
+            )
 
         if path.suffix.lower() == ".csv":
             fieldnames = [

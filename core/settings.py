@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Dict, Any, List
 
+from core.credential_store import CredentialStore
 from core.email_models import EmailAccountConfig, OTPRequest
+
+logger = logging.getLogger(__name__)
 
 
 class SettingsError(RuntimeError):
@@ -149,7 +153,10 @@ class AppSettings:
             raise SettingsError(f"Invalid value in application settings: {exc}") from exc
 
     def to_dict(self) -> Dict:
-        return asdict(self)
+        data = asdict(self)
+        # Passwords NEVER hit disk — they live in the OS credential vault.
+        data.pop("email_app_password", None)
+        return data
 
 
 def _default_schedule_days() -> Dict[str, bool]:
@@ -209,10 +216,74 @@ def load_app_settings(path: Path) -> AppSettings:
     except (OSError, json.JSONDecodeError) as exc:
         raise SettingsError(f"Could not read application settings: {exc}") from exc
 
-    return AppSettings.from_dict(raw)
+    settings = AppSettings.from_dict(raw)
+    legacy_password = settings.email_app_password
+    if not settings.email_address:
+        settings.email_app_password = ""
+        return settings
+
+    store = CredentialStore()
+    keyring_password = store.get_password(settings.email_address) or ""
+
+    if keyring_password:
+        settings.email_app_password = keyring_password
+        if legacy_password:
+            # Stale plaintext lingering in JSON — strip it.
+            try:
+                _atomic_write_json(path, settings.to_dict())
+                logger.info(
+                    "[credential-migration] removed stale plaintext password from %s "
+                    "(keyring already had a credential for %s)",
+                    path,
+                    settings.email_address,
+                )
+            except SettingsError as exc:
+                logger.warning(
+                    "[credential-migration] could not rewrite %s to remove plaintext password: %s",
+                    path,
+                    exc,
+                )
+        return settings
+
+    if legacy_password:
+        if store.set_password(settings.email_address, legacy_password):
+            settings.email_app_password = legacy_password
+            try:
+                _atomic_write_json(path, settings.to_dict())
+                logger.info(
+                    "[credential-migration] moved plaintext password for %s from %s into the OS credential vault",
+                    settings.email_address,
+                    path,
+                )
+            except SettingsError as exc:
+                logger.warning(
+                    "[credential-migration] migrated password to keyring but failed to clear plaintext from %s: %s",
+                    path,
+                    exc,
+                )
+        else:
+            logger.warning(
+                "[credential-migration] keyring is unavailable; leaving plaintext password "
+                "for %s in %s. Migration will retry on next launch.",
+                settings.email_address,
+                path,
+            )
+            settings.email_app_password = legacy_password
+        return settings
+
+    settings.email_app_password = ""
+    return settings
 
 
 def save_app_settings(path: Path, settings: AppSettings) -> None:
+    if settings.email_address and settings.email_app_password:
+        store = CredentialStore()
+        if not store.set_password(settings.email_address, settings.email_app_password):
+            logger.warning(
+                "[credential-migration] keyring write failed for %s; password will not be persisted "
+                "across launches until keyring is available.",
+                settings.email_address,
+            )
     _atomic_write_json(path, settings.to_dict())
 
 

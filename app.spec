@@ -7,7 +7,11 @@ datas = [
     ("assets", "assets"),
 ]
 binaries = []
-hiddenimports = []
+hiddenimports = [
+    "keyring.backends.Windows",
+    "keyring.backends.macOS",
+    "keyring.backends.SecretService",
+]
 
 tmp_ret = collect_all("uiautomator2")
 datas += tmp_ret[0]

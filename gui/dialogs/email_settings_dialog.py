@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import threading
 import tkinter as tk
+from tkinter import messagebox
 
 import ttkbootstrap as tb
 
+from core.credential_store import CredentialStore
 from core.email_models import EmailAccountConfig, OTPRequest, get_provider_defaults
 
 
@@ -80,20 +82,40 @@ class EmailSettingsDialogMixin:
                 insertbackground=palette["text"],
             ),
         )
+        password_row = tk.Frame(grid, bg=palette["surface_alt"])
+        password_entry = tk.Entry(
+            password_row,
+            textvariable=email_app_password_var,
+            show="*",
+            bg=palette["surface"],
+            fg=palette["text"],
+            insertbackground=palette["text"],
+        )
+        password_entry.pack(side="left", fill="x", expand=True)
+        clear_btn = tk.Button(
+            password_row,
+            text="Clear Saved",
+            relief="flat",
+            bg=palette["surface"],
+            fg=palette["muted"],
+            activebackground=palette["border_alt"],
+            activeforeground=palette["text"],
+            font=(self.mono_font, 8),
+            padx=8,
+            pady=2,
+            cursor="hand2",
+            command=lambda: self._clear_saved_email_password(
+                email_address_var, email_app_password_var
+            ),
+        )
+        clear_btn.pack(side="left", padx=(6, 0))
         self._email_form_field(
             grid,
             palette,
             1,
             0,
             "App Password",
-            tk.Entry(
-                grid,
-                textvariable=email_app_password_var,
-                show="*",
-                bg=palette["surface"],
-                fg=palette["text"],
-                insertbackground=palette["text"],
-            ),
+            password_row,
         )
         self._email_form_field(
             grid,
@@ -346,6 +368,45 @@ class EmailSettingsDialogMixin:
                 email_use_ssl_var,
             ),
         )
+
+    def _clear_saved_email_password(self, email_address_var, email_app_password_var):
+        address = str(email_address_var.get() or "").strip()
+        if not address:
+            self._email_action_status_var.set(
+                "Enter the email address first so the saved credential can be located."
+            )
+            return
+        if not messagebox.askyesno(
+            "Clear Saved Password",
+            f"Remove the saved app password for {address} from the OS credential vault?",
+        ):
+            return
+
+        store = CredentialStore()
+        deleted = store.delete_password(address)
+        email_app_password_var.set("")
+
+        # Wipe any in-process cache held on a controller-side EmailAccountConfig
+        # so the password truly disappears from the running process.
+        if hasattr(self, "otp_controller"):
+            try:
+                config, _ = self.otp_controller.load_email_settings()
+                config.clear_password()
+            except Exception:
+                pass
+
+        if deleted:
+            self._email_action_status_var.set(f"Saved app password for {address} cleared.")
+            self.log(f"Cleared saved email app password for {address}.", "INFO")
+        else:
+            self._email_action_status_var.set(
+                "Could not clear the saved password (keyring may be unavailable). "
+                "Entry field has been cleared."
+            )
+            self.log(
+                f"Keyring delete failed for {address}; entry field cleared in-memory only.",
+                "WARNING",
+            )
 
     def _email_form_field(self, parent, palette, row, column, label, widget):
         label_row = row * 2

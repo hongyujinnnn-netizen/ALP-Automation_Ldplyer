@@ -1,3 +1,4 @@
-psutil
-ttkbootstrap
-uiautomator2
+psutil>=5.9
+ttkbootstrap>=1.10,<2.0
+uiautomator2==3.2.4
+keyring>=24.0

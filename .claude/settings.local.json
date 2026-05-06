@@ -10,7 +10,8 @@
       "Bash(python -m unittest tests.test_controller_services -v)",
       "Bash(python *)",
       "Bash(git stash *)",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "Bash(git *)"
     ]
   }
 }

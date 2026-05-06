@@ -2,14 +2,18 @@
 import hashlib
 import hmac
 import json
+import logging
 import re
 import struct
 import time
 from datetime import datetime
 from typing import Any, Callable, TYPE_CHECKING
 
+from core.credential_store import CredentialStore
 from core.paths import get_app_paths
 from core.settings import _atomic_write_json
+
+_logger = logging.getLogger(__name__)
 
 class LoginHandlerMixin:
     # ------------------------------------------------------------------
@@ -578,14 +582,33 @@ class LoginHandlerMixin:
     def _save_logged_account(self, ld_name, ld_adb, creds, facebook_uid=""):
         paths = get_app_paths()
         account_file = paths.config_dir / "logged_accounts.json"
+        facebook_uid = str(facebook_uid or "").strip()
+
+        on_disk_password = creds.password
+        if facebook_uid and creds.password:
+            store = CredentialStore()
+            if store.set_account_secret(facebook_uid, "password", creds.password):
+                on_disk_password = ""
+            else:
+                _logger.warning(
+                    "[credential-migration] keyring unavailable for %s; password will be written as plaintext to %s",
+                    facebook_uid,
+                    account_file,
+                )
+        elif not facebook_uid and creds.password:
+            _logger.warning(
+                "[credential-migration] logged account has no facebook_uid; password remains plaintext in %s",
+                account_file,
+            )
+
         record = {
-            "facebook_uid": str(facebook_uid or "").strip(),
+            "facebook_uid": facebook_uid,
             "identifier": creds.identifier,
             "identifier_label": creds.label,
             "email": creds.identifier if creds.label == "email" else "",
             "phone": creds.identifier if creds.label == "phone" else "",
             "username": creds.identifier if creds.label == "username" else "",
-            "password": creds.password,
+            "password": on_disk_password,
             "ld_adb": str(ld_adb or "").strip(),
             "instance": str(ld_name or "").strip(),
             "device_name": str(ld_name or "").strip(),
@@ -601,6 +624,28 @@ class LoginHandlerMixin:
                     existing = [row for row in loaded if isinstance(row, dict)]
             except (OSError, json.JSONDecodeError) as exc:
                 self.log(f"Logged account file was invalid, resetting it: {exc}")
+
+        # Migrate legacy plaintext entries (skip the loop entirely if all are already redacted).
+        if any(str(row.get("password") or "").strip() for row in existing):
+            store = CredentialStore()
+            migrated = 0
+            for row in existing:
+                row_uid = str(row.get("facebook_uid") or "").strip()
+                row_pwd = str(row.get("password") or "").strip()
+                if not row_uid or not row_pwd:
+                    continue
+                if store.get_account_secret(row_uid, "password"):
+                    row["password"] = ""
+                    migrated += 1
+                    continue
+                if store.set_account_secret(row_uid, "password", row_pwd):
+                    row["password"] = ""
+                    migrated += 1
+            if migrated:
+                _logger.info(
+                    "[credential-migration] moved %d logged-account password(s) into the OS credential vault",
+                    migrated,
+                )
 
         existing.append(record)
         _atomic_write_json(account_file, existing)
