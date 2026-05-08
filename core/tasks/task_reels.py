@@ -164,7 +164,8 @@ class ReelsTaskHandler(ReelsHandlerMixin, BaseTaskHandler):
                         progress=0,
                     )
                     return False
-                time.sleep(15)
+                if self.interruptible_sleep(15):
+                    return False
                 if self._open_file_manager_with_retry(d, attempts=2, delay=2):
                     time.sleep(3)
                     if self.navigate_to_pictures(d):
@@ -202,7 +203,8 @@ class ReelsTaskHandler(ReelsHandlerMixin, BaseTaskHandler):
                 wait_for = max(0.0, limiter.get_wait_time())
                 if wait_for > 0:
                     self.log(f"Reels rate limit reached on {name}; pausing for {wait_for:.1f}s")
-                    time.sleep(min(wait_for, 90.0))
+                    if self.interruptible_sleep(min(wait_for, 90.0)):
+                        return False
 
             page_video_posted = 0
 
@@ -246,7 +248,8 @@ class ReelsTaskHandler(ReelsHandlerMixin, BaseTaskHandler):
 
                     if self.facebook_first_next(d):
                         time.sleep(2)
-                    time.sleep(10)
+                    if self.interruptible_sleep(10):
+                        return False
 
                     video_data = None
                     if use_content_queue and self.content_manager:
@@ -332,10 +335,12 @@ class ReelsTaskHandler(ReelsHandlerMixin, BaseTaskHandler):
             f_index += 1
 
         self.log("Finished processing all pages/videos for this account")
-        time.sleep(5)
+        if self.interruptible_sleep(5):
+            return False
         self.end_to_accoutn_profile(d, name)
 
-        time.sleep(6)
+        if self.interruptible_sleep(6):
+            return False
         if clear_cache:
             self.clear_app_cache(d, name)
 
@@ -352,7 +357,8 @@ class ReelsTaskHandler(ReelsHandlerMixin, BaseTaskHandler):
         if not self.open_facebook(d):
             self.log(f"Failed to open Facebook for final cleanup on {name}")
 
-        time.sleep(6)
+        if self.interruptible_sleep(6):
+            return False
         if not self.click_facebook_menu(d):
             self.log(f"Failed to open Facebook menu on {name}")
             self.push_runtime_state(
@@ -364,7 +370,8 @@ class ReelsTaskHandler(ReelsHandlerMixin, BaseTaskHandler):
             )
             return False
 
-        time.sleep(4)
+        if self.interruptible_sleep(4):
+            return False
         if not self.back_to_account_profile(d, name):
             self.log(f"Failed to switch back to profile on {name}")
             self.push_runtime_state(

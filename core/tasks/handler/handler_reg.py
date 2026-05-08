@@ -143,7 +143,8 @@ class RegAccountHandlerMixin:
             required=False,
         ):
             self.log("Tapped 'Confirm by email'")
-            time.sleep(5)
+            if self.interruptible_sleep(5):
+                return False
 
             return True
         self.log("'Confirm by email' option not shown")
@@ -314,16 +315,19 @@ class RegAccountHandlerMixin:
             self.log(f"Failed on name step for {name}")
             return False, "name"
 
-        time.sleep(3)
+        if self.interruptible_sleep(3):
+            return False, "birthdate"
         skip_contact = False
         if not self._fill_birthdate_step(d, name, profile):
             try:
                 self._fill_contact_step(d, name, profile)
                 self._check_Continue_creating_account(d)
                 skip_contact = True
-                time.sleep(3)
+                if self.interruptible_sleep(3):
+                    return False, "birthdate"
                 if self._fill_birthdate_step(d, name, profile):
-                    time.sleep(4)
+                    if self.interruptible_sleep(4):
+                        return False, "birthdate"
                 else:
                     self.log(f"Failed on birth date step for {name}")
                     return False, "birthdate"
@@ -331,25 +335,29 @@ class RegAccountHandlerMixin:
                 self.log(f"Failed on birth date step for {name}")
                 return False, "birthdate"
         else:
-            time.sleep(4)
+            if self.interruptible_sleep(4):
+                return False, "gender"
 
         if not self._fill_gender_step(d, name, profile):
             self.log(f"Failed on gender step for {name}")
             return False, "gender"
 
-        time.sleep(4)
+        if self.interruptible_sleep(4):
+            return False, "password"
         if not skip_contact:
             if self._fill_contact_step(d, name, profile):
                 self._check_Continue_creating_account(d)
             else:
                 self.log(f"Failed on contact step for {name}")
 
-        time.sleep(4)
+        if self.interruptible_sleep(4):
+            return False, "password"
         if not self._fill_password_step(d, name, profile):
             self.log(f"Failed on password step for {name}")
             return False, "password"
 
-        time.sleep(4)
+        if self.interruptible_sleep(4):
+            return False, "password"
 
         self._handle_save_step(d)
         self.tap_i_agree(d)
@@ -486,7 +494,8 @@ class RegAccountHandlerMixin:
             self.log(f"Failed to open Settings: {exc}")
             return False
 
-        time.sleep(3)
+        if self.interruptible_sleep(3):
+            return False
 
         account_patterns = (
             "accounts",
@@ -771,7 +780,8 @@ class RegAccountHandlerMixin:
             self.log("Failed to open Settings > Accounts for Facebook ID collection")
             return []
 
-        time.sleep(3)
+        if self.interruptible_sleep(3):
+            return []
         facebook_ids = self.detect_facebook_account_numbers(d)
         self.log(f"Facebook IDs collected from Settings > Accounts: {facebook_ids}")
         return facebook_ids
@@ -1650,7 +1660,8 @@ class RegAccountHandlerMixin:
             if not self._tap_continue(d, required=False):
                 return False
 
-        time.sleep(5)
+        if self.interruptible_sleep(5):
+            return False
         verification_markers = [
             {"textContains": "Enter the confirmation code"},
             {"textContains": "confirmation code"},

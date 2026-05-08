@@ -73,14 +73,16 @@ class CreatePageTaskHandler(CreatePageHandlerMixin, RegAccountTaskHandler):
             self.log(f"Failed to open Facebook on {name}")
             return False
 
-        time.sleep(4)
+        if self.interruptible_sleep(4):
+            return False
 
         self.push_runtime_state(name, state="Running", task="Navigating to Pages", progress=40)
         if not self._run_create_page_steps_with_retry(d, name, profile):
             return False
 
         self.push_runtime_state(name, state="Running", task="Confirming creation", progress=80)
-        time.sleep(6)
+        if self.interruptible_sleep(6):
+            return False
 
         status = self._detect_create_page_status(d)
         self.log(f"Create-page status for {name}: {status}")

@@ -26,10 +26,33 @@ class BaseTaskHandler(ABC):
         pass
 
     def check_paused(self):
-        """Check if operations should be paused - blocks if paused"""
-        while not self.pause_event.is_set() and self.running_flag():
-            time.sleep(0.5)
+        """Block while paused. Returns True if stop was requested during the wait."""
+        while self.running_flag() and not self.pause_event.is_set():
+            # Event.wait with timeout: instant wakeup on resume,
+            # still notices running_flag flipping during pause.
+            self.pause_event.wait(timeout=1.0)
         return not self.running_flag()
+
+    def interruptible_sleep(self, seconds, poll=0.25):
+        """Sleep up to `seconds` but break early on stop, and block while paused.
+
+        Returns True if stop was requested during the wait (caller should bail out),
+        False if the full duration elapsed normally.
+        """
+        if seconds <= 0:
+            return not self.running_flag()
+        deadline = time.time() + seconds
+        while True:
+            if not self.running_flag():
+                return True
+            if not self.pause_event.is_set():
+                self.pause_event.wait(timeout=poll)
+                deadline = time.time() + max(0.0, deadline - time.time())
+                continue
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                return False
+            time.sleep(min(poll, remaining))
 
     def push_runtime_state(self, name, **payload):
         callback = getattr(self, "state_callback", None)

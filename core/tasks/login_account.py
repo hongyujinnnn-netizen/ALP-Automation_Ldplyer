@@ -92,7 +92,8 @@ class LoginAccountTaskHandler(LoginHandlerMixin, RegAccountTaskHandler):
         if not self._run_login_steps_with_retry(d, name, creds):
             return False
 
-        time.sleep(12)
+        if self.interruptible_sleep(12):
+            return False
 
         login_status = self._detect_login_status(d)
         self.log(f"Detected login status for {name}: {login_status}")
@@ -118,14 +119,16 @@ class LoginAccountTaskHandler(LoginHandlerMixin, RegAccountTaskHandler):
                     return False
             elif not handled_2fa:
                 return False
-            time.sleep(8)
+            if self.interruptible_sleep(8):
+                return False
             login_status = self._detect_login_status(d)
             self.log(f"Post-OTP login status for {name}: {login_status}")
 
         if login_status == "Otp2":
             if self.handle_facebook_2fa(d):
                 handled_2fa = self.handle_2fa(d, twofa_secret=twofa_secret)
-                time.sleep(5)
+                if self.interruptible_sleep(5):
+                    return False
                 if not handled_2fa:
                     self.log(f"Failed to submit Facebook 2FA code for {name}")
                     return False
@@ -142,9 +145,11 @@ class LoginAccountTaskHandler(LoginHandlerMixin, RegAccountTaskHandler):
 
         time.sleep(2)
         self._handle_save_login_info_prompt(d)
-        time.sleep(4)
+        if self.interruptible_sleep(4):
+            return False
         self._handle_skip_notifications_prompt(d)
-        time.sleep(4)
+        if self.interruptible_sleep(4):
+            return False
 
         sucess = self._check_sucessful_login(d, name)
         if not sucess:

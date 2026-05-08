@@ -3404,6 +3404,7 @@ Recent Items:
                     progress_callback=self.update_progress,
                     emulator=self.emulator,
                     state_callback=self.update_device_runtime_state,
+                    pause_event=self.pause_event,
                 )
             except Exception as exc:
                 self.log(f" Error in automation: {exc}", "ERROR")

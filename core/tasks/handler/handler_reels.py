@@ -1025,19 +1025,36 @@ class ReelsHandlerMixin:
 
             # Check if we're in the initial context menu (with Send option)
             if "Send" in all_options:
-                # Click the Send option
                 for element in d(className="android.widget.TextView"):
                     text = element.info.get("text", "")
                     if text and "Send" in text:
                         element.click()
-                        if not wait_for_any(
-                            d,
-                            [{"text": "Next"}, {"text": "News Feed"}, {"textContains": "reels"}],
-                            timeout=10,
-                        ):
-                            self.log(
-                                f"[{getattr(d, 'serial', '?')}] timeout waiting for Share with dialog"
-                            )
+                        
+                        # Wait longer and use multiple anchor strategies
+                        anchors = [
+                            {"textMatches": "(?i)next"},          # case-insensitive Next
+                            {"descriptionMatches": "(?i)next"},    # content-desc fallback
+                            {"textMatches": "(?i)edit reel"},
+                            {"textContains": "Edit"},
+                            {"text": "Audio"},                     # right-side panel anchor
+                            {"text": "Effects"},
+                            {"text": "Stickers"},
+                        ]
+                        
+                        if not wait_for_any(d, anchors, timeout=20):
+                            # Dump for debugging
+                            try:
+                                xml = d.dump_hierarchy()
+                                with open(f"debug_share_{d.serial}.xml", "w", encoding="utf-8") as f:
+                                    f.write(xml)
+                                d.screenshot(f"debug_share_{d.serial}.png")
+                                self.log(f"[{d.serial}] dumped debug_share_{d.serial}.xml/.png")
+                            except Exception as e:
+                                self.log(f"[{d.serial}] debug dump failed: {e}")
+                            
+                            self.log(f"[{d.serial}] timeout waiting for Share-with/Reel editor screen")
+                        else:
+                            self.log(f"[{d.serial}] reel editor loaded")
                         break
 
                 # Check for permission dialog again after clicking Send

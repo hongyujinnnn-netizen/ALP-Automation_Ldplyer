@@ -93,7 +93,8 @@ class CreatePageHandlerMixin:
             self.log(f"Could not submit Create Page on {ld_name}")
             return False
 
-        time.sleep(10)
+        if self.interruptible_sleep(10):
+            return False
         self._handle_next_notifications_prompt(d)
 
         time.sleep(2)
@@ -776,12 +777,14 @@ class CreatePageHandlerMixin:
         if not self.open_facebook(d):
             self.log(f"Failed to open Facebook for final cleanup on {name}")
 
-        time.sleep(6)
+        if self.interruptible_sleep(6):
+            return False
         if not self.click_facebook_menu(d):
             self.log(f"Failed to open Facebook menu on {name}")
             return False
 
-        time.sleep(4)
+        if self.interruptible_sleep(4):
+            return False
         if not self.back_to_profile(d):
             self.log(f"Failed to switch back to profile on {name}")
             return False

@@ -31,6 +31,7 @@ class MainWindow:
         state_callback=None,
         accounts_pool=None,
         verify_2fa=True,
+        pause_event=None,
     ):
 
         # Import here to avoid circular imports when we need a fresh controller
@@ -70,8 +71,11 @@ class MainWindow:
         self.task_duration = task_duration
         self.start_same_time = start_same_time
         self.auto_arrange_ld = auto_arrange_ld
-        self.pause_event = threading.Event()
-        self.pause_event.set()  # Start unpaused
+        if pause_event is None:
+            self.pause_event = threading.Event()
+            self.pause_event.set()
+        else:
+            self.pause_event = pause_event
         self.task_type = task_type
         self.task_template = task_template
         self.task_handler = task_handler
@@ -109,10 +113,33 @@ class MainWindow:
             self.log(f"Failed to auto arrange LD windows: {e}")
 
     def check_paused(self):
-        """Check if operations should be paused - blocks if paused"""
-        while not self.pause_event.is_set() and self.running_flag():
-            time.sleep(0.5)
+        """Block while paused. Returns True if stop was requested during the wait."""
+        while self.running_flag() and not self.pause_event.is_set():
+            # Event.wait with timeout: instant wakeup on resume,
+            # still notices running_flag flipping during pause.
+            self.pause_event.wait(timeout=1.0)
         return not self.running_flag()
+
+    def interruptible_sleep(self, seconds, poll=0.25):
+        """Sleep up to `seconds` but break early on stop, and block while paused.
+
+        Returns True if stop was requested during the wait (caller should bail out),
+        False if the full duration elapsed normally.
+        """
+        if seconds <= 0:
+            return not self.running_flag()
+        deadline = time.time() + seconds
+        while True:
+            if not self.running_flag():
+                return True
+            if not self.pause_event.is_set():
+                self.pause_event.wait(timeout=poll)
+                deadline = time.time() + max(0.0, deadline - time.time())
+                continue
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                return False
+            time.sleep(min(poll, remaining))
 
     def _push_state(self, name, **payload):
         if callable(self.state_callback):
@@ -400,17 +427,20 @@ class MainWindow:
             self._close_ld_if_needed(name)
 
     def _wait_for_stage_threads(self, threads, stage):
+        """Wait for stage threads, polling so Stop can break out promptly."""
         if stage == "task" and self.task_type == "reels":
-            while any(t.is_alive() for t in threads):
-                if not self.running_flag():
-                    break
-                for t in threads:
-                    if t.is_alive():
-                        t.join(timeout=self.reels_task_join_poll_seconds)
-            return
+            poll = self.reels_task_join_poll_seconds
+        elif stage == "task":
+            poll = 1.0
+        else:
+            poll = 0.5
 
-        for t in threads:
-            t.join(timeout=600 if stage == "task" else None)
+        while any(t.is_alive() for t in threads):
+            if not self.running_flag():
+                break
+            for t in threads:
+                if t.is_alive():
+                    t.join(timeout=poll)
 
     def main(self):
         total = len(self.thread_ld)
@@ -441,7 +471,8 @@ class MainWindow:
                             if not self.running_flag():
                                 break
                             self.ld_task_stage(name, stage)
-                            time.sleep(10)  # Fixed start delay
+                            if self.interruptible_sleep(10):
+                                break
                         self._auto_arrange_windows()
                     else:
                         threads = []

@@ -210,7 +210,8 @@ class ScrollTaskHandler(BaseTaskHandler):
                         if wait_for > 0:
                             self.log(f"Rate limit reached for {name}; backing off for {wait_for:.1f}s")
                             # Sleep in the worker thread, does not block Tkinter UI.
-                            time.sleep(min(wait_for, 60.0))
+                            if self.interruptible_sleep(min(wait_for, 60.0)):
+                                return False
 
                 # Execute the swipe command
                 try:
@@ -313,7 +314,8 @@ class ScrollTaskHandler(BaseTaskHandler):
                 if random.random() < 0.15:
                     delay += random.uniform(0.15, 0.45)
 
-                time.sleep(delay)
+                if self.interruptible_sleep(delay):
+                    return False
 
             self.log(
                 f"Completed scrolling on {name}: {successful_swipes} successful, "
@@ -368,7 +370,8 @@ class ScrollTaskHandler(BaseTaskHandler):
             # Give the app time to finish initial loading so UI is stable
             wait_secs = random.uniform(*ready_delay_range)
             self.log(f"Waiting {wait_secs:.1f}s for Facebook to be ready")
-            time.sleep(wait_secs)
+            if self.interruptible_sleep(wait_secs):
+                return False
 
             # Wait until main UI appears (logo or feed)
             if d(packageName=package).wait(timeout=10):

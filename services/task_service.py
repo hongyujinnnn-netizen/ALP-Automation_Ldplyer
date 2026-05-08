@@ -36,6 +36,7 @@ class TaskService:
         progress_callback: Callable[[float], None] | None = None,
         emulator: Any = None,
         state_callback: Callable[..., Any] | None = None,
+        pause_event: Any = None,
     ) -> Any:
         # Interim: ``MainWindow`` currently lives under ``gui/`` but is
         # actually the per-batch automation runner, not a Tk window. Lazy
@@ -67,4 +68,5 @@ class TaskService:
             state_callback=state_callback,
             accounts_pool=list(request.accounts_pool or []),
             verify_2fa=request.verify_2fa,
+            pause_event=pause_event,
         )

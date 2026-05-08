@@ -262,7 +262,8 @@ class RegAccountTaskHandler(RegAccountHandlerMixin, ScrollTaskHandler):
         if not self._run_registration_steps_with_retry(d, name, profile):
             return False
 
-        time.sleep(20)
+        if self.interruptible_sleep(20):
+            return False
 
         account_status = self.detect_account_status(d)
         self.log(f"Detected account status for {name}: {account_status}")
@@ -280,10 +281,12 @@ class RegAccountTaskHandler(RegAccountHandlerMixin, ScrollTaskHandler):
             time.sleep(2)
 
             self._handle_didnt_get_code_step(d)
-            time.sleep(3)
+            if self.interruptible_sleep(3):
+                return False
 
             self._handle_confirm_by_email(d)
-            time.sleep(3)
+            if self.interruptible_sleep(3):
+                return False
 
             confirmation_email = self._resolve_confirmation_email()
             if not confirmation_email:
@@ -291,7 +294,8 @@ class RegAccountTaskHandler(RegAccountHandlerMixin, ScrollTaskHandler):
             elif not self.enter_email(d, confirmation_email):
                 self.log(f"Failed to enter confirmation email for {name}")
 
-            time.sleep(10)
+            if self.interruptible_sleep(10):
+                return False
 
             otp_code = self._wait_for_confirmation_otp(confirmation_email)
             if not otp_code:
@@ -301,7 +305,8 @@ class RegAccountTaskHandler(RegAccountHandlerMixin, ScrollTaskHandler):
                 self.log(f"Failed to enter confirmation code for {name}")
                 return False
 
-            time.sleep(10)
+            if self.interruptible_sleep(10):
+                return False
             account_status = self.detect_human_confirm_screen(d)
             if account_status == "Dead":
                 self.log(f"Account {name} was flagged for human verification → DEAD")
@@ -311,26 +316,32 @@ class RegAccountTaskHandler(RegAccountHandlerMixin, ScrollTaskHandler):
         if account_status == "Unknown":
             self.log(f"Account status is Unknown for {name}, skipping Facebook UID detection")
         else:
-            time.sleep(10)
+            if self.interruptible_sleep(10):
+                return False
             d.app_stop("com.facebook.katana")
-            time.sleep(4)
+            if self.interruptible_sleep(4):
+                return False
 
             d.app_start("com.facebook.katana")
-            time.sleep(7)
+            if self.interruptible_sleep(7):
+                return False
 
             d.app_stop("com.facebook.katana")
-            time.sleep(3)
+            if self.interruptible_sleep(3):
+                return False
 
             facebook_uid = self.check_uid_account(d, before_ids=before_facebook_ids)
             if facebook_uid == "":
                 self.log(f"UID resolution failed on first attempt for {name}, retrying once")
-                time.sleep(3)
+                if self.interruptible_sleep(3):
+                    return False
                 facebook_uid = self.check_uid_account(d, before_ids=before_facebook_ids)
             if facebook_uid == "":
                 self.log(f"Failed to create Facebook account {name}")
                 return False
 
-        time.sleep(3)
+        if self.interruptible_sleep(3):
+            return False
 
         if not self._submit_signup_step(d, name):
             self.log(f"Failed on final signup step for {name}")
@@ -344,7 +355,8 @@ class RegAccountTaskHandler(RegAccountHandlerMixin, ScrollTaskHandler):
                 facebook_uid=facebook_uid,
                 account_status=account_status,
             )
-            time.sleep(3)
+            if self.interruptible_sleep(3):
+                return False
             self.log(f"Account created successfully for {name} with UID: {facebook_uid}")
             self.log(f"Account status for {name}: {account_status}")
             self.log(f"Create-account flow completed on LD: {name}")
@@ -352,7 +364,8 @@ class RegAccountTaskHandler(RegAccountHandlerMixin, ScrollTaskHandler):
             self.log(f"Generated account password: {profile.password}")
             self.push_runtime_state(name, state="Completed", task="Account form submitted", progress=100)
 
-        time.sleep(5)
+        if self.interruptible_sleep(5):
+            return False
         # Reset Facebook app data after registration to avoid stale sessions.
         self._clear_app_data(d, "com.facebook.katana", name=name)
 
