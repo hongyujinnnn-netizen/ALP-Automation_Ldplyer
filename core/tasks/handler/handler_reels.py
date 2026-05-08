@@ -1,9 +1,11 @@
-import json
+﻿import json
 import os
 import random
 import re
 import subprocess
 import time
+
+from utils.uiwait import wait_for_any
 
 
 def get_app_paths():
@@ -18,7 +20,12 @@ class ReelsHandlerMixin:
         if not self.open_facebook(d):
             self.log(f"Failed to open Facebook for final cleanup on {name}")
 
-        time.sleep(6)
+        if not wait_for_any(
+            d,
+            [{"description": "Menu"}, {"text": "Feed"}, {"resourceIdMatches": ".*tab_bar.*"}],
+            timeout=12,
+        ):
+            self.log(f"[{name}] timeout waiting for Facebook home tab bar")
         if not self.click_facebook_menu(d):
             self.log(f"Failed to open Facebook menu on {name}")
             self.push_runtime_state(
@@ -30,7 +37,16 @@ class ReelsHandlerMixin:
             )
             return False
 
-        time.sleep(4)
+        if not wait_for_any(
+            d,
+            [
+                {"text": "Settings & privacy"},
+                {"text": "Your profile"},
+                {"descriptionContains": "profile"},
+            ],
+            timeout=10,
+        ):
+            self.log(f"[{name}] timeout waiting for Facebook menu screen")
         if not self.back_to_account_profile(d, name):
             self.log(f"Failed to switch back to profile on {name}")
             self.push_runtime_state(
@@ -184,7 +200,12 @@ class ReelsHandlerMixin:
                 self.log(f"Failed to open app settings on {name}: {error_output}")
                 return False
 
-            time.sleep(3)
+            if not wait_for_any(
+                d,
+                [{"text": "Storage"}, {"text": "STORAGE"}, {"text": "Clear cache"}],
+                timeout=10,
+            ):
+                self.log(f"[{name}] timeout waiting for app settings page")
 
             if not _click_if_found(clear_cache_selectors, wait_timeout=1.0, label="Clear cache"):
                 storage_opened = _click_storage_row(wait_timeout=1.5)
@@ -203,12 +224,22 @@ class ReelsHandlerMixin:
                     self.log(f"Could not find Storage section while clearing cache on {name}")
                     return False
 
-                time.sleep(2)
+                if not wait_for_any(
+                    d,
+                    [{"text": "Clear cache"}, {"text": "Clear data"}, {"text": "Cache"}],
+                    timeout=8,
+                ):
+                    self.log(f"[{name}] timeout waiting for Storage panel")
                 if not _click_if_found(clear_cache_selectors, wait_timeout=1.5, label="Clear cache"):
                     self.log(f"Could not find Clear cache button on {name}")
                     return False
 
-            time.sleep(2)
+            if not wait_for_any(
+                d,
+                [{"textContains": "cleared"}, {"textContains": "0 B"}, {"text": "Storage"}],
+                timeout=6,
+            ):
+                self.log(f"[{name}] timeout waiting for cache-cleared confirmation")
             self.log(f"Facebook cache cleared on {name}")
             return True
         except Exception as e:
@@ -232,7 +263,17 @@ class ReelsHandlerMixin:
         """
         try:
             # Wait for the reels description screen to load
-            time.sleep(5)
+            _dev = getattr(d, "serial", "?")
+            if not wait_for_any(
+                d,
+                [
+                    {"className": "android.widget.EditText"},
+                    {"textContains": "Describe your reel"},
+                    {"text": "Share"},
+                ],
+                timeout=12,
+            ):
+                self.log(f"[{_dev}] timeout waiting for Reels description screen")
 
             # FIRST: Check for and click OK button if it exists
             ok_button_found = False
@@ -341,7 +382,12 @@ class ReelsHandlerMixin:
 
             # Look for the final share/post button with more flexible detection
             self.log(" Looking for Share...")
-            time.sleep(3)
+            if not wait_for_any(
+                d,
+                [{"text": "Share"}, {"text": "Post"}, {"text": "Share now"}, {"text": "Publish"}],
+                timeout=10,
+            ):
+                self.log(f"[{_dev}] timeout waiting for share button")
             share_button_found = False
             share_button_texts = [
                 "Share",
@@ -664,14 +710,28 @@ class ReelsHandlerMixin:
         try:
             # Long press video
             self.hold_on_video(d, hold_time=2)
-            time.sleep(2)
+            if not wait_for_any(
+                d,
+                [{"text": "Delete"}, {"text": "DELETE"}, {"textContains": "Delete"}],
+                timeout=8,
+            ):
+                self.log(
+                    f"[{getattr(d, 'serial', '?')}] timeout waiting for long-press context menu"
+                )
 
             # Find and click "Delete" option
             for element in d(className="android.widget.TextView"):
                 text = element.info.get("text", "")
                 if text and "Delete" in text:
                     element.click()
-                    time.sleep(2)  # Wait for confirmation dialog
+                    if not wait_for_any(
+                        d,
+                        [{"text": "YES"}, {"text": "Yes"}, {"textContains": "delete"}],
+                        timeout=8,
+                    ):
+                        self.log(
+                            f"[{getattr(d, 'serial', '?')}] timeout waiting for delete confirmation dialog"
+                        )
                     break
 
             # Handle the confirm deletion popup
@@ -711,16 +771,16 @@ class ReelsHandlerMixin:
         """
         # List of sample captions for generic videos
         base_captions = [
-            "Check out this amazing video! Ã°Å¸Å½Â¥",
-            "Just created this awesome content! Ã¢Å“Â¨",
-            "Watch this viral video trending now! Ã°Å¸â€Â¥",
-            "This video is blowing up! Ã°Å¸â€™Â¥",
-            "Don't miss this incredible footage! Ã°Å¸â€œÂ¸",
-            "Epic content coming your way! Ã°Å¸Å¡â‚¬",
-            "This is too good not to share! Ã°Å¸â€˜Â",
-            "Viral moment captured on camera! Ã°Å¸â€œÂ¹",
-            "Trending content you need to see! Ã°Å¸â€˜â‚¬",
-            "Amazing video that you'll love! Ã¢ÂÂ¤Ã¯Â¸Â",
+            "Check out this amazing video! ",
+            "Just created this awesome content! ",
+            "Watch this viral video trending now! ",
+            "This video is blowing up! ",
+            "Don't miss this incredible footage! ",
+            "Epic content coming your way! ",
+            "This is too good not to share! ",
+            "Viral moment captured on camera! ",
+            "Trending content you need to see! ",
+            "Amazing video that you'll love! ",
         ]
 
         # List of popular hashtags for reels
@@ -941,7 +1001,17 @@ class ReelsHandlerMixin:
     def click_context_option(self, d):
         """Click on a context menu option that might be a send/share button"""
         try:
-            time.sleep(2)
+            if not wait_for_any(
+                d,
+                [
+                    {"text": "Send"},
+                    {"text": "Share with"},
+                    {"text": "News Feed"},
+                    {"textContains": "reels"},
+                ],
+                timeout=8,
+            ):
+                self.log(f"[{getattr(d, 'serial', '?')}] timeout waiting for context menu")
             # First, check if we're seeing the Facebook permission dialog
             if self.check_and_handle_facebook_permission(d):
                 return True
@@ -960,7 +1030,14 @@ class ReelsHandlerMixin:
                     text = element.info.get("text", "")
                     if text and "Send" in text:
                         element.click()
-                        time.sleep(3)  # Wait for Share dialog to appear
+                        if not wait_for_any(
+                            d,
+                            [{"text": "Next"}, {"text": "News Feed"}, {"textContains": "reels"}],
+                            timeout=10,
+                        ):
+                            self.log(
+                                f"[{getattr(d, 'serial', '?')}] timeout waiting for Share with dialog"
+                            )
                         break
 
                 # Check for permission dialog again after clicking Send
@@ -1001,7 +1078,14 @@ class ReelsHandlerMixin:
                     # If Reels found, click it
                     if reels_option:
                         reels_option.click()
-                        time.sleep(3)
+                        if not wait_for_any(
+                            d,
+                            [{"text": "Always"}, {"text": "Just once"}],
+                            timeout=10,
+                        ):
+                            self.log(
+                                f"[{getattr(d, 'serial', '?')}] timeout waiting for Always/Just once dialog"
+                            )
 
                         # Wait for the "Always/Just once" dialog to appear
                         time.sleep(2)
@@ -1103,7 +1187,14 @@ class ReelsHandlerMixin:
                 # If Reels found, click it
                 if reels_option:
                     reels_option.click()
-                    time.sleep(3)
+                    if not wait_for_any(
+                        d,
+                        [{"text": "Always"}, {"text": "Just once"}],
+                        timeout=10,
+                    ):
+                        self.log(
+                            f"[{getattr(d, 'serial', '?')}] timeout waiting for Always/Just once dialog"
+                        )
 
                     # Check for permission dialog again after clicking Reels
                     if self.check_and_handle_facebook_permission(d):
@@ -1112,7 +1203,14 @@ class ReelsHandlerMixin:
                     self.log("Clicked Reels option")
 
                     # Wait for the "Always/Just once" dialog to appear
-                    time.sleep(2)
+                    if not wait_for_any(
+                        d,
+                        [{"text": "Always"}, {"text": "Just once"}],
+                        timeout=8,
+                    ):
+                        self.log(
+                            f"[{getattr(d, 'serial', '?')}] timeout waiting for Always/Just once dialog (2nd branch)"
+                        )
 
                     # Look for "Always" or "Just once" options
                     always_found = False
@@ -1219,7 +1317,12 @@ class ReelsHandlerMixin:
                 return False
 
             # Wait additional time for UI to fully load
-            time.sleep(3)
+            if not wait_for_any(
+                d,
+                [{"text": "Next"}, {"text": "Post"}, {"text": "Share"}, {"text": "Continue"}],
+                timeout=10,
+            ):
+                self.log(f"[{getattr(d, 'serial', '?')}] timeout waiting for FB post UI")
 
             # Candidate button texts in multiple languages
             post_button_texts = [
@@ -1389,10 +1492,25 @@ class ReelsHandlerMixin:
     def navigate_to_pictures(self, d):
         """Click on Pictures folder"""
         try:
-            time.sleep(3)
+            _dev = getattr(d, "serial", "?")
+            if not wait_for_any(
+                d,
+                [{"text": "Pictures"}, {"text": "DCIM"}, {"text": "Download"}],
+                timeout=10,
+            ):
+                self.log(f"[{_dev}] timeout waiting for file-manager directory list")
             if d(text="Pictures").exists:
                 d(text="Pictures").click()
-                time.sleep(2)
+                if not wait_for_any(
+                    d,
+                    [
+                        {"resourceIdMatches": ".*list.*"},
+                        {"className": "androidx.recyclerview.widget.RecyclerView"},
+                        {"className": "android.widget.ListView"},
+                    ],
+                    timeout=8,
+                ):
+                    self.log(f"[{_dev}] timeout waiting for Pictures folder contents")
                 return True
             else:
                 # Try to scroll if not visible
@@ -1474,7 +1592,18 @@ class ReelsHandlerMixin:
 
                             if height > 30 and width > 50:  # Reasonable button dimensions
                                 element.click()
-                                time.sleep(3)
+                                if not wait_for_any(
+                                    d,
+                                    [
+                                        {"resourceId": "com.facebook.katana:id/feed"},
+                                        {"description": "News Feed"},
+                                        {"textContains": "What's on your mind"},
+                                    ],
+                                    timeout=8,
+                                ):
+                                    self.log(
+                                        f"[{getattr(d, 'serial', '?')}] timeout waiting for FB feed after ALLOW"
+                                    )
                                 self.log(f"Clicked ALLOW button: {text}")
                                 # Permission was handled, but the reels flow still needs to continue.
                                 return False
@@ -1498,7 +1627,18 @@ class ReelsHandlerMixin:
                         bounds = element.info.get("bounds")
                         if bounds and (bounds["bottom"] - bounds["top"]) > 30:
                             element.click()
-                            time.sleep(3)
+                            if not wait_for_any(
+                                d,
+                                [
+                                    {"resourceId": "com.facebook.katana:id/feed"},
+                                    {"description": "News Feed"},
+                                    {"textContains": "What's on your mind"},
+                                ],
+                                timeout=8,
+                            ):
+                                self.log(
+                                    f"[{getattr(d, 'serial', '?')}] timeout waiting for FB feed after right-side ALLOW"
+                                )
                             self.log("Clicked right-side element (likely ALLOW button)")
                             # Permission was handled, but the reels flow still needs to continue.
                             return False
@@ -1764,7 +1904,16 @@ class ReelsHandlerMixin:
     def navigate_to_page(self, d):
         """Click on Page-1 folder (exact Page-1 / Page 1 only)"""
         try:
-            time.sleep(2)  # Wait for directory to load
+            if not wait_for_any(
+                d,
+                [
+                    {"resourceIdMatches": ".*list.*"},
+                    {"className": "androidx.recyclerview.widget.RecyclerView"},
+                    {"className": "android.widget.ListView"},
+                ],
+                timeout=8,
+            ):
+                self.log(f"[{getattr(d, 'serial', '?')}] timeout waiting for page directory list")
             # Only match explicit "Page-1" or "Page 1"
             if d(text="Page-1").exists:
                 d(text="Page-1").click()

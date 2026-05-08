@@ -11,7 +11,8 @@
       "Bash(python *)",
       "Bash(git stash *)",
       "Bash(git rm *)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(ruff check *)"
     ]
   }
 }

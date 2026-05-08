@@ -10,6 +10,7 @@ from datetime import datetime
 from core.credential_store import CredentialStore
 from core.paths import get_app_paths
 from core.settings import _atomic_write_json
+from utils.popup_dismiss import ensure_clean_state
 
 _logger = logging.getLogger(__name__)
 
@@ -61,9 +62,21 @@ class LoginHandlerMixin:
             time.sleep(2)
             if not self.open_facebook(d):
                 continue
+            # Post-recovery, pre-retry: clear any LDPlayer popup that may have
+            # surfaced while FB was being relaunched. relaunch= passes the
+            # existing FB launcher; no recursion since open_facebook itself
+            # does not call ensure_clean_state.
+            d.info_log = self.log  # route popup logs through self.log
+            ensure_clean_state(d, relaunch=lambda: self.open_facebook(d))
         return False
 
     def _run_login_steps_once(self, d, name, creds):
+        # Session start: dismiss any LDPlayer popup ("Welcome to LDPlayer",
+        # update prompts, Rate prompts) and verify FB is foregrounded before
+        # the first UI interaction.
+        d.info_log = self.log  # route popup logs through self.log
+        ensure_clean_state(d, relaunch=lambda: self.open_facebook(d))
+
         # Some Facebook builds show a landing screen before the login form.
         self._open_existing_account_login(d)
 
