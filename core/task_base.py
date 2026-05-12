@@ -1,5 +1,8 @@
+import random
 import time
 from abc import ABC, abstractmethod
+
+FACEBOOK_PACKAGE = "com.facebook.katana"
 
 # Import uiautomator2
 try:
@@ -119,6 +122,108 @@ class BaseTaskHandler(ABC):
                     continue
             time.sleep(0.3)
         return False
+
+    def connect_u2(self, serial):
+        """Connect uiautomator2 to a device serial. Returns the Device or None."""
+        if not U2_AVAILABLE:
+            self.log("uiautomator2 not available")
+            return None
+        try:
+            return u2.connect(serial)
+        except Exception as exc:
+            self.log(f"Failed to connect uiautomator2 to {serial}: {exc}")
+            return None
+
+    def open_facebook(self, d):
+        """Launch Facebook on the connected device.
+
+        Honors `facebook_start_delay_seconds` and uses interruptible_sleep so
+        Stop/Pause stays responsive during the post-launch wait.
+        """
+        try:
+            package = FACEBOOK_PACKAGE
+            d.app_start(package)
+            self.log("Facebook app opened")
+
+            delay = max(0, int(getattr(self, "facebook_start_delay_seconds", 8)))
+            wait_secs = random.uniform(delay, delay + 1.5) if delay > 0 else 0
+            self.log(f"Waiting {wait_secs:.1f}s for Facebook UI to load")
+            if self.interruptible_sleep(wait_secs):
+                return False
+
+            load_timeout = max(10, delay + 5)
+            if d(packageName=package).wait(timeout=load_timeout):
+                self.log("Facebook is running")
+                return True
+            self.log("Facebook app did not load in time")
+            return False
+        except Exception as exc:
+            self.log(f"Failed to open Facebook: {exc}")
+            return False
+
+    def open_facebook_with_recovery(self, name, serial, max_retries=1):
+        """Connect uiautomator2 and open Facebook, restarting LD on failure.
+
+        On failure: stops Facebook, quits LD, waits, restarts LD, waits for
+        device readiness, reconnects ADB (if `_ensure_adb_connection` is
+        defined), reconnects uiautomator2, and retries `open_facebook`.
+
+        Returns (success, d, serial). The serial may have changed after a
+        restart; the old `d` object becomes stale, so callers should use the
+        returned values.
+        """
+        attempt = 0
+        while True:
+            d = self.connect_u2(serial)
+            if d is not None and self.open_facebook(d):
+                return True, d, serial
+
+            if attempt >= max_retries:
+                return False, d, serial
+
+            attempt += 1
+            self.log(
+                f"Recovering Facebook on {name} via LD restart "
+                f"(attempt {attempt}/{max_retries})"
+            )
+
+            if d is not None:
+                try:
+                    d.app_stop(FACEBOOK_PACKAGE)
+                except Exception:
+                    pass
+
+            try:
+                if hasattr(self.emulator, "quit_ld"):
+                    self.emulator.quit_ld(name)
+            except Exception as exc:
+                self.log(f"Failed to quit LD {name}: {exc}")
+
+            if self.interruptible_sleep(5):
+                return False, None, serial
+
+            try:
+                if not self.emulator.start_ld(name):
+                    self.log(f"Failed to restart LD: {name}")
+                    return False, None, serial
+            except Exception as exc:
+                self.log(f"Failed to start LD {name}: {exc}")
+                return False, None, serial
+
+            self.auto_arrange_ld_windows()
+
+            boot_timeout = max(90, int(getattr(self.emulator, "boot_delay", 20)) * 6)
+            if not self.ensure_device_ready(name, timeout=boot_timeout):
+                self.log(f"Device not ready after restart: {name}")
+                return False, None, serial
+
+            serial = self.emulator.name_to_serial.get(name, serial)
+
+            ensure_adb = getattr(self, "_ensure_adb_connection", None)
+            if callable(ensure_adb):
+                if not ensure_adb(serial):
+                    self.log(f"Failed to reconnect ADB after restart for {name}")
+                    return False, None, serial
 
     def auto_arrange_ld_windows(self):
         """Arrange LD windows when enabled in settings."""

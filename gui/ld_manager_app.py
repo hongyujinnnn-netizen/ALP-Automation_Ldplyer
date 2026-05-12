@@ -197,6 +197,7 @@ class LDManagerApp(
         # Initialize settings variables
         self.parallel_ld = tk.IntVar(value=2)
         self.boot_delay = tk.IntVar(value=10)
+        self.facebook_start_delay_seconds = tk.IntVar(value=8)
         self.task_duration = tk.IntVar(value=15)  # In minutes
         self.max_videos = tk.IntVar(value=2)
         self.page_per_account = tk.IntVar(value=2)
@@ -2644,6 +2645,7 @@ class LDManagerApp(
 
         self.parallel_ld.set(settings.parallel_ld)
         self.boot_delay.set(settings.boot_delay)
+        self.facebook_start_delay_seconds.set(settings.facebook_start_delay_seconds)
         self.task_duration.set(settings.task_duration)
         self.max_videos.set(settings.max_videos)
         self.page_per_account.set(settings.page_per_account)
@@ -2692,6 +2694,7 @@ class LDManagerApp(
         settings = AppSettings(
             parallel_ld=int(self.parallel_ld.get()),
             boot_delay=int(self.boot_delay.get()),
+            facebook_start_delay_seconds=int(self.facebook_start_delay_seconds.get()),
             task_duration=int(self.task_duration.get()),
             max_videos=int(self.max_videos.get()),
             page_per_account=int(self.page_per_account.get()),
@@ -3347,6 +3350,7 @@ Recent Items:
             scroll_after_post=bool(self.scroll_after_post.get()),
             random_like=bool(self.random_like.get()),
             clear_cache=bool(self.clear_cache.get()),
+            facebook_start_delay_seconds=int(self.facebook_start_delay_seconds.get()),
             reg_contact_mode=self.reg_contact_mode.get(),
             reg_contact_value=self.reg_contact_value.get(),
             reg_phone_prefix=self.reg_phone_prefix.get(),

@@ -773,31 +773,8 @@ class ReelsTaskHandler(BaseTaskHandler):
             self.log(f"[switch_to_page] Error: {e}")
             return False
 
-    def open_facebook(self, d, ready_delay_range=(5, 10)):
-        try:
-            package = "com.facebook.katana"  # Main Facebook package name
-            activity = "com.facebook.katana.LoginActivity"
-
-            # Try launching Facebook
-            d.app_start(package)
-            self.log("Facebook app opened")
-
-            # Give the app a short window to finish booting so UI elements exist
-            wait_secs = random.uniform(*ready_delay_range)
-            self.log(f"Waiting {wait_secs:.1f}s for Facebook to be ready")
-            time.sleep(wait_secs)
-
-            # Wait until main UI appears (logo or feed)
-            if d(packageName=package).wait(timeout=10):
-                self.log("Facebook is running")
-                return True
-            else:
-                self.log("Facebook app did not load in time")
-                return False
-
-        except Exception as e:
-            self.log(f"Failed to open Facebook: {e}")
-            return False
+    def open_facebook(self, d, ready_delay_range=None):
+        return super().open_facebook(d)
 
     #function clear app    
     def clear_app(self, d, package_name: str) -> bool:

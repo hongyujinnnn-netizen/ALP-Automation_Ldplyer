@@ -1,7 +1,7 @@
 import time
 
 from core.paths import get_app_paths  # noqa: F401  # re-exported for test patching
-from core.task_base import U2_AVAILABLE, BaseTaskHandler, u2
+from core.task_base import U2_AVAILABLE, BaseTaskHandler, u2  # noqa: F401
 from core.tasks.handler.handler_reels import ReelsHandlerMixin
 from utils.ip_guard import check_ld_ip_allowed
 
@@ -64,13 +64,9 @@ class ReelsTaskHandler(ReelsHandlerMixin, BaseTaskHandler):
                     pass
                 return False
 
-        try:
-            if not U2_AVAILABLE:
-                self.log("uiautomator2 not available. Cannot run Reels task.")
-                return False
-            d = u2.connect(serial)
-        except Exception as e:
-            self.log(f"Failed to connect {serial}: {e}")
+        success, d, serial = self.open_facebook_with_recovery(name, serial, max_retries=1)
+        if not success:
+            self.log(f"Failed to open Facebook on {name}")
             return False
 
         page_ready = 0

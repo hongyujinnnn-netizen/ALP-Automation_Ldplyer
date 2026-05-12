@@ -278,12 +278,17 @@ class RegAccountHandlerMixin:
         resolved_name = name or getattr(d, "serial", None) or package_name
         return self.clear_app_storage(d, resolved_name, package_name=package_name)
 
-    def _run_registration_steps_with_retry(self, d, name, profile, retries=2, retry_delay=3):
+    def _run_registration_steps_with_retry(
+        self, d, name, profile, retries=2, retry_delay=3, facebook_already_open=False
+    ):
         total_attempts = retries + 1
         delay_fb = 2
         for attempt in range(1, total_attempts + 1):
             delay_fb += 2
-            ok, failed_step = self._run_registration_steps_once(d, name, profile, delay_fb)
+            open_facebook = not facebook_already_open or attempt > 1
+            ok, failed_step = self._run_registration_steps_once(
+                d, name, profile, delay_fb, open_facebook=open_facebook
+            )
             if ok:
                 return True
 
@@ -300,11 +305,12 @@ class RegAccountHandlerMixin:
 
         return False
 
-    def _run_registration_steps_once(self, d, name, profile, delay_fb):
-        self.log(f"Opening Facebook: {name}")
-        if not self.open_facebook(d):
-            self.log(f"Failed to open Facebook for registration: {name}")
-            return False, "open_facebook"
+    def _run_registration_steps_once(self, d, name, profile, delay_fb, open_facebook=True):
+        if open_facebook:
+            self.log(f"Opening Facebook: {name}")
+            if not self.open_facebook(d):
+                self.log(f"Failed to open Facebook for registration: {name}")
+                return False, "open_facebook"
         time.sleep(delay_fb)
         self.push_runtime_state(name, state="Running", task="Starting registration", progress=45)
         if not self._start_registration_flow(d, name):

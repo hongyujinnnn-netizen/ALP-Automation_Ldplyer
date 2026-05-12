@@ -1128,6 +1128,15 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
             "Register Account will run this many times per emulator.",
             min_value=1,
         )
+        self._metric_card(
+            grid3,
+            palette,
+            "Facebook Start Delay",
+            self.facebook_start_delay_seconds,
+            "seconds",
+            "Wait this long after opening Facebook before tapping the UI.",
+            min_value=0,
+        )
 
         outer, notes = self._premium_card(
             parent, palette, "Performance Notes", "Quick guidance based on current setup."

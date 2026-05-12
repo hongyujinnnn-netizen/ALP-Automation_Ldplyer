@@ -28,6 +28,7 @@ class AppSettings:
 
     parallel_ld: int = 2
     boot_delay: int = 10
+    facebook_start_delay_seconds: int = 8
     task_duration: int = 15
     max_videos: int = 2
     page_per_account: int = 2
@@ -113,6 +114,9 @@ class AppSettings:
             return cls(
                 parallel_ld=int(raw.get("parallel_ld", defaults.parallel_ld)),
                 boot_delay=int(raw.get("boot_delay", defaults.boot_delay)),
+                facebook_start_delay_seconds=int(
+                    raw.get("facebook_start_delay_seconds", defaults.facebook_start_delay_seconds)
+                ),
                 task_duration=int(raw.get("task_duration", defaults.task_duration)),
                 max_videos=int(raw.get("max_videos", defaults.max_videos)),
                 page_per_account=int(raw.get("page_per_account", defaults.page_per_account)),

@@ -3,7 +3,7 @@ import re
 import subprocess
 import time
 
-from core.task_base import U2_AVAILABLE, BaseTaskHandler, u2
+from core.task_base import BaseTaskHandler
 from utils.ip_guard import check_ld_ip_allowed
 
 
@@ -105,18 +105,9 @@ class ScrollTaskHandler(BaseTaskHandler):
                     pass
                 return False
 
-        # Connect with uiautomator2 for profile switching
-        try:
-            if not U2_AVAILABLE:
-                self.log("âŒ uiautomator2 not available. Cannot switch profile.")
-                return False
-            d = u2.connect(serial)
-        except Exception as e:
-            self.log(f"âŒ Failed to connect {serial}: {e}")
-            return False
-
         self.log(f"Opening Facebook after IP check: {name}")
-        if not self.open_facebook(d):
+        success, d, serial = self.open_facebook_with_recovery(name, serial, max_retries=1)
+        if not success:
             self.log(f"Failed to open Facebook before scrolling: {name}")
             return False
         self.log(f"Running scroll task on LD: {name}")
@@ -357,33 +348,6 @@ class ScrollTaskHandler(BaseTaskHandler):
                 self.log(f"Error connecting to {serial}: {str(e)}")
 
         return False
-
-    def open_facebook(self, d, ready_delay_range=(5, 15)):
-        try:
-            package = "com.facebook.katana"  # Main Facebook package name
-            activity = "com.facebook.katana.LoginActivity"
-
-            # Try launching Facebook
-            d.app_start(package)
-            self.log("Facebook app opened")
-
-            # Give the app time to finish initial loading so UI is stable
-            wait_secs = random.uniform(*ready_delay_range)
-            self.log(f"Waiting {wait_secs:.1f}s for Facebook to be ready")
-            if self.interruptible_sleep(wait_secs):
-                return False
-
-            # Wait until main UI appears (logo or feed)
-            if d(packageName=package).wait(timeout=10):
-                self.log("Facebook is running")
-                return True
-            else:
-                self.log("Facebook app did not load in time")
-                return False
-
-        except Exception as e:
-            self.log(f"Failed to open Facebook: {e}")
-            return False
 
     def _in_top_right(self, d, node, top_ratio=0.25, right_ratio=0.28):
         try:

@@ -49,6 +49,7 @@ class TaskHandlerContext:
     scroll_after_post: bool = False
     random_like: bool = True
     clear_cache: bool = False
+    facebook_start_delay_seconds: int = 8
 
     # Task-specific config
     reg_contact_mode: str = "random_phone"
@@ -67,6 +68,7 @@ def _apply_common_config(handler: Any, ctx: TaskHandlerContext) -> None:
     handler.blocked_countries = list(ctx.blocked_countries)
     handler.auto_arrange_ld = bool(ctx.auto_arrange_ld)
     handler.state_callback = ctx.state_callback
+    handler.facebook_start_delay_seconds = max(0, int(ctx.facebook_start_delay_seconds))
 
 
 def _apply_reg_contact_config(handler: Any, ctx: TaskHandlerContext) -> None:

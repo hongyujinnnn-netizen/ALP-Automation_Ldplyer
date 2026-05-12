@@ -1,7 +1,6 @@
 import time
 from dataclasses import dataclass
 
-from core.task_base import U2_AVAILABLE, u2
 from core.tasks.handler.handle_create_page import CreatePageHandlerMixin
 from core.tasks.reg_account import RegAccountTaskHandler
 from utils.ip_guard import check_ld_ip_allowed
@@ -59,17 +58,9 @@ class CreatePageTaskHandler(CreatePageHandlerMixin, RegAccountTaskHandler):
                 pass
             return False
 
-        try:
-            if not U2_AVAILABLE:
-                self.log("uiautomator2 not available. Cannot run create-page task.")
-                return False
-            d = u2.connect(serial)
-        except Exception as exc:
-            self.log(f"Failed to connect {serial}: {exc}")
-            return False
-
         self.push_runtime_state(name, state="Running", task="Opening Facebook", progress=15)
-        if not self.open_facebook(d):
+        success, d, serial = self.open_facebook_with_recovery(name, serial, max_retries=1)
+        if not success:
             self.log(f"Failed to open Facebook on {name}")
             return False
 

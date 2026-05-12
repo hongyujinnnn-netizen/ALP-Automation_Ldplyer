@@ -1618,6 +1618,7 @@ class DashboardDialogMixin:
             blocked_countries=blocked_countries,
             auto_arrange_ld=bool(self._db_var_value("auto_arrange_ld", False)),
             state_callback=self.update_device_runtime_state,
+            facebook_start_delay_seconds=int(self._db_var_value("facebook_start_delay_seconds", 8)),
         )
 
         try:
@@ -2310,6 +2311,7 @@ class DashboardDialogMixin:
             verify_account=bool(self._db_var_value("verify_account", True)),
             scroll_after_post=bool(self._db_var_value("scroll_after_post", True)),
             clear_cache=bool(self._db_var_value("clear_cache", True)),
+            facebook_start_delay_seconds=int(self._db_var_value("facebook_start_delay_seconds", 8)),
         )
 
         try:
