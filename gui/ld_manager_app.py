@@ -1679,9 +1679,14 @@ class LDManagerApp(
             self.update_selection_info()
             return
 
-        children = self.ld_table.get_children()
-        if children:
-            self.ld_table.delete(*children)
+        # Diff-based update — preserves iids and only mutates changed rows.
+        existing_iids = list(self.ld_table.get_children())
+        existing_set = set(existing_iids)
+        new_names = {row[0] for row in rows}
+        for iid in existing_iids:
+            if iid not in new_names:
+                self.ld_table.delete(iid)
+                self.ld_table.checkboxes.pop(iid, None)
 
         for idx, (name, serial, status, account_text, group_text) in enumerate(rows):
             runtime = self._device_runtime_state.get(name) or {}
@@ -1706,25 +1711,28 @@ class LDManagerApp(
                 progress_text = "0%"
             zebra_tag = "odd_row" if idx % 2 == 0 else "even_row"
             is_checked = name in checked_names
-            item_id = self.ld_table.insert(
-                "",
-                "end",
-                text="☑" if is_checked else "☐",
-                values=(
-                    name,
-                    serial,
-                    self._status_text(status),
-                    task_text,
-                    progress_text,
-                    account_text,
-                    group_text,
-                ),
+            values = (
+                name,
+                serial,
+                self._status_text(status),
+                task_text,
+                progress_text,
+                account_text,
+                group_text,
             )
-            self.ld_table.checkboxes[item_id] = is_checked
+            text_val = "☑" if is_checked else "☐"
             base_tags = [zebra_tag, self._status_tag(status)]
             if is_checked:
                 base_tags.append("checked")
-            self.ld_table.item(item_id, tags=tuple(base_tags))
+            tags_tup = tuple(base_tags)
+
+            if name in existing_set:
+                self.ld_table.item(name, text=text_val, values=values, tags=tags_tup)
+                if self.ld_table.index(name) != idx:
+                    self.ld_table.move(name, "", idx)
+            else:
+                self.ld_table.insert("", idx, iid=name, text=text_val, values=values, tags=tags_tup)
+            self.ld_table.checkboxes[name] = is_checked
 
         self._last_table_signature = render_signature
         self._update_fleet_summary(rows)

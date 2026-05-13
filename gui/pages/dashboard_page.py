@@ -1046,21 +1046,28 @@ class DashboardDialogMixin:
             return
 
         try:
-            for item in tree.get_children():
-                tree.delete(item)
+            existing_iids = list(tree.get_children())
         except tk.TclError:
             self._db_tree = None
             return
+        existing_set = set(existing_iids)
 
         query = (self._db_search_var.get() or "").strip().lower() if hasattr(self, "_db_search_var") else ""
         device_names = self._db_device_names()
         self._dashboard_checked = set(getattr(self, "_dashboard_checked", set())) & set(device_names)
         by_name = self._db_instances_by_name()
 
-        row_idx = 0
+        visible_names = []
         for name in device_names:
             if query and query not in name.lower():
                 continue
+            visible_names.append(name)
+        visible_set = set(visible_names)
+        for iid in existing_iids:
+            if iid not in visible_set:
+                tree.delete(iid)
+
+        for row_idx, name in enumerate(visible_names):
             inst = by_name.get(name) or {}
             acc = inst.get("account") or {}
             pages = self._db_account_pages(acc)
@@ -1069,20 +1076,15 @@ class DashboardDialogMixin:
                 str(acc.get("name") or acc.get("uid") or acc.get("mail") or "").strip() or "— No account"
             )
             zebra = "even_row" if row_idx % 2 == 0 else "odd_row"
-            tree.insert(
-                "",
-                "end",
-                iid=name,
-                values=(
-                    name,
-                    status_table_text(status),
-                    account_label,
-                    str(len(pages)),
-                ),
-                tags=(status_tag(status), zebra),
-            )
+            values = (name, status_table_text(status), account_label, str(len(pages)))
+            tags = (status_tag(status), zebra)
+            if name in existing_set:
+                tree.item(name, values=values, tags=tags)
+                if tree.index(name) != row_idx:
+                    tree.move(name, "", row_idx)
+            else:
+                tree.insert("", row_idx, iid=name, values=values, tags=tags)
             self._db_apply_check_visual(tree, name, name in self._dashboard_checked)
-            row_idx += 1
 
         if self._db_widget_exists(getattr(self, "_db_list_count", None)):
             count = len(tree.get_children())

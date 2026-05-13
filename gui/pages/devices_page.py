@@ -403,8 +403,12 @@ class DevicesPageMixin:
         if not hasattr(self, "devices_tree"):
             return
         rows = self._device_page_rows()
-        for item in self.devices_tree.get_children():
-            self.devices_tree.delete(item)
+        existing_iids = list(self.devices_tree.get_children())
+        existing_set = set(existing_iids)
+        new_names = {row["name"] for row in rows}
+        for iid in existing_iids:
+            if iid not in new_names:
+                self.devices_tree.delete(iid)
         if hasattr(self, "devices_table_state_view"):
             if rows:
                 self.devices_table_state_view.pack_forget()
@@ -423,7 +427,7 @@ class DevicesPageMixin:
                 )
                 self.devices_table_state_view.pack(fill="x", pady=(0, 10))
         selected_count = waiting_count = running_count = completed_count = 0
-        for row in rows:
+        for idx, row in enumerate(rows):
             state_lower = row["state"].lower()
             tag = status_tag(row["state"])
             if "running" in state_lower:
@@ -440,20 +444,22 @@ class DevicesPageMixin:
                 tag = "attention"
             if row["selected"]:
                 selected_count += 1
-            self.devices_tree.insert(
-                "",
-                "end",
-                values=(
-                    row["name"],
-                    status_table_text(row["state"]),
-                    row["task"],
-                    row["timer"],
-                    row["target"],
-                    row["queue"],
-                    row["account"],
-                ),
-                tags=(tag,),
+            name = row["name"]
+            values = (
+                name,
+                status_table_text(row["state"]),
+                row["task"],
+                row["timer"],
+                row["target"],
+                row["queue"],
+                row["account"],
             )
+            if name in existing_set:
+                self.devices_tree.item(name, values=values, tags=(tag,))
+                if self.devices_tree.index(name) != idx:
+                    self.devices_tree.move(name, "", idx)
+            else:
+                self.devices_tree.insert("", idx, iid=name, values=values, tags=(tag,))
 
         if hasattr(self, "device_metric_cards"):
             self.device_metric_cards["selected"].config(text=str(selected_count))
