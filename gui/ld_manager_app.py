@@ -1684,6 +1684,8 @@ class LDManagerApp(
             self.ld_table.delete(*children)
 
         for idx, (name, serial, status, account_text, group_text) in enumerate(rows):
+            runtime = self._device_runtime_state.get(name) or {}
+            runtime_progress = runtime.get("progress")
             if status == "Running":
                 task_text = {
                     "scroll": "Scroll Feed",
@@ -1692,10 +1694,10 @@ class LDManagerApp(
                     "login": "Login Account",
                     "test_feature": "Test Feature",
                 }.get(self.task_type_var.get(), self.task_type_var.get().title())
-                progress_text = f"{random.randint(24, 96)}%"
+                progress_text = f"{int(runtime_progress)}%" if isinstance(runtime_progress, (int, float)) else "—"
             elif status == "Active":
                 task_text = "Starting"
-                progress_text = f"{random.randint(8, 30)}%"
+                progress_text = f"{int(runtime_progress)}%" if isinstance(runtime_progress, (int, float)) else "—"
             elif status == "Inactive":
                 task_text = "—"
                 progress_text = "0%"
