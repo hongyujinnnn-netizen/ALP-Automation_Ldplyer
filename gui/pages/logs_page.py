@@ -247,13 +247,11 @@ class LogsPageMixin:
         )
         devices = set(getattr(self, "_ld_snapshot", {}).keys())
         devices.update(getattr(self, "_device_runtime_state", {}).keys())
-        for record in getattr(self, "log_records", []):
-            device = str(record.get("device") or "").strip()
-            if device:
-                devices.add(device)
+        # Use the maintained cache rather than rescanning every log record.
+        devices.update(getattr(self, "_known_log_devices", set()))
 
         values = [self.ALL_DEVICES_LABEL]
-        if any(not str(record.get("device") or "").strip() for record in getattr(self, "log_records", [])):
+        if getattr(self, "_has_general_log_records", False):
             values.append(self.GENERAL_LOG_LABEL)
         values.extend(sorted(devices, key=str.lower))
         self.log_device_combo.configure(values=tuple(values))

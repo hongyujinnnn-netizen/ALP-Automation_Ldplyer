@@ -126,6 +126,8 @@ class LDManagerApp(
         self.dashboard_events = []
         self.log_records = []
         self._max_log_records = 5000
+        self._known_log_devices = set()
+        self._has_general_log_records = False
         self._last_table_signature = None
         self._ld_search_job = None
         self._ld_right_hold_job = None
@@ -2874,7 +2876,17 @@ class LDManagerApp(
             self.log_records = self.log_records[-self._max_log_records :]
 
         self._record_dashboard_event(timestamp, message, normalized_level)
-        if hasattr(self, "_refresh_log_filter_options"):
+        # Only refresh the filter dropdown when the device set actually changes.
+        device_key = (log_device or "").strip()
+        filter_dirty = False
+        if device_key:
+            if device_key not in self._known_log_devices:
+                self._known_log_devices.add(device_key)
+                filter_dirty = True
+        elif not self._has_general_log_records:
+            self._has_general_log_records = True
+            filter_dirty = True
+        if filter_dirty and hasattr(self, "_refresh_log_filter_options"):
             self._refresh_log_filter_options()
         if hasattr(self, "_render_logs_view"):
             # Debounce rapid log bursts so the Text widget doesn't rebuild per line.
