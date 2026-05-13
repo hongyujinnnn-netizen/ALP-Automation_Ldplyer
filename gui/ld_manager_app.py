@@ -2995,7 +2995,20 @@ class LDManagerApp(
         )
         self.dashboard_events = self.dashboard_events[-80:]
         if hasattr(self, "dashboard_recent_events_frame"):
-            self._render_recent_events()
+            # Debounce repaints — bursts of important logs would otherwise rebuild
+            # the FeedCards on every line.
+            pending = getattr(self, "_events_render_job", None)
+            if pending is not None:
+                try:
+                    self.root.after_cancel(pending)
+                except Exception:
+                    pass
+
+            def _do_render_events():
+                self._events_render_job = None
+                self._render_recent_events()
+
+            self._events_render_job = self.root.after(150, _do_render_events)
 
     def show_time_picker(self):
         """Show time picker dialog"""
