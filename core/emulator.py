@@ -1,8 +1,11 @@
 import ctypes
+import logging
 import os
 import shlex
 import subprocess
 import time
+
+logger = logging.getLogger(__name__)
 
 
 # ==================== LOCAL IMPORTS ====================
@@ -329,30 +332,45 @@ class ControlEmulator:
             status = "Active" if self.is_ld_running(name) else "Inactive"
             print(f"  '{name}': {serial} ({status})")
 
+    def get_online_serials(self):
+        """Return the set of online adb serials from a single `adb devices` call.
+
+        Used by status-refresh loops to avoid spawning one adb subprocess per
+        instance per cycle.
+        """
+        online = set()
+        try:
+            result = subprocess.run(["adb", "devices"], capture_output=True, text=True, timeout=5)
+        except Exception as e:
+            logger.debug(f"adb devices failed: {e}")
+            return online
+
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if not line or line.startswith("List of devices"):
+                continue
+            parts = line.split()
+            if len(parts) >= 2 and parts[1] == "device":
+                online.add(parts[0])
+        return online
+
     def is_ld_running(self, name):
         """Check if LDPlayer is running"""
         serial = self.name_to_serial.get(name)
         if not serial:
-            print(f"No serial found for '{name}'")
+            logger.debug(f"No serial found for '{name}'")
             return False
 
-        try:
-            result = subprocess.run(["adb", "devices"], capture_output=True, text=True, timeout=5)
+        online = self.get_online_serials()
+        if serial in online:
+            return True
 
-            # Check if serial is in the output and marked as device
-            for line in result.stdout.split("\n"):
-                if serial in line and "device" in line:
+        # Also try without the "127.0.0.1:" prefix
+        if ":" in serial:
+            port = serial.split(":")[1]
+            for s in online:
+                if port in s:
                     return True
-
-            # Also try without the "127.0.0.1:" prefix
-            if ":" in serial:
-                port = serial.split(":")[1]
-                for line in result.stdout.split("\n"):
-                    if port in line and "device" in line:
-                        return True
-
-        except Exception as e:
-            print(f"Error checking if LD is running: {e}")
 
         return False
 

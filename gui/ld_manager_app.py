@@ -2815,15 +2815,20 @@ class LDManagerApp(
                 try:
                     self.emulator._build_serial_mapping()
                     snapshot = self._snapshot_with_dashboard_fallback(dict(self.emulator.name_to_serial))
+                    try:
+                        online_serials = self.emulator.get_online_serials()
+                    except Exception:
+                        online_serials = set()
                     status_cache = {}
                     for name, serial in snapshot.items():
                         if not serial:
                             status_cache[name] = "Inactive"
                             continue
-                        try:
-                            status_cache[name] = "Active" if self.emulator.is_ld_running(name) else "Inactive"
-                        except Exception:
-                            status_cache[name] = self._ld_status_cache.get(name, "Inactive")
+                        is_online = serial in online_serials
+                        if not is_online and ":" in serial:
+                            port = serial.split(":")[1]
+                            is_online = any(port in s for s in online_serials)
+                        status_cache[name] = "Active" if is_online else "Inactive"
                     account_cache = self._build_ld_account_cache(snapshot)
                     self.root.after_idle(
                         lambda data=snapshot, statuses=status_cache, accounts=account_cache: (
