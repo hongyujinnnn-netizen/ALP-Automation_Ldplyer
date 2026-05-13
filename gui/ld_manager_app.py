@@ -7,8 +7,6 @@ import sys
 import threading
 import time
 import tkinter as tk
-import zipfile
-from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, simpledialog, ttk
@@ -18,7 +16,6 @@ from tkinter.scrolledtext import ScrolledText
 
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
-from ttkbootstrap.scrolled import ScrolledText as tbScrolledText
 
 # Import local modules
 from controllers.app_controller import AppController
@@ -1238,14 +1235,6 @@ class LDManagerApp(
         elif idx == 5:
             self.request_backup_refresh()
 
-    def _is_analytics_tab_active(self) -> bool:
-        """Return True only when the Analytics tab (index 0) is the visible tab."""
-        try:
-            nb = getattr(self, "notebook", None)
-            return nb is not None and nb.index("current") == 0
-        except Exception:
-            return False
-
     def request_dashboard_refresh(self, force=True):
         if hasattr(self, "_refresh_dashboard"):
             try:
@@ -1465,11 +1454,6 @@ class LDManagerApp(
                 )
             except Exception:
                 pass
-
-    def _extract_group_name(self, display_text):
-        if not display_text:
-            return None
-        return str(display_text).rsplit("  (", 1)[0].strip()
 
     def _get_active_group_name(self):
         current_filter = self.ld_group_filter_var.get().strip()

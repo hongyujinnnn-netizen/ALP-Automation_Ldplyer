@@ -197,14 +197,6 @@ class AnalyticsPageMixin:
             used = sum(1 for item in items if item.get("used"))
             return {"total": total, "used": used, "available": total - used, "queue_size": total}
 
-    def _get_dashboard_performance_stats(self):
-        if not hasattr(self, "performance_monitor"):
-            return {"total_tasks": 0, "success_rate": 0, "completed": 0, "failed": 0}
-        try:
-            return self.performance_monitor.get_stats()
-        except Exception:
-            return {"total_tasks": 0, "success_rate": 0, "completed": 0, "failed": 0}
-
     def _compute_dashboard_alerts(self):
         alerts = []
         counts = self._get_dashboard_status_counts()

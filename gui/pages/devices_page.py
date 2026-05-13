@@ -2,7 +2,6 @@ import tkinter as tk
 
 import ttkbootstrap as tb
 
-from gui.components.cards import MetricCard
 from gui.components.scrollable_frame import ScrollableFrame
 from gui.components.state_views import StateView
 from gui.components.status import (
@@ -44,28 +43,6 @@ class DevicesPageMixin:
         self._build_devices_side_panel(right)
         scroller.bind_scroll_tree(shell)
         self._render_devices_page()
-
-    def _build_devices_hero(self, parent):
-        row = tb.Frame(parent, style="CardInner.TFrame")
-        row.pack(fill="x")
-        self.device_metric_cards = {}
-        metrics = [
-            ("selected", "Selected", self.palette["primary"], "Queued for the next run"),
-            ("waiting", "Waiting", self.palette["warning"], "Ready but not yet running"),
-            ("running", "Running", self.palette["success"], "Devices executing live tasks"),
-            ("completed", "Completed", "#38BDF8", "Finished in the current session"),
-        ]
-        for idx, (key, label, accent, subtitle) in enumerate(metrics):
-            card = MetricCard(
-                row,
-                label,
-                "0",
-                subtitle,
-                accent=accent,
-                palette=self.palette,
-            )
-            card.pack(side="left", fill="both", expand=True, padx=(0, 8 if idx < len(metrics) - 1 else 0))
-            self.device_metric_cards[key] = card.value_label
 
     def _build_devices_table_panel(self, parent):
         card = self._create_card_section(

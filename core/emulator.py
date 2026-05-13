@@ -14,10 +14,9 @@ class LDPlayer:
     def __init__(self, ld_dir):
         self.ld_dir = ld_dir
         self.emulators = {}
-        print(f"LDPlayer initialized with directory: {ld_dir}")
-
+        logger.debug(f"LDPlayer initialized with directory: {ld_dir}")
     def sort_window(self):
-        print("LDPlayer: sort_window called")
+        logger.debug("LDPlayer: sort_window called")
         # Your implementation here
 
 
@@ -29,9 +28,7 @@ try:
 except Exception as e:
     u2 = None
     U2_AVAILABLE = False
-    print("uiautomator2 not available:", e)
-
-
+    logger.error(f"uiautomator2 not available: {e}")
 class SimpleLDPlayer:
     def __init__(self, ld_path="C:\\LDPlayer\\LDPlayer9"):
         self.ld_path = ld_path
@@ -40,17 +37,17 @@ class SimpleLDPlayer:
     def list_emulators(self):
         try:
             result = subprocess.run([self.console_path, "list2"], capture_output=True, text=True, timeout=10)
-            print("Console output:", result.stdout)
+            logger.debug(f"Console output: {result.stdout}")
             return result.stdout
         except subprocess.TimeoutExpired:
-            print("dnconsole list2 timed out after 10s")
+            logger.debug("dnconsole list2 timed out after 10s")
             return None
         except Exception as e:
             error_str = str(e)
             if "740" in error_str or "elevation" in error_str.lower():
-                print("LDPlayer console requires administrator privileges.")
+                logger.debug("LDPlayer console requires administrator privileges.")
             else:
-                print(f"Error: {e}")
+                logger.error(f"Error: {e}")
             return None
 
 
@@ -84,13 +81,11 @@ class ControlEmulator:
                 if result.returncode == 0:
                     # Parse the output
                     lines = result.stdout.strip().split("\n")
-                    print(f"Console output lines: {len(lines)}")
-
+                    logger.debug(f"Console output lines: {len(lines)}")
                     for line in lines:
                         if line.strip():
                             parts = line.split(",")
-                            print(f"Parsing line: {line}, parts: {parts}")
-
+                            logger.debug(f"Parsing line: {line}, parts: {parts}")
                             if len(parts) >= 2:
                                 # The format appears to be: index,name,...
                                 emu_index = parts[0].strip()
@@ -110,21 +105,18 @@ class ControlEmulator:
 
                                 self.em[emu_name] = emu_obj
                                 self.name_to_serial[emu_name] = serial
-                                print(f"Found emulator: '{emu_name}' -> {serial}")
-
+                                logger.debug(f"Found emulator: '{emu_name}' -> {serial}")
                     if self.em:
-                        print(f"Total emulators found: {len(self.em)}")
+                        logger.debug(f"Total emulators found: {len(self.em)}")
                         return
                     else:
-                        print("No emulators parsed from output")
-
+                        logger.debug("No emulators parsed from output")
         except Exception as e:
             error_str = str(e)
             if "740" in error_str or "elevation" in error_str.lower():
-                print("LDPlayer console requires administrator privileges. Using test emulators instead.")
+                logger.debug("LDPlayer console requires administrator privileges. Using test emulators instead.")
             else:
-                print(f"Error detecting emulators via dnconsole: {e}")
-
+                logger.error(f"Error detecting emulators via dnconsole: {e}")
         # Fallback: create test emulators if none found
         if not self.em:
             self._create_test_emulators()
@@ -155,37 +147,34 @@ class ControlEmulator:
         if os.path.exists(ld_adb_path):
             # Add LDPlayer directory to PATH temporarily
             os.environ["PATH"] = self.ld_dir + os.pathsep + os.environ["PATH"]
-            print(f"Added LDPlayer ADB to PATH: {self.ld_dir}")
-
+            logger.debug(f"Added LDPlayer ADB to PATH: {self.ld_dir}")
         try:
             # Test ADB
             result = subprocess.run(["adb", "version"], capture_output=True, text=True, timeout=10)
 
             if result.returncode == 0:
-                print(f"ADB is working: {result.stdout.splitlines()[0]}")
+                logger.debug(f"ADB is working: {result.stdout.splitlines()[0]}")
                 return True
             else:
-                print("ADB command failed")
+                logger.error("ADB command failed")
                 return False
 
         except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
-            print(f"ADB verification failed: {e}")
-
+            logger.error(f"ADB verification failed: {e}")
             # Try to start ADB server
             try:
                 if os.path.exists(ld_adb_path):
                     subprocess.run([ld_adb_path, "start-server"], timeout=10)
-                    print("Started ADB server")
+                    logger.debug("Started ADB server")
                     return True
             except Exception as e2:
-                print(f"Failed to start ADB server: {e2}")
-
+                logger.error(f"Failed to start ADB server: {e2}")
             return False
 
     def sort_window(self):
         """Arrange visible LDPlayer windows without changing their current size."""
         if os.name != "nt":
-            print("Window arrangement is only supported on Windows")
+            logger.debug("Window arrangement is only supported on Windows")
             return False
 
         user32 = ctypes.windll.user32
@@ -272,7 +261,7 @@ class ControlEmulator:
         user32.EnumWindows(enum_proc, 0)
 
         if not matched:
-            print("No visible LDPlayer windows found to arrange")
+            logger.debug("No visible LDPlayer windows found to arrange")
             return False
 
         matched.sort(key=lambda item: item[1].lower())
@@ -319,19 +308,17 @@ class ControlEmulator:
                 user32.ShowWindow(hwnd, SW_RESTORE)
                 user32.SetWindowPos(hwnd, 0, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE)
             except Exception as exc:
-                print(f"Failed to move window '{title}': {exc}")
-
-        print(f"Arranged {count} LDPlayer window(s)")
+                logger.error(f"Failed to move window '{title}': {exc}")
+        logger.debug(f"Arranged {count} LDPlayer window(s)")
         return True
 
     def list_emulators(self):
         """List all detected emulators"""
-        print(f"Total emulators: {len(self.em)}")
+        logger.debug(f"Total emulators: {len(self.em)}")
         for name, emu in self.em.items():
             serial = self.name_to_serial.get(name, "N/A")
             status = "Active" if self.is_ld_running(name) else "Inactive"
-            print(f"  '{name}': {serial} ({status})")
-
+            logger.debug(f"  '{name}': {serial} ({status})")
     def get_online_serials(self):
         """Return the set of online adb serials from a single `adb devices` call.
 
@@ -381,7 +368,7 @@ class ControlEmulator:
 
             if os.path.exists(dnconsole_path):
                 # Use dnconsole to launch
-                print(f"Starting LD: '{name}'")
+                logger.debug(f"Starting LD: '{name}'")
                 result = subprocess.run(
                     [dnconsole_path, "launch", "--name", name],
                     capture_output=True,
@@ -391,7 +378,7 @@ class ControlEmulator:
                 )
 
                 if result.returncode == 0:
-                    print(f"LD '{name}' started successfully")
+                    logger.debug(f"LD '{name}' started successfully")
                     time.sleep(delay_between_starts)
 
                     # Try to connect via ADB
@@ -401,27 +388,27 @@ class ControlEmulator:
 
                     return True
                 else:
-                    print(f"Failed to start LD '{name}': {result.stderr}")
+                    logger.error(f"Failed to start LD '{name}': {result.stderr}")
                     return False
             else:
-                print(f"dnconsole.exe not found at {dnconsole_path}")
+                logger.error(f"dnconsole.exe not found at {dnconsole_path}")
                 # Simulate start for testing
-                print(f"LD '{name}' started (simulated)")
+                logger.debug(f"LD '{name}' started (simulated)")
                 time.sleep(5)
                 return True
 
         except Exception as e:
-            print(f"Error starting LD '{name}': {e}")
+            logger.error(f"Error starting LD '{name}': {e}")
             return False
 
     def _connect_adb(self, serial):
         """Connect to device via ADB"""
         try:
             result = subprocess.run(["adb", "connect", serial], capture_output=True, text=True, timeout=10)
-            print(f"ADB connect result: {result.stdout}")
+            logger.debug(f"ADB connect result: {result.stdout}")
             return "connected" in result.stdout.lower()
         except Exception as e:
-            print(f"Error connecting ADB: {e}")
+            logger.error(f"Error connecting ADB: {e}")
             return False
 
     def _is_serial_online(self, serial):
@@ -451,7 +438,7 @@ class ControlEmulator:
         """
         serial = self.name_to_serial.get(name)
         if not serial:
-            print(f"No serial found for '{name}'")
+            logger.debug(f"No serial found for '{name}'")
             return False
 
         deadline = time.time() + timeout
@@ -476,7 +463,7 @@ class ControlEmulator:
 
             time.sleep(poll_interval)
 
-        print(f"Timeout waiting for LD '{name}' to be ready")
+        logger.error(f"Timeout waiting for LD '{name}' to be ready")
         return False
 
     def quit_ld(self, name):
@@ -492,7 +479,7 @@ class ControlEmulator:
             dnconsole_path = os.path.join(self.ld_dir, "dnconsole.exe")
 
             if not os.path.exists(dnconsole_path):
-                print(f"LD '{name}' quit (simulated)")
+                logger.debug(f"LD '{name}' quit (simulated)")
                 return True
 
             result = subprocess.run(
@@ -504,13 +491,13 @@ class ControlEmulator:
             )
 
             if result.returncode == 0:
-                print(f"LD '{name}' quit successfully")
+                logger.debug(f"LD '{name}' quit successfully")
                 return True
 
-            print(f"Failed to quit LD '{name}': {(result.stderr or result.stdout or '').strip()}")
+            logger.error(f"Failed to quit LD '{name}': {(result.stderr or result.stdout or '').strip()}")
             return False
         except Exception as e:
-            print(f"Error quitting LD '{name}': {e}")
+            logger.error(f"Error quitting LD '{name}': {e}")
             return False
 
     def rename_ld(self, old_name, new_name):
@@ -524,7 +511,7 @@ class ControlEmulator:
         try:
             dnconsole_path = os.path.join(self.ld_dir, "dnconsole.exe")
             if not os.path.exists(dnconsole_path):
-                print(f"dnconsole.exe not found; cannot rename LD '{old_name}'")
+                logger.error(f"dnconsole.exe not found; cannot rename LD '{old_name}'")
                 return False
 
             result = subprocess.run(
@@ -535,17 +522,17 @@ class ControlEmulator:
                 timeout=10,
             )
             if result.returncode != 0:
-                print(f"Failed to rename LD '{old_name}' -> '{new_name}': {result.stderr}")
+                logger.error(f"Failed to rename LD '{old_name}' -> '{new_name}': {result.stderr}")
                 return False
 
             # Migrate the serial mapping so callers can keep using the new name.
             serial = self.name_to_serial.pop(old_name, None)
             if serial is not None:
                 self.name_to_serial[new_name] = serial
-            print(f"LD '{old_name}' renamed to '{new_name}'")
+            logger.debug(f"LD '{old_name}' renamed to '{new_name}'")
             return True
         except Exception as e:
-            print(f"Error renaming LD '{old_name}' -> '{new_name}': {e}")
+            logger.error(f"Error renaming LD '{old_name}' -> '{new_name}': {e}")
             return False
 
     def diagnose_ld(self, name):
@@ -620,7 +607,7 @@ class ControlEmulator:
         try:
             os.makedirs(folder_native, exist_ok=True)
         except Exception as exc:
-            print(f"Could not create shared folder '{folder_native}': {exc}")
+            logger.error(f"Could not create shared folder '{folder_native}': {exc}")
             return False
 
         # 2) Warn (don't refuse) if the LD is still running. LDPlayer rewrites
@@ -628,8 +615,8 @@ class ControlEmulator:
         # write now will be overwritten unless the caller stops it.
         try:
             if self.is_ld_running(name):
-                print(
-                    f"WARNING: LD '{name}' is running — its config will be "
+                logger.warning(
+                    f"LD '{name}' is running — its config will be "
                     "overwritten on shutdown. Stop the instance before "
                     "applying the shared folder."
                 )
@@ -639,28 +626,27 @@ class ControlEmulator:
         # 3) Authoritative path: edit the per-instance config JSON.
         config_path = self._instance_config_path(name)
         if not config_path:
-            print(f"Cannot resolve LD index for '{name}'; aborting shared folder change")
+            logger.error(f"Cannot resolve LD index for '{name}'; aborting shared folder change")
             return False
         if not os.path.exists(config_path):
-            print(f"Per-instance config not found: {config_path}")
+            logger.error(f"Per-instance config not found: {config_path}")
             return False
 
         try:
             with open(config_path, "r", encoding="utf-8") as f:
                 cfg = json.load(f)
         except Exception as exc:
-            print(f"Failed to read {config_path}: {exc}")
+            logger.error(f"Failed to read {config_path}: {exc}")
             return False
         if not isinstance(cfg, dict):
-            print(f"Unexpected config shape in {config_path}; expected a JSON object")
+            logger.debug(f"Unexpected config shape in {config_path}; expected a JSON object")
             return False
 
         # Backup before mutating — keeps a one-step rollback handy.
         try:
             shutil.copy2(config_path, config_path + ".bak")
         except Exception as exc:
-            print(f"Backup failed for {config_path}: {exc}")
-
+            logger.error(f"Backup failed for {config_path}: {exc}")
         # LDPlayer 9 exposes three concrete share targets — no enable flag.
         # Point all three at the chosen folder so it surfaces in Android
         # under "Other", "Picture", and as the APK install drop.
@@ -678,10 +664,10 @@ class ControlEmulator:
                 json.dump(cfg, f, ensure_ascii=False, indent=4)
             os.replace(tmp_path, config_path)
         except Exception as exc:
-            print(f"Failed to write {config_path}: {exc}")
+            logger.error(f"Failed to write {config_path}: {exc}")
             return False
 
-        print(
+        logger.debug(
             f"Shared folder for LD '{name}' written to {config_path} "
             f"(keys: {', '.join(shared_keys)}) → '{folder_for_config}'"
         )
@@ -726,7 +712,7 @@ class ControlEmulator:
         try:
             dnconsole_path = os.path.join(self.ld_dir, "dnconsole.exe")
             if not os.path.exists(dnconsole_path):
-                print(f"dnconsole.exe not found; cannot remove LD '{name}'")
+                logger.error(f"dnconsole.exe not found; cannot remove LD '{name}'")
                 return False
 
             result = subprocess.run(
@@ -737,27 +723,27 @@ class ControlEmulator:
                 timeout=15,
             )
             if result.returncode != 0:
-                print(f"Failed to remove LD '{name}': {result.stderr}")
+                logger.error(f"Failed to remove LD '{name}': {result.stderr}")
                 return False
 
             self.name_to_serial.pop(name, None)
-            print(f"LD '{name}' removed")
+            logger.debug(f"LD '{name}' removed")
             return True
         except Exception as e:
-            print(f"Error removing LD '{name}': {e}")
+            logger.error(f"Error removing LD '{name}': {e}")
             return False
 
     def open_facebook(self, name):
         """Open Facebook on the specified LDPlayer"""
         serial = self.name_to_serial.get(name)
         if not serial:
-            print(f"No serial found for '{name}'")
+            logger.debug(f"No serial found for '{name}'")
             return False
 
         # Ensure ADB is connected
         self._connect_adb(serial)
         if not self.wait_for_ld_ready(name, timeout=90, poll_interval=2):
-            print(f"LD '{name}' is not ready yet; skip opening Facebook")
+            logger.debug(f"LD '{name}' is not ready yet; skip opening Facebook")
             return False
 
         try:
@@ -779,11 +765,10 @@ class ControlEmulator:
             )
 
             if result.returncode == 0:
-                print(f"Facebook app launched on LD '{name}'")
+                logger.debug(f"Facebook app launched on LD '{name}'")
                 return True
             else:
-                print(f"Failed to launch Facebook via activity: {result.stderr}")
-
+                logger.error(f"Failed to launch Facebook via activity: {result.stderr}")
                 # Fallback: use monkey command
                 result = subprocess.run(
                     [
@@ -804,27 +789,26 @@ class ControlEmulator:
                 )
 
                 if result.returncode == 0:
-                    print(f"Facebook app launched on LD '{name}' (fallback)")
+                    logger.debug(f"Facebook app launched on LD '{name}' (fallback)")
                     return True
                 else:
-                    print(f"Failed to launch Facebook on LD '{name}': {result.stderr}")
+                    logger.error(f"Failed to launch Facebook on LD '{name}': {result.stderr}")
                     return False
 
         except subprocess.TimeoutExpired:
-            print(f"Timeout launching Facebook on LD '{name}'")
+            logger.error(f"Timeout launching Facebook on LD '{name}'")
             return False
         except Exception as e:
-            print(f"Error launching Facebook on LD '{name}': {e}")
+            logger.error(f"Error launching Facebook on LD '{name}': {e}")
             return False
 
     def cleanup_adb(self):
         """Clean up ADB connections when done"""
         try:
             subprocess.run(["adb", "kill-server"], timeout=10)
-            print("ADB server killed")
+            logger.debug("ADB server killed")
         except Exception as e:
-            print(f"Error killing ADB server: {e}")
-
+            logger.error(f"Error killing ADB server: {e}")
     def run_adb_command(self, command, timeout=15):
         """Run an adb command for the tools console and return combined output."""
         if not isinstance(command, str) or not command.strip():

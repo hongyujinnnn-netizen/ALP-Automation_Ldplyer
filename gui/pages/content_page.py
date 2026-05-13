@@ -1236,12 +1236,6 @@ class ContentPageMixin:
         self._populate_videos(folder_path)
         self._update_breadcrumb()
 
-    def _clear_folders_pane(self):
-        self._content_folders_shared_root = None
-        self._content_folders_raw = []
-        self._content_folders_load_error = None
-        self._render_folders()
-
     # ─────────────────────────────────────────────── videos pane ──
     def _populate_videos(self, folder):
         self._content_videos_folder = folder
