@@ -1195,6 +1195,20 @@ class LDManagerApp(
             8: "logs",
         }
         self._set_sidebar_nav_active(tab_to_nav.get(idx, "analytics"))
+        tab_titles = {
+            0: ("Analytics", "Live device + automation overview"),
+            1: ("Dashboard", "Manage devices and shared folders"),
+            2: ("Devices", "Configure and inspect LD instances"),
+            3: ("Tasks", "Run and monitor automation tasks"),
+            4: ("Account", "Browse and manage Snapchat accounts"),
+            5: ("Backups", "Snapshot and restore Snapchat data"),
+            6: ("Schedule", "Plan recurring automation"),
+            7: ("Content Library", "Manage videos across all LD shared folders"),
+            8: ("Logs", "Inspect activity logs and history"),
+        }
+        title, subtitle = tab_titles.get(idx, ("Analytics", ""))
+        if hasattr(self, "set_top_title"):
+            self.set_top_title(title, subtitle)
         if hasattr(self, "_top_tab_buttons"):
             active_label = "Analytics"
             if idx == 1:

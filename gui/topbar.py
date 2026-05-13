@@ -26,7 +26,10 @@ class TopBarMixin:
         title_wrap = tb.Frame(top_bar, style="Topbar.TFrame")
         title_wrap.pack(side="left")
 
-        tb.Label(title_wrap, text="Analytics", style="TopTitle.TLabel").pack(anchor="w")
+        self.top_title_label = tb.Label(
+            title_wrap, text="Analytics", style="TopTitle.TLabel"
+        )
+        self.top_title_label.pack(anchor="w")
         self.top_status_label = tb.Label(
             title_wrap,
             text=f"System: Idle | {datetime.now().strftime('%d %b %Y %H:%M')}",
@@ -87,6 +90,13 @@ class TopBarMixin:
         self.top_action_button.pack(side="left", padx=4)
         self.set_top_action_state("idle")
         self._update_header_chips()
+
+    def set_top_title(self, title, subtitle=None):
+        """Update the page title (and optional subtitle) shown in the top bar."""
+        if hasattr(self, "top_title_label") and title is not None:
+            self.top_title_label.configure(text=title)
+        if subtitle is not None and hasattr(self, "top_status_label"):
+            self.top_status_label.configure(text=subtitle)
 
     def _on_top_action_clicked(self):
         """Dispatch the morphing top-bar action button based on current mode."""
