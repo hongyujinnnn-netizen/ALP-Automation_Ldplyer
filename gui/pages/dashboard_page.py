@@ -315,6 +315,8 @@ class DashboardDialogMixin:
 
     def _db_render_empty_detail(self):
         self._clear_frame(self._db_detail_host)
+        self._db_detail_widgets = None
+        self._db_detail_instance_key = None
         view = StateView(
             self._db_detail_host,
             kind="empty",
@@ -327,17 +329,27 @@ class DashboardDialogMixin:
         view.pack(fill="x", pady=(0, 4))
 
     def _db_render_instance(self, instance):
-        self._clear_frame(self._db_detail_host)
-        acc = instance.get("account") or {}
-        pages = self._db_account_pages(acc)
+        # Reuse the prior widget tree when possible — destroying ~50 widgets per
+        # selection caused visible jank on every list click.
+        if not self._db_detail_widgets:
+            self._clear_frame(self._db_detail_host)
+            self._db_build_detail_widgets()
+        self._db_update_detail_widgets(instance)
 
-        # ── Account profile row ─────────────────────────────────────── #
+    def _db_build_detail_widgets(self):
+        """Construct the static header/section frames once. Children that depend
+        on data (KPI cards, credential chips, page cards) are populated later
+        inside their dedicated containers."""
+        w = {}
+
+        # Profile row
         profile = tb.Frame(self._db_detail_host, style="CardInner.TFrame")
         profile.pack(fill="x", pady=(0, 12))
+        w["profile"] = profile
 
         avatar = tk.Label(
             profile,
-            text=(acc.get("name") or instance.get("name") or "?")[:1].upper(),
+            text="?",
             bg=self.palette["primary"],
             fg="#0B0F17",
             font=(self.display_font, 22, "bold"),
@@ -345,73 +357,48 @@ class DashboardDialogMixin:
             height=1,
         )
         avatar.pack(side="left")
+        w["avatar"] = avatar
 
         meta = tb.Frame(profile, style="CardInner.TFrame")
         meta.pack(side="left", fill="x", expand=True, padx=14)
 
-        ld_name = instance.get("name") or "Unnamed"
-        fb_name = (acc.get("name") or "").strip() or "— Not set"
-
         name_row = tb.Frame(meta, style="CardInner.TFrame")
         name_row.pack(anchor="w", fill="x")
-        tk.Label(
+        ld_name_label = tk.Label(
             name_row,
-            text=ld_name,
+            text="",
             bg=self.palette["surface"],
             fg=self.palette["text"],
             font=(self.display_font, 16, "bold"),
-        ).pack(side="left")
-        has_2fa = bool((acc.get("twofa") or "").strip())
-        StatusPill(
-            name_row,
-            "success" if has_2fa else "muted",
-            palette=self.palette,
-            text="2FA ON" if has_2fa else "2FA OFF",
-            font=(self.mono_font, 8),
-            padx=8,
-            pady=3,
-        ).pack(side="left", padx=10)
+        )
+        ld_name_label.pack(side="left")
+        w["ld_name_label"] = ld_name_label
+        # Container for the 2FA pill — recreated on update because StatusPill
+        # has no public mutator.
+        twofa_host = tb.Frame(name_row, style="CardInner.TFrame")
+        twofa_host.pack(side="left", padx=10)
+        w["twofa_host"] = twofa_host
 
         fb_row = tb.Frame(meta, style="CardInner.TFrame")
         fb_row.pack(anchor="w", fill="x", pady=(4, 0))
-        tb.Label(
+        tb.Label(fb_row, text="FACEBOOK", style="MetricLabel.TLabel").pack(side="left")
+        fb_name_label = tk.Label(
             fb_row,
-            text="FACEBOOK",
-            style="MetricLabel.TLabel",
-        ).pack(side="left")
-        tk.Label(
-            fb_row,
-            text=fb_name,
+            text="",
             bg=self.palette["surface"],
             fg=self.palette["primary"],
             font=(self.display_font, 11, "bold"),
-        ).pack(side="left", padx=(8, 0))
+        )
+        fb_name_label.pack(side="left", padx=(8, 0))
+        w["fb_name_label"] = fb_name_label
 
-        tb.Label(
-            meta,
-            text="LD Instance · Facebook Account",
-            style="MetricSub.TLabel",
-        ).pack(anchor="w", pady=(4, 8))
+        tb.Label(meta, text="LD Instance · Facebook Account", style="MetricSub.TLabel").pack(
+            anchor="w", pady=(4, 8)
+        )
 
-        # Credential presence chips
         chip_row = tb.Frame(meta, style="CardInner.TFrame")
         chip_row.pack(anchor="w")
-        for lbl, val in [
-            ("UID", acc.get("uid")),
-            ("Password", acc.get("password")),
-            ("2FA", acc.get("twofa")),
-            ("Mail", acc.get("mail")),
-        ]:
-            present = bool((val or "") if not isinstance(val, str) else val.strip())
-            StatusPill(
-                chip_row,
-                "success" if present else "muted",
-                palette=self.palette,
-                text=f"● {lbl}" if present else f"○ {lbl}",
-                font=(self.mono_font, 8),
-                padx=8,
-                pady=3,
-            ).pack(side="left", padx=(0, 6))
+        w["chip_row"] = chip_row
 
         tb.Button(
             profile,
@@ -421,29 +408,13 @@ class DashboardDialogMixin:
             width=14,
         ).pack(side="right", anchor="n")
 
-        # ── Mini summary metrics ────────────────────────────────────── #
         mini = tb.Frame(self._db_detail_host, style="CardInner.TFrame")
         mini.pack(fill="x", pady=(0, 12))
+        w["mini"] = mini
 
-        reels_on = sum(1 for p in pages if (p.get("reels") or {}).get("enabled"))
-        auto_pct = (reels_on / len(pages) * 100) if pages else 0
-
-        kpi_cards = [
-            ("Pages", str(len(pages)), self.palette["primary"], "Configured on this LD"),
-            ("Automation", f"{auto_pct:.0f}%", self.palette["success"], f"{reels_on} of {len(pages)} ON"),
-        ]
-        for idx, (label, value, accent, subtitle) in enumerate(kpi_cards):
-            card = MetricCard(mini, label, value, subtitle, accent=accent, palette=self.palette)
-            card.pack(side="left", fill="both", expand=True, padx=(0, 8 if idx < len(kpi_cards) - 1 else 0))
-
-        # ── Pages section ───────────────────────────────────────────── #
         sec_head = tb.Frame(self._db_detail_host, style="CardInner.TFrame")
         sec_head.pack(fill="x", pady=(0, 8))
-        tb.Label(
-            sec_head,
-            text="FACEBOOK PAGES · REELS PIPELINE",
-            style="MetricLabel.TLabel",
-        ).pack(side="left")
+        tb.Label(sec_head, text="FACEBOOK PAGES · REELS PIPELINE", style="MetricLabel.TLabel").pack(side="left")
         tb.Button(
             sec_head,
             text="+ Add Page",
@@ -452,9 +423,77 @@ class DashboardDialogMixin:
             width=12,
         ).pack(side="right")
 
+        pages_host = tb.Frame(self._db_detail_host, style="CardInner.TFrame")
+        pages_host.pack(fill="x")
+        w["pages_host"] = pages_host
+
+        self._db_detail_widgets = w
+
+    def _db_update_detail_widgets(self, instance):
+        w = self._db_detail_widgets
+        acc = instance.get("account") or {}
+        pages = self._db_account_pages(acc)
+        ld_name = instance.get("name") or "Unnamed"
+        fb_name = (acc.get("name") or "").strip() or "— Not set"
+
+        w["avatar"].config(text=(acc.get("name") or instance.get("name") or "?")[:1].upper())
+        w["ld_name_label"].config(text=ld_name)
+        w["fb_name_label"].config(text=fb_name)
+
+        # 2FA pill — destroy/recreate inside its dedicated host.
+        for child in w["twofa_host"].winfo_children():
+            child.destroy()
+        has_2fa = bool((acc.get("twofa") or "").strip())
+        StatusPill(
+            w["twofa_host"],
+            "success" if has_2fa else "muted",
+            palette=self.palette,
+            text="2FA ON" if has_2fa else "2FA OFF",
+            font=(self.mono_font, 8),
+            padx=8,
+            pady=3,
+        ).pack(side="left")
+
+        # Credential chips
+        for child in w["chip_row"].winfo_children():
+            child.destroy()
+        for lbl, val in [
+            ("UID", acc.get("uid")),
+            ("Password", acc.get("password")),
+            ("2FA", acc.get("twofa")),
+            ("Mail", acc.get("mail")),
+        ]:
+            present = bool((val or "") if not isinstance(val, str) else val.strip())
+            StatusPill(
+                w["chip_row"],
+                "success" if present else "muted",
+                palette=self.palette,
+                text=f"● {lbl}" if present else f"○ {lbl}",
+                font=(self.mono_font, 8),
+                padx=8,
+                pady=3,
+            ).pack(side="left", padx=(0, 6))
+
+        # Mini KPI cards
+        for child in w["mini"].winfo_children():
+            child.destroy()
+        reels_on = sum(1 for p in pages if (p.get("reels") or {}).get("enabled"))
+        auto_pct = (reels_on / len(pages) * 100) if pages else 0
+        kpi_cards = [
+            ("Pages", str(len(pages)), self.palette["primary"], "Configured on this LD"),
+            ("Automation", f"{auto_pct:.0f}%", self.palette["success"], f"{reels_on} of {len(pages)} ON"),
+        ]
+        for idx, (label, value, accent, subtitle) in enumerate(kpi_cards):
+            card = MetricCard(w["mini"], label, value, subtitle, accent=accent, palette=self.palette)
+            card.pack(side="left", fill="both", expand=True, padx=(0, 8 if idx < len(kpi_cards) - 1 else 0))
+
+        # Pages list — count varies, so rebuild this container.
+        pages_host = w["pages_host"]
+        for child in pages_host.winfo_children():
+            child.destroy()
         if not pages:
             view = StateView(
-                self._db_detail_host,
+                pages_host,
                 kind="empty",
                 title="No pages yet",
                 message="Add a Facebook page to enable the reels pipeline for this LD instance.",
@@ -468,7 +507,7 @@ class DashboardDialogMixin:
             view.pack(fill="x")
         else:
             for idx, page in enumerate(pages):
-                self._db_render_page_card(self._db_detail_host, idx, page)
+                self._db_render_page_card(pages_host, idx, page)
 
     def _db_render_page_card(self, parent, idx, page):
         reels = page.get("reels") or {}
@@ -641,6 +680,8 @@ class DashboardDialogMixin:
         self._db_instance_drag_select = None
         self._db_login_drag_select = None
         self._db_detail_host = None
+        self._db_detail_widgets = None
+        self._db_detail_instance_key = None
 
     def _db_message_parent(self):
         parent = getattr(self, "_dashboard_dialog", None)
