@@ -1,6 +1,7 @@
 {
     "parallel_ld": 3,
     "boot_delay": 7,
+    "facebook_start_delay_seconds": 8,
     "task_duration": 11,
     "max_videos": 4,
     "page_per_account": 3,

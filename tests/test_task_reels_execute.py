@@ -126,6 +126,128 @@ class TestReelsExecutePageLoop(unittest.TestCase):
         self.assertTrue(account["pages"][2]["reels"]["enabled"])
         self.assertIn("Updated dashboard config for Ryu S. Kennedy", logs[-1])
 
+    def _make_sync_handler(self, logs, shared_dir):
+        emulator = Mock()
+        emulator.get_shared_folder = Mock(return_value=str(shared_dir))
+        pause_event = Mock()
+        return ReelsTaskHandler(
+            emulator,
+            lambda message, level="INFO": logs.append(message),
+            pause_event,
+            lambda: True,
+        )
+
+    def test_auto_assign_source_subfolders_by_index_skips_ld_launcher(self):
+        logs = []
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            paths = build_test_paths(root)
+            paths.ensure_runtime_dirs()
+            shared = root / "shared"
+            shared.mkdir()
+            for name in ("Alpha", "Bravo", "Charlie", "ld_launcher"):
+                (shared / name).mkdir()
+
+            handler = self._make_sync_handler(logs, shared)
+
+            dashboard_path = paths.config_dir / "dashboard_instances.json"
+            dashboard_path.write_text(json.dumps({"instances": []}), encoding="utf-8")
+
+            with patch("core.tasks.task_reels.get_app_paths", return_value=paths):
+                handler._sync_detected_pages_to_dashboard(
+                    "LD-1",
+                    ["MainAccount", "Page1", "Page2", "Page3"],
+                )
+
+            saved = json.loads(dashboard_path.read_text(encoding="utf-8"))
+
+        pages = saved["instances"][0]["account"]["pages"]
+        self.assertEqual(
+            [p["reels"]["source_subfolder"] for p in pages],
+            ["Alpha", "Bravo", "Charlie"],
+        )
+        for p in pages:
+            self.assertNotEqual(p["reels"]["source_subfolder"].lower(), "ld_launcher")
+
+    def test_auto_assign_single_folder_shared_by_all_pages(self):
+        logs = []
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            paths = build_test_paths(root)
+            paths.ensure_runtime_dirs()
+            shared = root / "shared"
+            shared.mkdir()
+            (shared / "OnlyOne").mkdir()
+            (shared / "ld_launcher").mkdir()
+
+            handler = self._make_sync_handler(logs, shared)
+
+            dashboard_path = paths.config_dir / "dashboard_instances.json"
+            dashboard_path.write_text(json.dumps({"instances": []}), encoding="utf-8")
+
+            with patch("core.tasks.task_reels.get_app_paths", return_value=paths):
+                handler._sync_detected_pages_to_dashboard(
+                    "LD-1",
+                    ["MainAccount", "Page1", "Page2", "Page3"],
+                )
+
+            saved = json.loads(dashboard_path.read_text(encoding="utf-8"))
+
+        pages = saved["instances"][0]["account"]["pages"]
+        self.assertEqual(
+            [p["reels"]["source_subfolder"] for p in pages],
+            ["OnlyOne", "OnlyOne", "OnlyOne"],
+        )
+
+    def test_auto_assign_preserves_valid_manual_override(self):
+        logs = []
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            paths = build_test_paths(root)
+            paths.ensure_runtime_dirs()
+            shared = root / "shared"
+            shared.mkdir()
+            for name in ("Alpha", "Bravo", "Charlie"):
+                (shared / name).mkdir()
+
+            handler = self._make_sync_handler(logs, shared)
+
+            dashboard_path = paths.config_dir / "dashboard_instances.json"
+            dashboard_path.write_text(
+                json.dumps(
+                    {
+                        "instances": [
+                            {
+                                "name": "LD-1",
+                                "account": {
+                                    "name": "MainAccount",
+                                    "pages": [
+                                        {
+                                            "name": "Page1",
+                                            "reels": {"source_subfolder": "Charlie"},
+                                        }
+                                    ],
+                                },
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch("core.tasks.task_reels.get_app_paths", return_value=paths):
+                handler._sync_detected_pages_to_dashboard(
+                    "LD-1",
+                    ["MainAccount", "Page1", "Page2", "Page3"],
+                )
+
+            saved = json.loads(dashboard_path.read_text(encoding="utf-8"))
+
+        pages = {p["name"]: p["reels"]["source_subfolder"] for p in saved["instances"][0]["account"]["pages"]}
+        self.assertEqual(pages["Page1"], "Charlie")
+        self.assertEqual(pages["Page2"], "Bravo")
+        self.assertEqual(pages["Page3"], "Charlie")
+
     def test_execute_uses_dashboard_pages_without_detecting_when_present(self):
         logs = []
         emulator = Mock()
@@ -148,7 +270,7 @@ class TestReelsExecutePageLoop(unittest.TestCase):
 
         clicked_pages = []
         clicked_page_indexes = []
-        folder_indexes = []
+        folder_names = []
 
         handler.open_facebook = Mock(return_value=True)
         handler.click_facebook_menu = Mock(return_value=True)
@@ -164,7 +286,7 @@ class TestReelsExecutePageLoop(unittest.TestCase):
         handler._open_file_manager_with_retry = Mock(return_value=True)
         handler.navigate_to_pictures = Mock(return_value=True)
         handler.click_folder_post_page = Mock(
-            side_effect=lambda d, index: folder_indexes.append(index) or True
+            side_effect=lambda d, folder_name: folder_names.append(folder_name) or True
         )
         handler.hold_on_video = Mock(return_value=True)
         handler.handle_context_menu_after_long_press = Mock(return_value=True)
@@ -187,8 +309,8 @@ class TestReelsExecutePageLoop(unittest.TestCase):
                                 "account": {
                                     "name": "Facebook A",
                                     "pages": [
-                                        {"name": "Page A"},
-                                        {"name": "Page B"},
+                                        {"name": "Page A", "reels": {"source_subfolder": "FolderA"}},
+                                        {"name": "Page B", "reels": {"source_subfolder": "FolderB"}},
                                     ],
                                 },
                             }
@@ -222,7 +344,7 @@ class TestReelsExecutePageLoop(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(clicked_pages, [["Page A", "Page B"], ["Page A", "Page B"]])
         self.assertEqual(clicked_page_indexes, [0, 1])
-        self.assertEqual(folder_indexes, [2, 3])
+        self.assertEqual(folder_names, ["FolderA", "FolderB"])
         handler.detect_facebook_page.assert_not_called()
         self.assertIn("Using dashboard page names on US - 01: ['Page A', 'Page B']", logs)
 
@@ -247,7 +369,7 @@ class TestReelsExecutePageLoop(unittest.TestCase):
         handler.rate_limiter.can_perform_action.return_value = True
 
         clicked_page_indexes = []
-        folder_indexes = []
+        folder_names = []
 
         handler.open_facebook = Mock(return_value=True)
         handler.click_facebook_menu = Mock(return_value=True)
@@ -259,7 +381,7 @@ class TestReelsExecutePageLoop(unittest.TestCase):
         handler._open_file_manager_with_retry = Mock(return_value=True)
         handler.navigate_to_pictures = Mock(return_value=True)
         handler.click_folder_post_page = Mock(
-            side_effect=lambda d, index: folder_indexes.append(index) or True
+            side_effect=lambda d, folder_name: folder_names.append(folder_name) or True
         )
         handler.hold_on_video = Mock(return_value=True)
         handler.handle_context_menu_after_long_press = Mock(return_value=True)
@@ -273,6 +395,25 @@ class TestReelsExecutePageLoop(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             paths = build_test_paths(Path(tmp_dir))
             paths.ensure_runtime_dirs()
+            (paths.config_dir / "dashboard_instances.json").write_text(
+                json.dumps(
+                    {
+                        "instances": [
+                            {
+                                "name": "US - 01",
+                                "account": {
+                                    "name": "Facebook A",
+                                    "pages": [
+                                        {"name": "Page A", "reels": {"source_subfolder": "FolderA"}},
+                                        {"name": "Page B", "reels": {"source_subfolder": "FolderB"}},
+                                    ],
+                                },
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             with (
                 patch("core.tasks.task_reels.U2_AVAILABLE", True),
@@ -297,7 +438,7 @@ class TestReelsExecutePageLoop(unittest.TestCase):
 
         self.assertTrue(result)
         self.assertEqual(clicked_page_indexes, [0, 1])
-        self.assertEqual(folder_indexes, [2, 3])
+        self.assertEqual(folder_names, ["FolderA", "FolderB"])
         self.assertEqual(handler.hold_on_video.call_count, 4)
         self.assertEqual(handler.delete_video.call_count, 4)
         self.assertEqual(handler.push_runtime_state.call_args_list[-1].kwargs["task"], "Processed 4/4 video")
@@ -354,7 +495,9 @@ class TestReelsExecutePageLoop(unittest.TestCase):
                                 "name": "US - 01",
                                 "account": {
                                     "name": "Facebook A",
-                                    "pages": [{"name": "Page A"}],
+                                    "pages": [
+                                        {"name": "Page A", "reels": {"source_subfolder": "FolderA"}},
+                                    ],
                                 },
                             }
                         ]

@@ -8,6 +8,9 @@ import time
 from utils.uiwait import wait_for_any
 
 
+SHARED_FOLDER_BLACKLIST = frozenset({"ld_launcher"})
+
+
 def get_app_paths():
     """Resolve through task_reels so existing tests can patch that module."""
     from core.tasks import task_reels
@@ -1887,13 +1890,83 @@ class ReelsHandlerMixin:
         self.log(f"Could not find page to click: {page_name}")
         return False
 
-    def click_folder_post_page(self, d, index, timeout=5):
-        xpath_expr = f'(//android.widget.ImageView[@resource-id="com.cyanogenmod.filemanager:id/navigation_view_item_icon"])[{index}]'
-        obj = d.xpath(xpath_expr)
-        if obj.exists:
-            obj.click()
-            return True
-        return False
+    def click_folder_post_page(self, d, folder_name, timeout=8):
+        """Click the file-manager folder matching the page's configured
+        ``source_subfolder``.
+
+        Looks up the row by *exact text* (then *textContains*), so the
+        bot opens the right folder regardless of where it sits in the
+        alphabetical listing. Falls back to a single swipe + retry, then
+        to an XPath text match against the file-manager row label.
+        Returns True on click, False otherwise. Never raises.
+        """
+        try:
+            target = str(folder_name or "").strip()
+            if not target:
+                self.log("Folder not found in file manager: <empty>")
+                return False
+
+            if not wait_for_any(
+                d,
+                [
+                    {"resourceIdMatches": ".*list.*"},
+                    {"className": "androidx.recyclerview.widget.RecyclerView"},
+                    {"className": "android.widget.ListView"},
+                ],
+                timeout=timeout,
+            ):
+                self.log(f"[{getattr(d, 'serial', '?')}] timeout waiting for file-manager list")
+
+            def try_click():
+                try:
+                    if d(text=target).exists:
+                        d(text=target).click()
+                        return True
+                except Exception:
+                    pass
+                try:
+                    if d(textContains=target).exists:
+                        d(textContains=target).click()
+                        return True
+                except Exception:
+                    pass
+                return False
+
+            if try_click():
+                self.log(f"Opened file-manager folder by name: {target}")
+                return True
+
+            try:
+                d.swipe(0.5, 0.7, 0.5, 0.3, 0.5)
+            except Exception:
+                pass
+            time.sleep(1)
+
+            if try_click():
+                self.log(f"Opened file-manager folder by name after swipe: {target}")
+                return True
+
+            try:
+                literal = self._xpath_literal(target)
+                xpaths = [
+                    f'//*[@resource-id="com.cyanogenmod.filemanager:id/navigation_view_item_name" and @text={literal}]',
+                    f'//*[contains(@resource-id,"com.cyanogenmod.filemanager:id/navigation_view_item_") and @text={literal}]',
+                    f'//android.widget.TextView[@text={literal}]',
+                ]
+                for xp in xpaths:
+                    obj = d.xpath(xp)
+                    if obj.exists:
+                        obj.click()
+                        self.log(f"Opened file-manager folder by xpath: {target}")
+                        return True
+            except Exception:
+                pass
+
+            self.log(f"Folder not found in file manager: {target}")
+            return False
+        except Exception as e:
+            self.log(f"Error clicking folder '{folder_name}' in file manager: {e}")
+            return False
 
     def navigate_to_page(self, d):
         """Click on Page-1 folder (exact Page-1 / Page 1 only)"""
@@ -2085,6 +2158,29 @@ class ReelsHandlerMixin:
             self.log(f"Failed to read dashboard pages for {instance_name}: {exc}")
         return []
 
+    def _get_dashboard_account_pages(self, instance_name):
+        """Return the full list of page records (dicts with ``reels``) for
+        this LD instance from ``dashboard_instances.json``. Empty list on
+        any failure.
+        """
+        if not instance_name:
+            return []
+        try:
+            paths = get_app_paths()
+            path = paths.config_dir / "dashboard_instances.json"
+            if not path.exists():
+                return []
+            data = json.loads(path.read_text(encoding="utf-8")) or {}
+            for instance in data.get("instances") or []:
+                if str(instance.get("name") or "").strip() != str(instance_name).strip():
+                    continue
+                account = instance.get("account") or {}
+                pages = account.get("pages") or []
+                return [p for p in pages if isinstance(p, dict)]
+        except Exception as exc:
+            self.log(f"Failed to read dashboard page records for {instance_name}: {exc}")
+        return []
+
     def _get_dashboard_account_name(self, instance_name):
         if not instance_name:
             return ""
@@ -2213,6 +2309,9 @@ class ReelsHandlerMixin:
                 by_name[page_name] = payload
                 existing_pages.append(payload)
 
+            # Auto-assign source folders based on the LD's shared folder.
+            self._auto_assign_source_folders(instance_name, existing_pages)
+
             account["pages"] = existing_pages
             path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
             self.log(
@@ -2235,10 +2334,64 @@ class ReelsHandlerMixin:
             "enabled": True,
             "schedule": "Manual",
             "interval_min": 30,
-            "hashtags": [],
-            "caption_template": "",
-            "source_folder": "",
+            "source_subfolder": "",
         }
+
+    def _list_usable_shared_subfolders(self, instance_name):
+        """Return (sorted_list_of_subfolder_names, shared_root_or_None).
+
+        Skips folders whose lowercase name is in SHARED_FOLDER_BLACKLIST.
+        Returns ([], None) if the shared folder is missing or unreadable.
+        """
+        try:
+            shared = self.emulator.get_shared_folder(instance_name)
+        except Exception:
+            shared = None
+        try:
+            if not shared or not isinstance(shared, (str, bytes, os.PathLike)) or not os.path.isdir(shared):
+                return [], shared
+            entries = sorted(
+                (e for e in os.listdir(shared)
+                 if os.path.isdir(os.path.join(shared, e))
+                 and e.lower() not in SHARED_FOLDER_BLACKLIST),
+                key=str.lower,
+            )
+        except Exception:
+            entries = []
+        return entries, shared
+
+    def _auto_assign_source_folders(self, instance_name, pages):
+        """Mutate `pages` in place, populating reels.source_subfolder per the
+        matching rules. Existing valid assignments are preserved."""
+        folders, _shared = self._list_usable_shared_subfolders(instance_name)
+        folder_set = set(folders)
+
+        if not pages:
+            return
+
+        for i, page in enumerate(pages):
+            if not isinstance(page, dict):
+                continue
+            reels = page.setdefault("reels", self._dashboard_reels_defaults())
+            current = str(reels.get("source_subfolder") or "").strip()
+
+            # Keep manual selection only if it still exists on disk.
+            if current and current in folder_set:
+                continue
+
+            if not folders:
+                reels["source_subfolder"] = ""
+                continue
+
+            if i < len(folders):
+                reels["source_subfolder"] = folders[i]
+            else:
+                reels["source_subfolder"] = folders[-1]
+
+        self.log(
+            f"Auto-assigned source folders for {instance_name}: "
+            f"{[ (p.get('name'), (p.get('reels') or {}).get('source_subfolder')) for p in pages ]}"
+        )
 
     def _open_file_manager_with_retry(self, d, attempts=2, delay=2):
         """Open file manager with bounded retries."""

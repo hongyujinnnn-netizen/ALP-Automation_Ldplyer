@@ -670,6 +670,33 @@ class ControlEmulator:
 
         return True
 
+    def get_shared_folder(self, name):
+        """Return the host path stored in ``statusSettings.sharedMisc`` for
+        this LD instance, or ``None`` if it cannot be resolved.
+
+        Never raises — any failure (unknown instance, missing config, parse
+        error, empty value) yields ``None`` so callers can treat "no shared
+        folder configured" uniformly.
+        """
+        import json
+
+        if not name:
+            return None
+        try:
+            config_path = self._instance_config_path(name)
+            if not config_path or not os.path.exists(config_path):
+                return None
+            with open(config_path, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            if not isinstance(cfg, dict):
+                return None
+            value = cfg.get("statusSettings.sharedMisc")
+            if not value or not isinstance(value, str):
+                return None
+            return os.path.normpath(value)
+        except Exception:
+            return None
+
     def remove_ld(self, name):
         """Delete an LDPlayer instance via dnconsole.
 

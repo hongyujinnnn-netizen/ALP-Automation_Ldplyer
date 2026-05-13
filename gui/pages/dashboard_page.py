@@ -7,6 +7,7 @@ Persists to config/dashboard_instances.json.
 
 import json
 import logging
+import os
 import re
 import threading
 import tkinter as tk
@@ -425,18 +426,15 @@ class DashboardDialogMixin:
         mini.pack(fill="x", pady=(0, 12))
 
         reels_on = sum(1 for p in pages if (p.get("reels") or {}).get("enabled"))
-        total_tags = sum(len((p.get("reels") or {}).get("hashtags") or []) for p in pages)
         auto_pct = (reels_on / len(pages) * 100) if pages else 0
 
-        for idx, (label, value, accent, subtitle) in enumerate(
-            [
-                ("Pages", str(len(pages)), self.palette["primary"], "Configured on this LD"),
-                ("Automation", f"{auto_pct:.0f}%", self.palette["success"], f"{reels_on} of {len(pages)} ON"),
-                ("Hashtags", str(total_tags), self.palette["warning"], "across all pages"),
-            ]
-        ):
+        kpi_cards = [
+            ("Pages", str(len(pages)), self.palette["primary"], "Configured on this LD"),
+            ("Automation", f"{auto_pct:.0f}%", self.palette["success"], f"{reels_on} of {len(pages)} ON"),
+        ]
+        for idx, (label, value, accent, subtitle) in enumerate(kpi_cards):
             card = MetricCard(mini, label, value, subtitle, accent=accent, palette=self.palette)
-            card.pack(side="left", fill="both", expand=True, padx=(0, 8 if idx < 2 else 0))
+            card.pack(side="left", fill="both", expand=True, padx=(0, 8 if idx < len(kpi_cards) - 1 else 0))
 
         # ── Pages section ───────────────────────────────────────────── #
         sec_head = tb.Frame(self._db_detail_host, style="CardInner.TFrame")
@@ -480,8 +478,7 @@ class DashboardDialogMixin:
         detail_bits = [
             f"Schedule: {reels.get('schedule') or 'Manual'}",
             f"Every {reels.get('interval_min', 30)} min",
-            f"{len(reels.get('hashtags') or [])} hashtags",
-            "Source set" if reels.get("source_folder") else "No source",
+            f"Source: {reels.get('source_subfolder') or '—'}",
         ]
         message = "  |  ".join(detail_bits)
 
@@ -944,9 +941,7 @@ class DashboardDialogMixin:
             "enabled": False,
             "schedule": "Manual",
             "interval_min": 30,
-            "hashtags": [],
-            "caption_template": "",
-            "source_folder": "",
+            "source_subfolder": "",
         }
 
     def _db_normalize_page_record(self, page):
@@ -961,6 +956,11 @@ class DashboardDialogMixin:
         payload["name"] = name
         payload.setdefault("page_id", None)
         payload.setdefault("reels", self._db_default_reels_config())
+        reels_blob = payload.get("reels") or {}
+        if isinstance(reels_blob, dict):
+            for legacy in ("hashtags", "caption_template", "source_folder"):
+                reels_blob.pop(legacy, None)
+            payload["reels"] = reels_blob
         return payload
 
     def _db_account_pages(self, account):
@@ -2857,6 +2857,23 @@ class DashboardDialogMixin:
     # ─────────────────────────────────────────────────────────────────── #
     # Reels config
 
+    def _db_list_shared_subfolders(self, inst):
+        """Return (list_of_subfolder_names, shared_root_path_or_None)."""
+        try:
+            shared_root = self.emulator.get_shared_folder((inst or {}).get("name"))
+        except Exception:
+            return [], None
+        if not shared_root or not os.path.isdir(shared_root):
+            return [], shared_root or None
+        try:
+            entries = os.listdir(shared_root)
+        except Exception:
+            return [], shared_root
+        subfolders = sorted(
+            name for name in entries if os.path.isdir(os.path.join(shared_root, name))
+        )
+        return subfolders, shared_root
+
     def _db_configure_reels(self, page_idx):
         inst = self._db_selected_instance()
         if not inst:
@@ -2870,7 +2887,7 @@ class DashboardDialogMixin:
             self._db_default_reels_config(),
         )
 
-        win = self._db_modal(f"Reels · {page.get('name')}", 580, 620)
+        win = self._db_modal(f"Reels · {page.get('name')}", 580, 420)
 
         head = tb.Frame(win, style="Card.TFrame", padding=(22, 16))
         head.pack(fill="x")
@@ -2887,8 +2904,7 @@ class DashboardDialogMixin:
         enabled_var = tk.BooleanVar(value=bool(reels.get("enabled")))
         schedule_var = tk.StringVar(value=str(reels.get("schedule") or "Manual"))
         interval_var = tk.StringVar(value=str(reels.get("interval_min") or 30))
-        hashtags_var = tk.StringVar(value=", ".join(reels.get("hashtags") or []))
-        source_var = tk.StringVar(value=str(reels.get("source_folder") or ""))
+        source_subfolder_var = tk.StringVar(value=str(reels.get("source_subfolder") or ""))
 
         toggle_row = tb.Frame(body, style="CardInner.TFrame")
         toggle_row.pack(fill="x", pady=(0, 14))
@@ -2918,29 +2934,47 @@ class DashboardDialogMixin:
         tb.Label(rcol, text="INTERVAL (MIN)", style="MetricLabel.TLabel").pack(anchor="w", pady=(0, 4))
         tb.Entry(rcol, textvariable=interval_var, bootstyle="secondary").pack(fill="x", ipady=3)
 
-        tb.Label(body, text="HASHTAGS (COMMA SEPARATED)", style="MetricLabel.TLabel").pack(
+        tb.Label(body, text="SOURCE (FROM SHARED FOLDER)", style="MetricLabel.TLabel").pack(
             anchor="w", pady=(0, 4)
         )
-        tb.Entry(body, textvariable=hashtags_var, bootstyle="secondary").pack(fill="x", pady=(0, 12), ipady=3)
+        hint_var = tk.StringVar(value="")
+        hint_label = tb.Label(body, textvariable=hint_var, style="MetricSub.TLabel")
+        hint_label.pack(anchor="w", pady=(0, 4))
 
-        tb.Label(body, text="SOURCE FOLDER / PATH", style="MetricLabel.TLabel").pack(anchor="w", pady=(0, 4))
-        tb.Entry(body, textvariable=source_var, bootstyle="secondary").pack(fill="x", pady=(0, 12), ipady=3)
-
-        tb.Label(body, text="CAPTION TEMPLATE", style="MetricLabel.TLabel").pack(anchor="w", pady=(0, 4))
-        caption_text = tk.Text(
+        source_combo = tb.Combobox(
             body,
-            height=5,
-            bg=self.palette["surface_alt"],
-            fg=self.palette["text"],
-            insertbackground=self.palette["primary"],
-            relief="flat",
-            font=(self.mono_font, 10),
-            wrap="word",
-            highlightthickness=1,
-            highlightbackground=self.palette["border"],
+            textvariable=source_subfolder_var,
+            values=(),
+            state="disabled",
+            bootstyle="secondary",
         )
-        caption_text.pack(fill="both", expand=True)
-        caption_text.insert("1.0", str(reels.get("caption_template") or ""))
+        source_combo.pack(fill="x", ipady=3)
+
+        def refresh_sources():
+            subfolders, shared_root = self._db_list_shared_subfolders(inst)
+            if shared_root:
+                hint_var.set(f"Shared: {shared_root}")
+            else:
+                hint_var.set(
+                    "No shared folder set for this LD. Use Devices → right-click → Shared Folder."
+                )
+            if subfolders:
+                source_combo.configure(values=tuple(subfolders), state="readonly")
+            else:
+                source_combo.configure(values=(), state="disabled")
+            current = source_subfolder_var.get()
+            if current and current not in subfolders:
+                source_subfolder_var.set("")
+
+        refresh_sources()
+
+        tb.Button(
+            body,
+            text="Refresh",
+            bootstyle="secondary-outline",
+            command=refresh_sources,
+            width=10,
+        ).pack(anchor="w", pady=(8, 0))
 
         def commit():
             try:
@@ -2948,15 +2982,14 @@ class DashboardDialogMixin:
             except ValueError:
                 MessageBox.showwarning("Invalid", "Interval must be a number.", parent=win)
                 return
-            tags = [t.strip().lstrip("#") for t in hashtags_var.get().split(",") if t.strip()]
+            for legacy in ("hashtags", "caption_template", "source_folder"):
+                reels.pop(legacy, None)
             reels.update(
                 {
                     "enabled": bool(enabled_var.get()),
                     "schedule": schedule_var.get().strip() or "Manual",
                     "interval_min": interval,
-                    "hashtags": tags,
-                    "source_folder": source_var.get().strip(),
-                    "caption_template": caption_text.get("1.0", "end").strip(),
+                    "source_subfolder": source_subfolder_var.get().strip(),
                 }
             )
             self._db_mark_dirty()

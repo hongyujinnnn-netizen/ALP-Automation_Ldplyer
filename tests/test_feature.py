@@ -99,7 +99,6 @@ class TestFeatureTaskHandler(BaseTaskHandler):
             self.log(f"Detected page names on {name}: {page}")
 
             click_pages = 0
-            f_index = 2
             time.sleep(4)
             if not self.click_on_page(d, page, page_to_click=click_pages):
                 self.log(f"Failed to click on detected page names on {name}")
@@ -138,13 +137,32 @@ class TestFeatureTaskHandler(BaseTaskHandler):
                 return False
 
             time.sleep(5)
-            if not self.click_folder_post_page(d, index=f_index):
-                self.log(f"Failed to click folder post page on {name}")
+            source_subfolder = ""
+            try:
+                pages = self._get_dashboard_account_pages(name)
+                if pages:
+                    source_subfolder = str(
+                        ((pages[0].get("reels") or {}).get("source_subfolder") or "")
+                    ).strip()
+            except Exception:
+                source_subfolder = ""
+            if not source_subfolder:
+                self.log(f"No source_subfolder configured for first page on {name}")
                 self.push_runtime_state(
                     name,
                     phase="task",
                     state="Attention",
-                    task="Could not click folder post page",
+                    task="No source_subfolder configured",
+                    progress=0,
+                )
+                return False
+            if not self.click_folder_post_page(d, folder_name=source_subfolder):
+                self.log(f"Could not open folder {source_subfolder} on {name}")
+                self.push_runtime_state(
+                    name,
+                    phase="task",
+                    state="Attention",
+                    task=f"Could not open folder {source_subfolder}",
                     progress=0,
                 )
                 return False
@@ -591,14 +609,42 @@ class TestFeatureTaskHandler(BaseTaskHandler):
             self.log(f"Error clicking Pictures: {e}")
             return False
 
-    # This method tries to click on the folder icon in the File Manager using a specific XPath expression. If the XPath click fails, it falls back to clicking based on the bounds of the element. It includes retries until a timeout is reached, and it logs each step of the process.
-    def click_folder_post_page(self, d, index, timeout=5):
-        xpath_expr = f'(//android.widget.ImageView[@resource-id="com.cyanogenmod.filemanager:id/navigation_view_item_icon"])[{index}]'
-        obj = d.xpath(xpath_expr)
-        if obj.exists:
-            obj.click()
-            return True
-        return False
+    # Clicks the file-manager folder matching the page's configured
+    # source_subfolder. Uses text/textContains selectors with a single
+    # swipe + retry, falling back to an XPath text match.
+    def click_folder_post_page(self, d, folder_name, timeout=8):
+        try:
+            target = str(folder_name or "").strip()
+            if not target:
+                return False
+
+            def try_click():
+                try:
+                    if d(text=target).exists:
+                        d(text=target).click()
+                        return True
+                except Exception:
+                    pass
+                try:
+                    if d(textContains=target).exists:
+                        d(textContains=target).click()
+                        return True
+                except Exception:
+                    pass
+                return False
+
+            if try_click():
+                return True
+            try:
+                d.swipe(0.5, 0.7, 0.5, 0.3, 0.5)
+            except Exception:
+                pass
+            time.sleep(1)
+            if try_click():
+                return True
+            return False
+        except Exception:
+            return False
 
     # This method attempts to long-press on a video file in the file manager. It first checks if we're in the correct folder by looking for video files, and if not, it tries to click into the folder. Then it looks for text elements that match common video file extensions and long-presses on the first one it finds. If it can't find video files by extension, it tries to long-press on any file-like element. If that also fails, it falls back to long-pressing on image thumbnails, which may represent videos. It includes logging and error handling to improve robustness across different file manager layouts and video file naming conventions.
     def hold_on_video(self, d, hold_time=2):

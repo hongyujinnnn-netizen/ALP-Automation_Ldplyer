@@ -71,7 +71,6 @@ class ReelsTaskHandler(ReelsHandlerMixin, BaseTaskHandler):
 
         page_ready = 0
         click_pages = 0
-        f_index = 2
         video_posted = 0
         success_pots = 0
         videos_per_page = max(0, int(max_videos or 0))
@@ -167,13 +166,35 @@ class ReelsTaskHandler(ReelsHandlerMixin, BaseTaskHandler):
                     if self.navigate_to_pictures(d):
                         setup_ready = True
                         time.sleep(5)
-                        if not self.click_folder_post_page(d, index=f_index):
-                            self.log(f"Failed to click folder post page on {name}")
+                        dashboard_pages = self._get_dashboard_account_pages(name)
+                        current_page = (
+                            dashboard_pages[page_ready]
+                            if 0 <= page_ready < len(dashboard_pages)
+                            else {}
+                        )
+                        current_page_name = str(current_page.get("name") or "").strip() or f"#{page_ready + 1}"
+                        source_subfolder = str(
+                            ((current_page.get("reels") or {}).get("source_subfolder") or "")
+                        ).strip()
+                        if not source_subfolder:
+                            self.log(
+                                f"No source_subfolder configured for page {current_page_name} on {name}"
+                            )
                             self.push_runtime_state(
                                 name,
                                 phase="task",
                                 state="Attention",
-                                task="Could not click folder post page",
+                                task=f"No source_subfolder configured for page {current_page_name}",
+                                progress=0,
+                            )
+                            return False
+                        if not self.click_folder_post_page(d, folder_name=source_subfolder):
+                            self.log(f"Could not open folder {source_subfolder} on {name}")
+                            self.push_runtime_state(
+                                name,
+                                phase="task",
+                                state="Attention",
+                                task=f"Could not open folder {source_subfolder}",
                                 progress=0,
                             )
                             return False
@@ -328,7 +349,6 @@ class ReelsTaskHandler(ReelsHandlerMixin, BaseTaskHandler):
 
             page_ready += 1
             click_pages += 1
-            f_index += 1
 
         self.log("Finished processing all pages/videos for this account")
         if self.interruptible_sleep(5):
