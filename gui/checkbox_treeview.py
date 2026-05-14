@@ -124,6 +124,7 @@ def _build_checkbox_image(*, size=18, fill, border, check=None, bg):
 class CheckboxTreeview(ttk.Treeview):
     def __init__(self, master=None, **kwargs):
         self.palette = kwargs.pop("palette", DEFAULT_PALETTE)
+        self._on_toggle = kwargs.pop("on_toggle", None)
         super().__init__(master, **kwargs)
         self.checkboxes = {}
         self.selection_enabled = True
@@ -175,21 +176,19 @@ class CheckboxTreeview(ttk.Treeview):
 
     def apply_palette(self, palette):
         self.palette = palette or DEFAULT_PALETTE
-        configure_status_tree_tags(self, self.palette)
+        # ttk.Treeview tag precedence is reverse-order-of-configuration: the
+        # LAST tag_configure call wins. Configure selection/checked tags FIRST
+        # so status tags (configured below) take precedence on row background.
         self.tag_configure(
             "selected",
             background=self.palette.get("selected_bg", self.palette["primary"]),
             foreground=self.palette.get("selected_fg", "#0A0C10"),
         )
         self.tag_configure("hover", background=self.palette.get("hover_bg", self.palette["surface_alt"]))
-        # Subtle cyan accent for checked rows — does NOT override status colors,
-        # since status tags are listed after "checked" in tags-tuples (status wins).
-        # The checkbox image is the primary visual indicator of checked state.
-        checked_tint = _blend(
-            self.palette.get("primary", "#00E5FF"), self.palette.get("surface", "#0E1118"), 0.10
-        )
-        self.tag_configure("checked", background=checked_tint, foreground=self.palette.get("text", "#E2E8F0"))
+        # Empty background — the drawn checkbox image alone signals checked state.
+        self.tag_configure("checked", background="", foreground="")
         self.tag_configure("unchecked", background="", foreground="")
+        configure_status_tree_tags(self, self.palette)
         if hasattr(self, "context_menu"):
             self.context_menu.configure(
                 bg=self.palette.get("context_bg", "#343A40"),
@@ -230,19 +229,43 @@ class CheckboxTreeview(ttk.Treeview):
             self.item(item, tags=current_tags)
 
     def insert(self, parent, index, iid=None, **kwargs):
-        kwargs.pop("text", None)
+        text_glyph = kwargs.pop("text", None)
+        initial_checked = bool(kwargs.pop("checked", False))
+        if text_glyph and text_glyph.strip() in ("☑", "✓", "✔"):
+            initial_checked = True
+
+        caller_tags = tuple(kwargs.pop("tags", ()) or ())
         item = super().insert(parent, index, iid, **kwargs)
-        self.checkboxes[item] = False
+        self.checkboxes[item] = initial_checked
 
         values = kwargs.get("values", [])
-        if len(values) > 2:
-            tags = ("unchecked", status_tag(values[2]))
-        else:
-            tags = ("unchecked", "inactive")
-
-        self.item(item, tags=tags)
-        self._apply_checkbox_visual(item, False)
+        status_t = status_tag(values[2]) if len(values) > 2 else "inactive"
+        check_tag = "checked" if initial_checked else "unchecked"
+        # Preserve caller-supplied tags (zebra striping etc.); drop any
+        # checked/unchecked or status tags they may have included since we own those.
+        preserved = tuple(
+            t for t in caller_tags
+            if t not in ("checked", "unchecked") and t != status_t
+        )
+        self.item(item, tags=preserved + (check_tag, status_t))
+        self._apply_checkbox_visual(item, initial_checked)
         return item
+
+    def set_checked(self, item, checked):
+        """Programmatically set the checked state of a row.
+
+        Used by host renderers to sync the widget with an external model
+        without simulating a click (which would fire on_toggle and loop).
+        """
+        if item not in self.checkboxes:
+            return
+        if self.checkboxes[item] == bool(checked):
+            return
+        self.checkboxes[item] = bool(checked)
+        tags = [t for t in self.item(item, "tags") if t not in ("checked", "unchecked")]
+        tags.append("checked" if checked else "unchecked")
+        self.item(item, tags=tags)
+        self._apply_checkbox_visual(item, bool(checked))
 
     def _on_double_click(self, event):
         item = self.identify_row(event.y)
@@ -314,6 +337,12 @@ class CheckboxTreeview(ttk.Treeview):
 
         self.item(item, tags=new_tags)
         self._apply_checkbox_visual(item, self.checkboxes[item])
+
+        if callable(self._on_toggle):
+            try:
+                self._on_toggle(item, self.checkboxes[item])
+            except Exception:
+                pass
 
     def _context_select(self):
         if self.context_item:

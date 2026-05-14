@@ -44,7 +44,7 @@ STATUS_SPECS = {
         "live", "Live", "LIVE", "success", "active", "success", "#081C14", 19, ("online account",)
     ),
     "active": StatusSpec(
-        "active", "Active", "ON", "info", "active", "primary", "#0A1A20", 20, ("online", "ready")
+        "active", "Active", "ON", "success", "active", "success", "#081C14", 20, ("online", "ready")
     ),
     "ready": StatusSpec("ready", "Ready", "READY", "success", "active", "success", "#0A1A14", 21),
     "queued": StatusSpec(
@@ -130,11 +130,14 @@ def normalize_status(status):
         ("starting", "starting"),
         ("preparing", "preparing"),
         ("ready", "ready"),
+        # NOTE: "inactive"/"disabled" MUST be checked before "active" — otherwise
+        # the substring match for "active" inside "inactive" misroutes Inactive
+        # rows into the green "active" tag.
+        ("inactive", "inactive"),
+        ("disabled", "disabled"),
         ("active", "active"),
         ("completed", "completed"),
         ("idle", "idle"),
-        ("inactive", "inactive"),
-        ("disabled", "disabled"),
         ("secondary", "neutral"),
         ("neutral", "neutral"),
         ("enabled", "enabled"),
@@ -210,13 +213,21 @@ def status_filter_values():
 def configure_status_tree_tags(tree, palette=None, *, include_zebra=False):
     """Apply shared status colors to a Treeview-compatible tag set."""
     palette = palette or DEFAULT_PALETTE
-    configured = set()
+    # Pick one canonical spec per tag. Multiple specs can share a tag (e.g.
+    # "live", "active", "ready" all map to tag "active"); prefer the spec
+    # whose key matches the tag so the tag inherits its own color_role
+    # instead of whichever alias happens to come first in STATUS_SPECS.
+    by_tag = {}
     for spec in STATUS_SPECS.values():
-        tag = spec.tag
-        if tag in configured:
+        existing = by_tag.get(spec.tag)
+        if existing is None or (spec.key == spec.tag and existing.key != existing.tag):
+            by_tag[spec.tag] = spec
+    for tag, spec in by_tag.items():
+        if tag in {"inactive", "idle"}:
+            # Normal (non-active) rows render with default text color and no tint.
+            tree.tag_configure(tag, background="", foreground="")
             continue
-        configured.add(tag)
-        background = "" if tag in {"inactive", "idle"} else status_background(spec.key, palette)
+        background = status_background(spec.key, palette)
         foreground = status_color(spec.key, palette)
         tree.tag_configure(tag, background=background, foreground=foreground)
 

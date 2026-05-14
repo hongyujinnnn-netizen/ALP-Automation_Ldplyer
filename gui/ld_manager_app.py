@@ -1079,6 +1079,7 @@ class LDManagerApp(
             height=15,
             palette=self.palette,
             style="Custom.Treeview",
+            on_toggle=self._on_ld_table_toggle,
         )
 
         self.ld_table.heading("#0", text="Sel", anchor="center")
@@ -1247,6 +1248,27 @@ class LDManagerApp(
 
     def _status_tag(self, status):
         return status_tag(status)
+
+    def _on_ld_table_toggle(self, name, checked):
+        """CheckboxTreeview callback — keep _ld_checked_names in sync with clicks."""
+        if not hasattr(self, "_ld_checked_names") or self._ld_checked_names is None:
+            self._ld_checked_names = set()
+        if checked:
+            self._ld_checked_names.add(name)
+        else:
+            self._ld_checked_names.discard(name)
+        # Invalidate the diff cache so the next render reflects this toggle.
+        self._last_table_signature = None
+        try:
+            self.update_selection_info()
+        except Exception:
+            pass
+        # Keep the Devices tab side panels (counters, waiting list, focus) in sync.
+        if hasattr(self, "_render_devices_page"):
+            try:
+                self._render_devices_page()
+            except Exception:
+                pass
 
     def _ensure_device_runtime_entry(self, ld_name):
         entry = self._device_runtime_state.setdefault(
@@ -1704,23 +1726,18 @@ class LDManagerApp(
                 account_text,
                 group_text,
             )
-            text_val = "☑" if is_checked else "☐"
-            # Order matters: ttk.Treeview gives later tags higher precedence
-            # for shared options (e.g. background). Status tag MUST come last
-            # so device state drives row color, not selection state.
-            base_tags = [zebra_tag]
-            if is_checked:
-                base_tags.append("checked")
-            base_tags.append(self._status_tag(status))
+            base_tags = [zebra_tag, self._status_tag(status)]
             tags_tup = tuple(base_tags)
 
             if name in existing_set:
-                self.ld_table.item(name, text=text_val, values=values, tags=tags_tup)
+                self.ld_table.item(name, values=values, tags=tags_tup)
                 if self.ld_table.index(name) != idx:
                     self.ld_table.move(name, "", idx)
+                self.ld_table.set_checked(name, is_checked)
             else:
-                self.ld_table.insert("", idx, iid=name, text=text_val, values=values, tags=tags_tup)
-            self.ld_table.checkboxes[name] = is_checked
+                self.ld_table.insert(
+                    "", idx, iid=name, values=values, tags=tags_tup, checked=is_checked
+                )
 
         self._last_table_signature = render_signature
         self._update_fleet_summary(rows)
