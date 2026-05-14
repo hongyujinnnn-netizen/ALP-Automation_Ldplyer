@@ -1705,9 +1705,13 @@ class LDManagerApp(
                 group_text,
             )
             text_val = "☑" if is_checked else "☐"
-            base_tags = [zebra_tag, self._status_tag(status)]
+            # Order matters: ttk.Treeview gives later tags higher precedence
+            # for shared options (e.g. background). Status tag MUST come last
+            # so device state drives row color, not selection state.
+            base_tags = [zebra_tag]
             if is_checked:
                 base_tags.append("checked")
+            base_tags.append(self._status_tag(status))
             tags_tup = tuple(base_tags)
 
             if name in existing_set:

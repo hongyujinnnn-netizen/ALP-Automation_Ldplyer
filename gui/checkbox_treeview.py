@@ -182,9 +182,11 @@ class CheckboxTreeview(ttk.Treeview):
             foreground=self.palette.get("selected_fg", "#0A0C10"),
         )
         self.tag_configure("hover", background=self.palette.get("hover_bg", self.palette["surface_alt"]))
-        # Subtle accent so checked rows stand out without overpowering status colors.
+        # Subtle cyan accent for checked rows — does NOT override status colors,
+        # since status tags are listed after "checked" in tags-tuples (status wins).
+        # The checkbox image is the primary visual indicator of checked state.
         checked_tint = _blend(
-            self.palette.get("success", "#10B981"), self.palette.get("surface", "#0E1118"), 0.12
+            self.palette.get("primary", "#00E5FF"), self.palette.get("surface", "#0E1118"), 0.10
         )
         self.tag_configure("checked", background=checked_tint, foreground=self.palette.get("text", "#E2E8F0"))
         self.tag_configure("unchecked", background="", foreground="")
