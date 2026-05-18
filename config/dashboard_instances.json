@@ -39,26 +39,6 @@
               "interval_min": 30,
               "source_subfolder": "tombstones"
             }
-          },
-          {
-            "name": "Your Instagram profile",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "source_subfolder": "tombstones"
-            }
-          },
-          {
-            "name": "jacobson123_",
-            "page_id": null,
-            "reels": {
-              "enabled": true,
-              "schedule": "Manual",
-              "interval_min": 30,
-              "source_subfolder": "tombstones"
-            }
           }
         ]
       }
@@ -229,12 +209,33 @@
       "name": "Chuii KonPa",
       "serial": "emulator-5574",
       "account": {
-        "name": null,
+        "name": "Chuii KonPa",
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": []
+        "pages": [
+          {
+            "name": "howto.fish",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "source_subfolder": "@fahriodetailing"
+            }
+          },
+          {
+            "name": "Glenda",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "source_subfolder": "@fahriodetailing"
+            }
+          }
+        ]
       }
     },
     {
@@ -360,38 +361,57 @@
       "name": "James Roberts",
       "serial": "emulator-5580",
       "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "Jason L. Mickle",
-      "serial": "emulator-5596",
-      "account": {
-        "name": null,
-        "uid": null,
-        "password": null,
-        "twofa": null,
-        "mail": null,
-        "pages": []
-      }
-    },
-    {
-      "name": "Jea Jonh Son",
-      "serial": "emulator-5558",
-      "account": {
-        "name": "Boon Bezzie",
+        "name": "James Roberts",
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
         "pages": [
           {
-            "name": "Jea Jonh Son",
+            "name": "LiveLifetaller",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "source_subfolder": "@layerworks"
+            }
+          },
+          {
+            "name": "marcocaravaggi2",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "source_subfolder": "@lorainetheprairiedog"
+            }
+          },
+          {
+            "name": "HorizonVibes",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "source_subfolder": "Facebook"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Jea Jonh Son",
+      "serial": "emulator-5558",
+      "account": {
+        "name": "Jea Jonh Son",
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": [
+          {
+            "name": "Boon Bezzie",
             "page_id": null,
             "reels": {
               "enabled": true,
@@ -437,14 +457,14 @@
       "name": "Jeck Lusika",
       "serial": "emulator-5582",
       "account": {
-        "name": "nikolaiiaksenov",
+        "name": "Jeck Lusika",
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
         "pages": [
           {
-            "name": "Jeck Lusika",
+            "name": "nikolaiiaksenov",
             "page_id": null,
             "reels": {
               "enabled": true,
@@ -460,12 +480,33 @@
       "name": "Jenn Anozy",
       "serial": "emulator-5584",
       "account": {
-        "name": null,
+        "name": "Jenn Anozy",
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": []
+        "pages": [
+          {
+            "name": "Nick hibbitts",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "source_subfolder": "@ivoviral"
+            }
+          },
+          {
+            "name": "Blakehickman",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "source_subfolder": "ldsdk"
+            }
+          }
+        ]
       }
     },
     {
@@ -508,12 +549,43 @@
       "name": "Mary T. Butler",
       "serial": "emulator-5566",
       "account": {
-        "name": null,
+        "name": "EchoVibe",
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
-        "pages": []
+        "pages": [
+          {
+            "name": "Mary T. Butler",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "source_subfolder": "@medazelli"
+            }
+          },
+          {
+            "name": "Bob Rese",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "source_subfolder": "@medazelli"
+            }
+          },
+          {
+            "name": "Pixel Studio",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "source_subfolder": "@medazelli"
+            }
+          }
+        ]
       }
     },
     {
@@ -683,20 +755,73 @@
       "name": "Shayne P. Ledesma",
       "serial": "emulator-5576",
       "account": {
-        "name": "Pixel Daily",
+        "name": "Shayne P. Ledesma",
         "uid": null,
         "password": null,
         "twofa": null,
         "mail": null,
         "pages": [
           {
-            "name": "Shayne P. Ledesma",
+            "name": "Pixel Daily",
             "page_id": null,
             "reels": {
               "enabled": true,
               "schedule": "Manual",
               "interval_min": 30,
               "source_subfolder": "@roscoescomedy"
+            }
+          },
+          {
+            "name": "Vibe Lab",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "source_subfolder": "@roscoescomedy"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Jason L. Mickle",
+      "serial": "emulator-5596",
+      "account": {
+        "name": "Jason L. Mickle",
+        "uid": null,
+        "password": null,
+        "twofa": null,
+        "mail": null,
+        "pages": [
+          {
+            "name": "Fan funnyy",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "source_subfolder": "@clipsdopalito"
+            }
+          },
+          {
+            "name": "Peter mai",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "source_subfolder": "@jacobcollier"
+            }
+          },
+          {
+            "name": "Spark World",
+            "page_id": null,
+            "reels": {
+              "enabled": true,
+              "schedule": "Manual",
+              "interval_min": 30,
+              "source_subfolder": "@jacobcollier"
             }
           }
         ]

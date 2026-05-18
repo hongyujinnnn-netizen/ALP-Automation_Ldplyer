@@ -13,6 +13,7 @@ from gui.appearance import (
     label_for,
     resolve_appearance,
 )
+from gui.components.scrollable_frame import ScrollableFrame
 from gui.components.status import StatusPill
 from gui.dialogs.email_settings_dialog import EmailSettingsDialogMixin
 
@@ -106,42 +107,13 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         widget.bind("<Button-5>", _on_mousewheel, add="+")
 
     def _create_scrollable_settings_page(self, parent, palette):
-        page = tk.Frame(parent, bg=palette["surface"])
-        page.place(relx=0, rely=0, relwidth=1, relheight=1)
-
-        canvas = tk.Canvas(
-            page,
+        page = ScrollableFrame(
+            parent,
             bg=palette["surface"],
-            highlightthickness=0,
-            bd=0,
+            fill_viewport_height=True,
         )
-        scrollbar = tb.Scrollbar(
-            page,
-            orient="vertical",
-            command=canvas.yview,
-            style="Vertical.TScrollbar",
-        )
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        scrollbar.pack(side="right", fill="y")
-        canvas.pack(side="left", fill="both", expand=True)
-
-        body = tk.Frame(canvas, bg=palette["surface"])
-        window_id = canvas.create_window((0, 0), window=body, anchor="nw")
-
-        def _sync_scrollregion(_event=None):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-
-        def _sync_width(event):
-            canvas.itemconfigure(window_id, width=event.width)
-
-        body.bind("<Configure>", _sync_scrollregion)
-        canvas.bind("<Configure>", _sync_width)
-
-        for target in (page, canvas, body):
-            self._bind_settings_mousewheel(target, canvas)
-
-        return page, body
+        page.place(relx=0, rely=0, relwidth=1, relheight=1)
+        return page, page.body
 
     def show_settings_dialog(self):
         dialog = getattr(self, "_settings_dialog", None)
@@ -2112,6 +2084,22 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         email_mark_as_seen_var,
         appearance_vars,
     ):
+        # Snapshot appearance values BEFORE applying — restart is only needed
+        # when the user actually changed something on the Appearance tab.
+        prev_appearance = (
+            self.theme_preset.get(),
+            self.accent_color.get(),
+            self.ui_density.get(),
+            self.ui_scale.get(),
+        )
+        new_appearance = (
+            appearance_vars["theme_preset"].get(),
+            appearance_vars["accent_color"].get(),
+            appearance_vars["ui_density"].get(),
+            appearance_vars["ui_scale"].get(),
+        )
+        appearance_changed = prev_appearance != new_appearance
+
         self.parallel_ld.set(parallel_var.get())
         self.boot_delay.set(boot_delay_var.get())
         self.task_duration.set(task_duration_var.get())
@@ -2138,16 +2126,17 @@ class SettingsDialogMixin(EmailSettingsDialogMixin):
         self.email_timeout_seconds.set(email_timeout_var.get())
         self.email_poll_interval_seconds.set(email_poll_interval_var.get())
         self.email_mark_as_seen.set(email_mark_as_seen_var.get())
-        self.theme_preset.set(appearance_vars["theme_preset"].get())
-        self.accent_color.set(appearance_vars["accent_color"].get())
-        self.ui_density.set(appearance_vars["ui_density"].get())
-        self.ui_scale.set(appearance_vars["ui_scale"].get())
+        self.theme_preset.set(new_appearance[0])
+        self.accent_color.set(new_appearance[1])
+        self.ui_density.set(new_appearance[2])
+        self.ui_scale.set(new_appearance[3])
         if hasattr(self, "save_settings"):
             try:
                 self.save_settings()
             except Exception:
                 pass
-        self._prompt_appearance_restart(dialog)
+        if appearance_changed:
+            self._prompt_appearance_restart(dialog)
         if getattr(self, "_settings_dialog", None) is dialog:
             self._close_settings_dialog(dialog)
 

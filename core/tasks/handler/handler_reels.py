@@ -259,6 +259,13 @@ class ReelsHandlerMixin:
                 pass
 
     # def handle_facebook_reels_post(self, d, video_data=None):
+    # Single regex matching every locale variant of the "OK" dismiss button.
+    # One textMatches probe replaces the previous 10x exists(timeout=2) loop.
+    _OK_BUTTON_REGEX = (
+        r"(?i)^(OK|Okay|OKE|Xong|Aceptar|Accepter|Accetta|Einverstanden|"
+        r"确认|확인)$"
+    )
+
     def handle_reels_description(self, d, video_data=None):
         """
         Handle the Facebook Reels description and audience selection screen
@@ -276,48 +283,26 @@ class ReelsHandlerMixin:
                 ],
                 timeout=12,
             ):
-                self.log(f"[{_dev}] timeout waiting for Reels description screen")
+                self.log(f"[{_dev}] timeout waiting for reels description screen")
 
-            # FIRST: Check for and click OK button if it exists
-            ok_button_found = False
-            ok_button_texts = [
-                "OK",
-                "Okay",
-                "Xong",
-                "Ã§Â¡Â®Ã¨Â®Â¤",
-                "Ã­â„¢â€¢Ã¬ÂÂ¸",
-                "Aceptar",
-                "Accepter",
-                "Accetta",
-                "Einverstanden",
-                "OKE",
-            ]
-
-            # Try to find and click OK button
-            for text in ok_button_texts:
-                try:
-                    if d(text=text).exists(timeout=2):
-                        d(text=text).click()
-                        self.log(f"Clicked OK button: {text}")
-                        ok_button_found = True
-                        time.sleep(2)
-                        break
-                except:
-                    continue
-
-            # If OK button was found and clicked, we're done
-            if ok_button_found:
-                self.log(" OK button handled successfully")
-                return True
-
-            # NEW: Try to add description with appropriate caption method
-            description_added = False
+            # Single combined check for the OK dismiss dialog (all locales).
             try:
-                # Look for description input field using multiple approaches
+                ok_btn = d(textMatches=self._OK_BUTTON_REGEX)
+                if ok_btn.exists(timeout=0):
+                    ok_btn.click()
+                    self.log(" OK button handled successfully")
+                    time.sleep(0.6)
+                    return True
+            except Exception:
+                pass
+
+            # Try to add description. Screen is already loaded (wait_for_any
+            # above), so probe selectors with timeout=0 — no need to spend 2s
+            # per miss. We also drop the over-broad TextView/View clickable
+            # selectors that frequently matched unrelated controls.
+            try:
                 description_selectors = [
                     d(className="android.widget.EditText"),
-                    d(className="android.widget.TextView", clickable=True),
-                    d(className="android.view.View", clickable=True),
                     d(textContains="Describe your reel"),
                     d(textContains="Add a description"),
                     d(textContains="Write a caption"),
@@ -327,68 +312,50 @@ class ReelsHandlerMixin:
                 description_field = None
                 for selector in description_selectors:
                     try:
-                        if selector.exists(timeout=2):
+                        if selector.exists(timeout=0):
                             description_field = selector
                             break
-                    except:
+                    except Exception:
                         continue
 
                 if description_field:
                     description_field.click()
-                    time.sleep(1)
-
-                    # Clear any existing text first
+                    time.sleep(0.4)
                     d.clear_text()
-                    time.sleep(1)
 
-                    # Use content from video_data if available
                     if video_data and video_data.get("caption"):
                         caption = video_data["caption"]
                         if video_data.get("hashtags"):
                             caption += " " + video_data["hashtags"]
                         self.log(f" Using content manager caption: {caption}")
                     else:
-                        # Fallback to original method
                         device_key = f"{d.serial}_last_video_title"
                         video_title = getattr(self, device_key, None)
-
                         if video_title:
-                            # Remove file extension from video title
-                            video_title_without_ext = self._remove_file_extension(video_title)
-
-                            # Use the video title without extension as caption
-                            caption = video_title_without_ext
-                            self.log(f" Using video title as caption:{video_title_without_ext}")
+                            caption = self._remove_file_extension(video_title)
+                            self.log(f" Using video title as caption:{caption}")
                         else:
-                            # Video has no title, use generated caption
                             caption = self._generate_video_caption()
                             self.log(" Using generated caption for untitled video")
 
-                    # Add the caption to description
                     d.send_keys(caption)
-                    time.sleep(1)
-
-                    # Hide keyboard
+                    time.sleep(0.3)
                     d.press("back")
-                    time.sleep(1)
-                    description_added = True
+                    time.sleep(0.4)
                     self.log(f" Description added: {caption}")
             except Exception as e:
                 self.log(f"Could not add description: {e}")
 
-            time.sleep(2)
-            # scroll down to make sure the share button is visible
-            d.swipe_ext("up", scale=0.7)
-            time.sleep(1)
-            d.swipe_ext("up", scale=0.7)
-            time.sleep(1)
+            # One bigger swipe surfaces the share button without two pauses.
+            d.swipe_ext("up", scale=0.9)
+            time.sleep(0.4)
 
             # Look for the final share/post button with more flexible detection
             self.log(" Looking for Share...")
             if not wait_for_any(
                 d,
                 [{"text": "Share"}, {"text": "Post"}, {"text": "Share now"}, {"text": "Publish"}],
-                timeout=10,
+                timeout=6,
             ):
                 self.log(f"[{_dev}] timeout waiting for share button")
             share_button_found = False
